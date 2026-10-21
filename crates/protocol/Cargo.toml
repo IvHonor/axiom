@@ -1,0 +1,11 @@
+[package]
+name = "axiom-protocol"
+version = "0.1.0"
+description = "The request and response types the Axiom app and server exchange"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1"

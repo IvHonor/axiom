@@ -1,0 +1,1548 @@
+/* Shell styles. Values come from theme variables (see theme.css); the
+   data-brackets / data-hatching / data-buttons switches on :root come from
+   the theme's `style` settings. */
+
+/* ---------- Layout ---------- */
+
+.app {
+  display: grid;
+  grid-template-rows: 48px minmax(0, 1fr) 26px;
+  height: 100vh;
+  user-select: none;
+}
+
+.workbench {
+  display: flex;
+  min-height: 0;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  container-type: inline-size;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--pattern) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 12px 12px;
+}
+
+/* ---------- Top bar ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.box {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.box-icon {
+  width: 32px;
+  padding: 0;
+  justify-content: center;
+}
+
+.box-icon:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.box-hatch {
+  width: 40px;
+  padding: 0;
+  background: linear-gradient(
+    to top right,
+    transparent calc(50% - 0.5px),
+    var(--line-strong) 50%,
+    transparent calc(50% + 0.5px)
+  );
+}
+
+[data-hatching="off"] .box-hatch {
+  display: none;
+}
+
+.topbar-brand {
+  font-weight: 600;
+  letter-spacing: calc(0.32em * var(--tracking));
+  text-transform: var(--label-case);
+}
+
+/* Open tabs: the overview first, then one per opened area or extension page. */
+.tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab {
+  flex: none;
+  max-width: 220px;
+  padding: 0 6px 0 12px;
+  color: var(--text-dim);
+  font-weight: 500;
+  letter-spacing: calc(0.08em * var(--tracking));
+  text-transform: var(--label-case);
+  cursor: pointer;
+}
+
+/* The overview tab has no close button, so balance its padding. */
+.tab:first-child {
+  padding-right: 12px;
+}
+
+.tab:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.tab.is-active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--hover);
+}
+
+.tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-close {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  border-radius: var(--radius-sm);
+  visibility: hidden;
+}
+
+.tab:hover .tab-close,
+.tab.is-active .tab-close,
+.tab-close:focus-visible {
+  visibility: visible;
+}
+
+.tab-close:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.topbar-clock {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Activity bar ---------- */
+
+.activitybar {
+  width: 52px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+}
+
+.activitybar-fill {
+  flex: 1;
+}
+
+.activity {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.activity:hover {
+  color: var(--text);
+}
+
+.activity.is-active {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+/* Without HUD brackets, mark the active icon the VS Code way: just the side bar. */
+[data-brackets="off"] .activity.is-active {
+  border-color: transparent;
+}
+
+.activity.is-active::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--accent);
+}
+
+/* ---------- Sidebar ---------- */
+
+.sidebar {
+  width: 300px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+}
+
+.sidebar-head {
+  height: 42px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: calc(0.16em * var(--tracking));
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 16px 14px 32px;
+  color: var(--text-dim);
+}
+
+.search {
+  height: 30px;
+  flex: none;
+  margin: 0 12px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: none;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.search input::placeholder {
+  color: var(--text-faint);
+}
+
+.section-head {
+  width: 100%;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: calc(0.14em * var(--tracking));
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-top: 1px solid var(--line);
+}
+
+.section-head:hover {
+  color: var(--text);
+}
+
+.section-count {
+  margin-left: auto;
+  font-family: var(--font-label);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.nav-item {
+  position: relative;
+  width: 100%;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  color: var(--text-dim);
+  text-align: left;
+}
+
+.section .nav-item {
+  padding-left: 32px;
+}
+
+.nav-item:hover,
+.nav-item.is-active {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.nav-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
+
+.nav-meta {
+  margin-left: auto;
+  font-family: var(--font-label);
+  font-size: 9.5px;
+  text-transform: var(--label-case);
+  color: var(--text-faint);
+}
+
+/* ---------- Extension cards ---------- */
+
+.ext-list {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 8px;
+}
+
+.ext-item {
+  position: relative;
+  padding: 10px 12px;
+}
+
+.ext-item:hover,
+.ext-item.is-selected {
+  background: var(--hover);
+}
+
+.ext-item.is-selected {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* Install sits top right, level with the name, so the description gets full width. */
+.ext-item > .btn {
+  position: absolute;
+  top: 9px;
+  right: 12px;
+}
+
+.ext-main {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  text-align: left;
+}
+
+.ext-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.ext-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ext-name {
+  font-weight: 600;
+}
+
+.ext-desc {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+
+.ext-meta {
+  margin-top: 2px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  text-transform: var(--label-case);
+  color: var(--text-faint);
+}
+
+/* ---------- Themes ---------- */
+
+.theme-list,
+.theme-rows {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 8px;
+}
+
+.theme-item {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 8px 32px;
+  color: var(--text-dim);
+  text-align: left;
+}
+
+.theme-item:hover,
+.theme-item.is-active {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.theme-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
+
+.theme-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.theme-name {
+  font-weight: 500;
+}
+
+.theme-check {
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.theme-rows {
+  padding: 0;
+}
+
+.theme-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.theme-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.theme-row .btn {
+  margin-left: auto;
+}
+
+/* A theme's preview uses that theme's own colors, set inline. */
+.swatch {
+  position: relative;
+  width: 46px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding-left: 8px;
+  overflow: hidden;
+  font-size: 12px;
+  border: 1px solid;
+}
+
+.swatch-side {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  border-right: 1px solid;
+}
+
+.swatch-accent {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 2px;
+  height: 8px;
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--text);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: calc(0.12em * var(--tracking));
+  text-transform: var(--label-case);
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+}
+
+.btn-sm {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 10px;
+}
+
+.btn-ghost {
+  border-color: var(--line-strong);
+  color: var(--text-dim);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: none;
+  border-color: var(--text);
+  color: var(--text);
+}
+
+/* Filled buttons (e.g. VS Code): accent primary, quiet grey secondary. */
+[data-buttons="filled"] .btn {
+  height: 26px;
+  font-size: 12px;
+  font-weight: 400;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+[data-buttons="filled"] .btn-sm {
+  height: 22px;
+  font-size: 11px;
+}
+
+[data-buttons="filled"] .btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--on-accent);
+  filter: brightness(1.12);
+}
+
+[data-buttons="filled"] .btn-ghost {
+  background: var(--line-strong);
+  border-color: transparent;
+  color: var(--text);
+}
+
+[data-buttons="filled"] .btn-ghost:hover:not(:disabled) {
+  background: var(--line-strong);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- Panel ---------- */
+
+.panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* HUD corner brackets: eight solid strips drawn over the border. */
+.panel::before {
+  --b: 12px;
+  --t: 2px;
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--accent) 0 0) top left / var(--b) var(--t),
+    linear-gradient(var(--accent) 0 0) top left / var(--t) var(--b),
+    linear-gradient(var(--accent) 0 0) top right / var(--b) var(--t),
+    linear-gradient(var(--accent) 0 0) top right / var(--t) var(--b),
+    linear-gradient(var(--accent) 0 0) bottom left / var(--b) var(--t),
+    linear-gradient(var(--accent) 0 0) bottom left / var(--t) var(--b),
+    linear-gradient(var(--accent) 0 0) bottom right / var(--b) var(--t),
+    linear-gradient(var(--accent) 0 0) bottom right / var(--t) var(--b);
+  background-repeat: no-repeat;
+}
+
+[data-brackets="off"] .panel::before {
+  display: none;
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px 0;
+}
+
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: calc(0.1em * var(--tracking));
+  text-transform: var(--label-case);
+}
+
+.panel-meta {
+  margin-top: 1px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.panel-actions {
+  margin-left: auto;
+}
+
+.panel-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 18px 18px;
+}
+
+/* ---------- Data bits ---------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  align-items: center;
+  text-align: center;
+  padding: 6px 0;
+}
+
+.stats-divider {
+  align-self: stretch;
+  background: var(--line-strong);
+}
+
+.stat-value {
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  margin-top: 8px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.kv dt {
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  line-height: 18px;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.kv dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-weight: 500;
+  text-transform: var(--label-case);
+}
+
+.kv dd.is-error {
+  color: var(--danger);
+}
+
+.kv-wide dd {
+  justify-content: flex-start;
+  text-transform: none;
+}
+
+.kv-wide dd.mono {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+
+/* Status mark: filled = online, hollow = off, blinking = connecting.
+   Square in sharp themes, round in rounded ones. */
+.dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border: 1px solid currentColor;
+  border-radius: min(50%, calc(var(--radius) * 10));
+}
+
+.dot.is-connected {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.dot.is-error {
+  border-color: var(--danger);
+}
+
+.dot.is-connecting {
+  animation: blink 1s steps(2, jump-none) infinite;
+}
+
+@keyframes blink {
+  to {
+    background: currentColor;
+  }
+}
+
+/* ---------- Status bar ---------- */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  font-family: var(--font-label);
+  font-size: calc(var(--font-size) * 0.82);
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-item.is-error {
+  color: var(--danger);
+}
+
+.status-fill {
+  flex: 1;
+}
+
+/* ---------- Overview ---------- */
+
+.overview {
+  padding: 20px;
+}
+
+.overview-empty {
+  min-height: 100%;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.empty-title {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: calc(0.24em * var(--tracking));
+  text-transform: var(--label-case);
+}
+
+.empty-text {
+  max-width: 38ch;
+  color: var(--text-dim);
+}
+
+.tile-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.tile-title:hover {
+  color: var(--accent);
+}
+
+/* ---------- Resizable tiles ---------- */
+
+/* Column count, row height and gap are set inline from TILE_GRID in ResizableTile.tsx. */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  grid-auto-rows: var(--row);
+  grid-auto-flow: row dense;
+  gap: var(--gap);
+}
+
+.tile-cell {
+  position: relative;
+  grid-column: span var(--w);
+  grid-row: span var(--h);
+  min-width: 0;
+  min-height: 0;
+}
+
+.tile-cell > .panel {
+  height: 100%;
+}
+
+.tile-cell .panel-body {
+  min-height: 0;
+  overflow: auto;
+}
+
+.tile-cell.is-resizing > .panel {
+  border-color: var(--accent);
+}
+
+.tile-size {
+  position: absolute;
+  right: 28px;
+  bottom: 7px;
+  padding: 1px 6px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
+.resize-handle {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  border-radius: var(--radius-sm);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.resize-handle:hover,
+.tile-cell.is-resizing .resize-handle {
+  color: var(--text);
+  background: var(--hover);
+}
+
+/* Keep the resize cursor while dragging, even off the handle. */
+.is-resizing,
+.is-resizing * {
+  cursor: nwse-resize !important;
+}
+
+/* ---------- Pages (extension details / views) ---------- */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 960px;
+  padding: 20px;
+}
+
+.ext-hero {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 20px;
+  padding: 4px 0;
+}
+
+.ext-hero-icon {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.ext-hero-name {
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.ext-hero-desc {
+  margin: 10px 0 16px;
+  color: var(--text-dim);
+}
+
+/* ---------- Icon buttons and dropdown menus ---------- */
+
+.icon-btn {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.icon-btn.is-armed {
+  width: auto;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 20;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.dropdown-menu.is-right {
+  right: 0;
+}
+
+.dropdown-menu.is-left {
+  left: 0;
+}
+
+.menu-item {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  text-align: left;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+}
+
+.menu-item:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.menu-item:disabled {
+  color: var(--text-faint);
+}
+
+.menu-item.is-danger,
+.menu-item.is-armed {
+  color: var(--danger);
+}
+
+.menu-check {
+  cursor: pointer;
+}
+
+.menu-field {
+  justify-content: space-between;
+}
+
+.menu-field input {
+  width: 64px;
+  height: 24px;
+  padding: 0 6px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--line);
+}
+
+.btn.is-danger:hover:not(:disabled),
+.btn.is-armed {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: none;
+  filter: none;
+}
+
+.dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+
+.menu-heading {
+  margin: 0;
+  padding: 4px 10px 2px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  text-transform: var(--label-case);
+  color: var(--text-faint);
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+}
+
+.menu-row .menu-item {
+  flex: 1;
+}
+
+.theme-follow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 12px 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.theme-follow > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.theme-follow input {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.theme-follow .ext-meta {
+  margin: 0;
+  line-height: 1.35;
+}
+
+/* A preview tab gets replaced by the next extension you browse. */
+.tab.is-preview .tab-label {
+  font-style: italic;
+}
+
+.context-menu {
+  position: fixed;
+  top: 0;
+  z-index: 50;
+}
+
+/* All / Areas / Themes filter in the Extensions sidebar. */
+.ext-filter {
+  display: flex;
+  gap: 4px;
+  margin: 0 12px 10px;
+}
+
+.ext-filter button {
+  flex: 1;
+  height: 24px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.ext-filter button:hover {
+  color: var(--text);
+}
+
+.ext-filter button.is-active {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.ext-group {
+  margin: 6px 0 0;
+  padding: 0 12px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: calc(0.08em * var(--tracking));
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* "Theme" / "Area" tag next to an extension's name. */
+.ext-kind {
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-family: var(--font-label);
+  font-size: 9.5px;
+  font-weight: 500;
+  vertical-align: 1px;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.ext-kind.is-theme {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+/* ---------- Account ---------- */
+
+/* Dot on the account icon while signed in. */
+.activity-badge {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+  border: 1.5px solid var(--surface);
+  border-radius: 50%;
+}
+
+.account {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 16px 16px;
+}
+
+.account-intro {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field-label {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.field input,
+.field-input {
+  height: 30px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 10px;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.field input:focus,
+.field-input:focus-within {
+  border-color: var(--accent);
+}
+
+.field input:disabled {
+  opacity: 0.6;
+}
+
+/* An input with an icon button inside its border (show password). */
+.field-input {
+  display: flex;
+  align-items: center;
+  padding: 0 4px 0 0;
+}
+
+.field-input input,
+.field-input input:focus {
+  height: 100%;
+  flex: 1;
+  border: 0;
+  background: none;
+}
+
+.field-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  border-radius: var(--radius-sm);
+}
+
+.field-icon:hover {
+  color: var(--text);
+}
+
+.field-hint {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.account-error {
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.account-submit {
+  justify-content: center;
+}
+
+.account-switch {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.account-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.account-avatar {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.account-who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.account-email {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.account-heading {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: calc(0.14em * var(--tracking));
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.account-note {
+  margin: 0;
+}
+
+/* ---------- Sync ---------- */
+
+.account-sync {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.account-sync .dot {
+  position: relative;
+  top: 1px;
+}
+
+.account-sync.is-error {
+  color: var(--danger);
+}
+
+/* A question that needs an answer: data to upload, or what to keep on sign-out. */
+.account-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.account-choice .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.status-button {
+  height: 100%;
+  font: inherit;
+  color: inherit;
+}
+
+.status-button:hover {
+  color: var(--text);
+}
+
+/* ---------- Account tools ---------- */
+
+.account-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.code-input {
+  font-family: var(--font-mono);
+  letter-spacing: 0.12em;
+}
+
+.account-subform {
+  width: 100%;
+}
+
+.device-list {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.device {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+}
+
+.device + .device {
+  border-top: 1px solid var(--line);
+}
+
+.device-icon {
+  flex: none;
+  color: var(--text-dim);
+}
+
+.device-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.device-name {
+  overflow: hidden;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-text .ext-meta {
+  margin: 0;
+}
+
+.account-saved {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.account-path {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+
+.account-danger {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.btn.is-danger {
+  color: var(--danger);
+}
+
+/* ---------- Extension pages ---------- */
+
+.ext-about {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 720px;
+  line-height: 1.55;
+}
+
+.ext-features {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ext-features li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ext-features svg {
+  flex: none;
+  position: relative;
+  top: 2px;
+  color: var(--accent);
+}
+
+/* Shown where the Install button would be. */
+.ext-soon {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.ext-kind.is-soon {
+  margin-left: 4px;
+  border-style: dashed;
+}

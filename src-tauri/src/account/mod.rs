@@ -1,0 +1,307 @@
+//! The user's Axiom account: signing up, in and out on this device.
+//!
+//! An account is optional. Everything works signed out; signing in is what
+//! lets sync (`crate::sync`) copy your data to your other devices.
+
+mod client;
+pub mod commands;
+pub(crate) mod store;
+#[cfg(test)]
+mod tests;
+
+use std::time::{Duration, Instant};
+
+use axiom_protocol::{
+    ChangePassword, Credentials, DeleteAccount, Device, PullResponse, PushRequest, PushResponse, ResetPassword, Session,
+    check_email, check_password, normalize_email,
+};
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use tokio::sync::Mutex;
+
+use crate::error::{Error, Result};
+use client::{Client, ClientError};
+pub use store::{Keychain, Saved, SessionStore};
+
+/// The server this build talks to, set with `AXIOM_SERVER_URL` when building.
+/// Development builds default to one on this computer (`npm run server`).
+/// Release builds have no default: without it, accounts are switched off
+/// rather than sending passwords to an address nobody has checked.
+pub const SERVER_URL: &str = match option_env!("AXIOM_SERVER_URL") {
+    Some(url) => url,
+    None if cfg!(debug_assertions) => "http://localhost:8787",
+    None => "",
+};
+
+const NO_SERVER: &str = "This copy of Axiom isn't connected to an account server, so accounts and sync aren't available.";
+
+/// Kept in Tauri's managed state. Commands receive it as `State<'_, Account>`.
+pub struct Account {
+    client: Client,
+    store: Box<dyn SessionStore>,
+    /// Behind an async lock so two actions (say, a refresh and a sign-out)
+    /// never interleave.
+    state: Mutex<Option<SignedIn>>,
+}
+
+struct SignedIn {
+    saved: Saved,
+    /// The current access token and when to stop using it.
+    access: Option<(String, Instant)>,
+}
+
+/// The account as the frontend sees it. Mirrored by `AccountStatus` in `src/lib/account.ts`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum AccountStatus {
+    SignedOut,
+    SignedIn { email: String },
+}
+
+impl Account {
+    /// Picks up the sign-in saved on a previous launch, without going online.
+    pub fn new(server_url: &str, store: Box<dyn SessionStore>) -> Self {
+        let state = store.load().map(|saved| SignedIn { saved, access: None });
+        Self { client: Client::new(server_url), store, state: Mutex::new(state) }
+    }
+
+    pub async fn status(&self) -> AccountStatus {
+        status_of(&*self.state.lock().await)
+    }
+
+    pub async fn sign_up(&self, email: &str, password: &str) -> Result<AccountStatus> {
+        self.require_server()?;
+        let credentials = credentials(email, password)?;
+        check_password(password).map_err(Error::Invalid)?;
+        let session = self.client.sign_up(&credentials).await.map_err(account_error)?;
+        self.start(session).await
+    }
+
+    pub async fn sign_in(&self, email: &str, password: &str) -> Result<AccountStatus> {
+        self.require_server()?;
+        let credentials = credentials(email, password)?;
+        let session = self.client.sign_in(&credentials).await.map_err(account_error)?;
+        self.start(session).await
+    }
+
+    /// Asks the server to email a reset code. Succeeds whether or not the
+    /// account exists (the server doesn't say).
+    pub async fn request_reset(&self, email: &str) -> Result<()> {
+        self.require_server()?;
+        let email = normalize_email(email);
+        check_email(&email).map_err(|message| Error::Invalid(message.into()))?;
+        self.client.forgot_password(&email).await.map_err(account_error)
+    }
+
+    /// Sets a new password with an emailed code and signs in.
+    pub async fn reset_password(&self, email: &str, code: &str, password: &str) -> Result<AccountStatus> {
+        self.require_server()?;
+        let Credentials { email, device_name, .. } = credentials(email, password)?;
+        check_password(password).map_err(Error::Invalid)?;
+        if code.trim().is_empty() {
+            return Err(Error::Invalid("Enter the code from the email.".into()));
+        }
+        let request = ResetPassword { email, code: code.into(), new_password: password.into(), device_name };
+        let session = self.client.reset_password(&request).await.map_err(account_error)?;
+        self.start(session).await
+    }
+
+    /// Changes the password. Other devices are signed out; this one stays in.
+    pub async fn change_password(&self, current: &str, new: &str) -> Result<()> {
+        check_password(new).map_err(Error::Invalid)?;
+        let request = ChangePassword { current_password: current.into(), new_password: new.into() };
+        let token = self.access_token().await?;
+        let result = self.client.change_password(&token, &request).await;
+        Ok(self.after_call(result).await?)
+    }
+
+    /// Every device signed in to the account.
+    pub async fn devices(&self) -> Result<Vec<DeviceView>> {
+        let token = self.access_token().await?;
+        let result = self.client.devices(&token).await;
+        Ok(self.after_call(result).await?.into_iter().map(DeviceView::from).collect())
+    }
+
+    pub async fn sign_out_device(&self, id: &str) -> Result<()> {
+        let token = self.access_token().await?;
+        let result = self.client.sign_out_device(&token, id).await;
+        Ok(self.after_call(result).await?)
+    }
+
+    /// Deletes the account on the server, then signs out here.
+    pub async fn delete_account(&self, password: &str) -> Result<()> {
+        let token = self.access_token().await?;
+        let result = self.client.delete_account(&token, &DeleteAccount { password: password.into() }).await;
+        self.after_call(result).await?;
+        *self.state.lock().await = None;
+        self.store.clear();
+        Ok(())
+    }
+
+    /// Forgets the sign-in on this device. Local data is left alone.
+    pub async fn sign_out(&self) -> AccountStatus {
+        let mut state = self.state.lock().await;
+        if let Some(signed_in) = state.take() {
+            self.store.clear();
+            // Best effort: if we're offline the server session just expires.
+            let _ = self.client.sign_out(&signed_in.saved.refresh_token).await;
+        }
+        AccountStatus::SignedOut
+    }
+
+    /// The signed-in user's id, if any.
+    pub async fn user_id(&self) -> Option<String> {
+        self.state.lock().await.as_ref().map(|s| s.saved.user.id.clone())
+    }
+
+    /// A valid access token for calling the server, refreshing it if needed.
+    /// If the server has ended the session, signs out here too.
+    pub async fn access_token(&self) -> std::result::Result<String, ServerError> {
+        let mut state = self.state.lock().await;
+        let signed_in = state.as_mut().ok_or(ServerError::SignedOut)?;
+        if let Some((token, until)) = &signed_in.access {
+            if Instant::now() < *until {
+                return Ok(token.clone());
+            }
+        }
+        match self.client.refresh(&signed_in.saved.refresh_token).await {
+            Ok(session) => {
+                let token = session.access_token.clone();
+                *signed_in = self.remember(session).map_err(|e| ServerError::Failed(e.to_string()))?;
+                Ok(token)
+            }
+            Err(err) => {
+                let err = ServerError::from(err);
+                if err == ServerError::SignedOut {
+                    *state = None;
+                    self.store.clear();
+                }
+                Err(err)
+            }
+        }
+    }
+
+    pub async fn push(&self, request: &PushRequest) -> std::result::Result<PushResponse, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.push(&token, request).await;
+        self.after_call(result).await
+    }
+
+    pub async fn pull(&self, since: i64) -> std::result::Result<PullResponse, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.pull(&token, since).await;
+        self.after_call(result).await
+    }
+
+    /// A refused token means the session was ended elsewhere: sign out here.
+    async fn after_call<T>(&self, result: std::result::Result<T, ClientError>) -> std::result::Result<T, ServerError> {
+        let result = result.map_err(ServerError::from);
+        if result.as_ref().err() == Some(&ServerError::SignedOut) {
+            *self.state.lock().await = None;
+            self.store.clear();
+        }
+        result
+    }
+
+    /// Every way of signing in starts here: a build with no server can't.
+    fn require_server(&self) -> Result<()> {
+        if self.client.has_server() { Ok(()) } else { Err(Error::Account(NO_SERVER.into())) }
+    }
+
+    async fn start(&self, session: Session) -> Result<AccountStatus> {
+        let mut state = self.state.lock().await;
+        *state = Some(self.remember(session)?);
+        Ok(status_of(&state))
+    }
+
+    /// Saves a new session to the credential store and returns it as state.
+    fn remember(&self, session: Session) -> Result<SignedIn> {
+        let saved = Saved { refresh_token: session.refresh_token, user: session.user };
+        self.store.save(&saved).map_err(Error::Account)?;
+        // Stop a minute early so a token never expires mid-request.
+        let lifetime = Duration::from_secs(session.expires_in.saturating_sub(60));
+        Ok(SignedIn { saved, access: Some((session.access_token, Instant::now() + lifetime)) })
+    }
+}
+
+fn status_of(state: &Option<SignedIn>) -> AccountStatus {
+    match state {
+        Some(signed_in) => AccountStatus::SignedIn { email: signed_in.saved.user.email.clone() },
+        None => AccountStatus::SignedOut,
+    }
+}
+
+fn credentials(email: &str, password: &str) -> Result<Credentials> {
+    let email = normalize_email(email);
+    check_email(&email).map_err(|message| Error::Invalid(message.into()))?;
+    if password.is_empty() {
+        return Err(Error::Invalid("Enter your password.".into()));
+    }
+    Ok(Credentials { email, password: password.into(), device_name: device_name() })
+}
+
+/// Shown in the account's device list, e.g. "DESKTOP-4F2 (Windows)".
+fn device_name() -> String {
+    let host = std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| "Computer".into());
+    let os = match std::env::consts::OS {
+        "windows" => "Windows",
+        "macos" => "macOS",
+        "linux" => "Linux",
+        other => other,
+    };
+    format!("{host} ({os})")
+}
+
+fn account_error(err: ClientError) -> Error {
+    Error::Account(err.message())
+}
+
+/// A signed-in device for the frontend. Mirrored by `Device` in `src/lib/account.ts`.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceView {
+    pub id: String,
+    pub name: String,
+    pub signed_in_at: DateTime<Utc>,
+    pub last_active_at: DateTime<Utc>,
+    /// This computer.
+    pub current: bool,
+}
+
+impl From<Device> for DeviceView {
+    fn from(d: Device) -> Self {
+        Self { id: d.id, name: d.name, signed_in_at: d.signed_in_at, last_active_at: d.last_active_at, current: d.current }
+    }
+}
+
+/// Lets commands use `?` on server calls; the message is ready to show.
+impl From<ServerError> for Error {
+    fn from(err: ServerError) -> Self {
+        Error::Account(match err {
+            ServerError::Offline => ClientError::Offline.message(),
+            ServerError::SignedOut => "You've been signed out. Sign in again to continue.".into(),
+            ServerError::Failed(message) => message,
+        })
+    }
+}
+
+/// Why a call to the server didn't work, as sync needs to know it.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ServerError {
+    /// No answer; try again later.
+    Offline,
+    /// The session is over (signed out here or ended elsewhere).
+    SignedOut,
+    /// The server answered with an error, ready to show.
+    Failed(String),
+}
+
+impl From<ClientError> for ServerError {
+    fn from(err: ClientError) -> Self {
+        match err {
+            ClientError::Offline => ServerError::Offline,
+            err if err.is_unauthorized() => ServerError::SignedOut,
+            err => ServerError::Failed(err.message()),
+        }
+    }
+}

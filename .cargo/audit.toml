@@ -1,0 +1,8 @@
+# Settings for `cargo audit` (cargo install cargo-audit).
+[advisories]
+ignore = [
+    # RSA timing side channel (Marvin attack). `rsa` comes in through
+    # jsonwebtoken's crypto backend, but Axiom only signs tokens with HMAC
+    # (HS256) and never runs RSA code. No fixed version exists upstream.
+    "RUSTSEC-2023-0071",
+]

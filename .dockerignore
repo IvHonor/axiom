@@ -1,0 +1,7 @@
+# Only the Rust sources are needed to build the server image.
+target
+node_modules
+dist
+.git
+**/.env
+**/.env.*

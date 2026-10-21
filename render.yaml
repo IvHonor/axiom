@@ -1,0 +1,27 @@
+# Render blueprint for the Axiom server: Render -> New -> Blueprint -> pick this repo.
+# Free plan: sleeps after 15 minutes idle and takes about a minute to wake.
+# Ohio sits next to Neon's us-east-2, so database queries take milliseconds.
+services:
+  - type: web
+    name: axiom-server
+    runtime: docker
+    plan: free
+    region: ohio
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      # Paste Neon's connection string when Render asks for it.
+      - key: DATABASE_URL
+        sync: false
+      # Render generates a random secret once and keeps it.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_IP_HEADER
+        value: x-forwarded-for
+      # From resend.com -> API Keys. Without it, reset codes only go to the log.
+      - key: RESEND_API_KEY
+        sync: false
+      # A sender on a domain verified in Resend, e.g. "Axiom <noreply@yourdomain.com>".
+      - key: EMAIL_FROM
+        sync: false

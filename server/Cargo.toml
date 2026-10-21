@@ -1,0 +1,33 @@
+[package]
+name = "axiom-server"
+version = "0.1.0"
+description = "Axiom's account and sync server"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+axiom-protocol = { path = "../crates/protocol" }
+axum = "0.8.9"
+tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
+tower-http = { version = "0.7.1", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dotenvy = "0.15.7"
+# Postgres (Neon) in production, SQLite for the tests.
+sea-orm = { version = "2.0.4", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = { version = "2.0.4", default-features = false, features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.28.0", features = ["v7"] }
+argon2 = "0.6.0"
+jsonwebtoken = { version = "11.1.0", default-features = false, features = ["rust_crypto"] }
+rand = "0.10.3"
+sha2 = "0.11.1"
+base64 = "0.23.1"
+# Sends email (password reset codes) through Resend's HTTP API.
+reqwest = { version = "0.13.5", features = ["json"] }
+
+[dev-dependencies]
+tower = { version = "0.5.3", features = ["util"] }
+http-body-util = "0.1.5"

@@ -1,0 +1,21 @@
+# One Cargo workspace for everything written in Rust, so the desktop app and the
+# server share one lockfile, one build folder (`target/`) and the protocol crate.
+[workspace]
+members = ["src-tauri", "server", "crates/protocol"]
+resolver = "3"
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
+
+# Password hashing is deliberately expensive; unoptimised it takes seconds, which
+# would make the server's tests crawl. Optimise just those crates in dev builds.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

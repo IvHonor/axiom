@@ -1546,3 +1546,87 @@
   margin-left: 4px;
   border-style: dashed;
 }
+
+/* ---------- Updates ---------- */
+
+.update-prompt {
+  position: fixed;
+  right: 16px;
+  bottom: 40px;
+  z-index: 40;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.28);
+}
+
+.update-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.update-icon {
+  flex: none;
+  color: var(--accent);
+}
+
+.update-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.update-notes {
+  max-height: 96px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  white-space: pre-line;
+}
+
+.update-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.update-bar {
+  height: 4px;
+  overflow: hidden;
+  background: var(--line);
+  border-radius: 2px;
+}
+
+.update-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+
+.update-bar span.is-unknown {
+  width: 30% !important;
+  animation: update-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes update-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-bar span.is-unknown {
+    animation: none;
+  }
+}

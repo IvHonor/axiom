@@ -13,10 +13,16 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
         .manage(db::Db::default())
         .manage(account::Account::new(account::SERVER_URL, Box::new(account::Keychain)))
         .manage(sync::SyncEngine::default())
         .setup(|app| {
+            // Checks GitHub Releases for signed updates (see plugins.updater
+            // in tauri.conf.json). The frontend decides when to ask.
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+
             // The local database lives in the app's data folder, e.g.
             // %APPDATA%\app.axiom.desktop\axiom.db on Windows.
             let file = app.path().app_data_dir()?.join("axiom.db");

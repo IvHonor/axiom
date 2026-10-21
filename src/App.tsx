@@ -12,6 +12,8 @@ import { TopBar } from "./shell/TopBar";
 import { useAccount } from "./shell/useAccount";
 import { useAppStatus } from "./shell/useAppStatus";
 import { useSync } from "./shell/useSync";
+import { useUpdater } from "./shell/useUpdater";
+import { UpdatePrompt } from "./shell/UpdatePrompt";
 import { useInstalled } from "./shell/useInstalled";
 import { useTabs } from "./shell/useTabs";
 import { ExtensionInfoView } from "./shell/views/ExtensionInfoView";
@@ -22,6 +24,7 @@ export default function App() {
   const status = useAppStatus();
   const [account, setAccount] = useAccount();
   const sync = useSync();
+  const updater = useUpdater();
   const { installedIds, install, uninstall } = useInstalled();
   const { tabs, active, previewKey, open, pin, close, closeExtension } = useTabs();
   const [panel, setPanel] = useState<SidePanel | null>("areas");
@@ -144,7 +147,14 @@ export default function App() {
           {panel === "themes" && <ThemesPanel onBrowse={browseThemes} />}
           <main className="main">{main}</main>
         </div>
-        <StatusBar status={status} sync={sync} onOpenSync={() => setPanel("account")} />
+        {updater.offered && <UpdatePrompt status={updater.status} onInstall={updater.install} onLater={updater.later} />}
+        <StatusBar
+          status={status}
+          sync={sync}
+          onOpenSync={() => setPanel("account")}
+          updater={updater.status}
+          onCheckUpdates={() => void updater.checkNow(true)}
+        />
       </div>
     </ThemeProvider>
   );

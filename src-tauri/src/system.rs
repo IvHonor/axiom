@@ -11,15 +11,17 @@ use crate::error::Error;
 /// Mirrored by `AppStatus` in `src/lib/backend.ts`.
 #[derive(Serialize)]
 pub struct AppStatus {
-    version: &'static str,
+    /// The app version from package.json (via tauri.conf.json), which
+    /// releases and the updater go by.
+    version: String,
     db: DbStatus,
 }
 
 /// Called from React with `invoke("app_status")`.
 #[tauri::command]
-pub async fn app_status(db: State<'_, Db>) -> Result<AppStatus, String> {
+pub async fn app_status(app: AppHandle, db: State<'_, Db>) -> Result<AppStatus, String> {
     Ok(AppStatus {
-        version: env!("CARGO_PKG_VERSION"),
+        version: app.package_info().version.to_string(),
         db: db.status().await,
     })
 }
@@ -32,7 +34,7 @@ pub async fn data_export(app: AppHandle, db: State<'_, Db>) -> Result<String, Er
     let now = Local::now();
     let export = json!({
         "app": "Axiom",
-        "version": env!("CARGO_PKG_VERSION"),
+        "version": app.package_info().version.to_string(),
         "exportedAt": now.to_rfc3339(),
         "tables": tables,
     });

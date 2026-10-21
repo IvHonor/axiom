@@ -51,7 +51,11 @@ Change how everything looks, from colours and fonts to corner shapes and labels.
 
 ## Getting Axiom
 
-Installers are on the way. Until then, you can build Axiom from source: see **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**. It takes a few minutes with Rust and Node.js installed.
+**Windows:** download the file ending in `_x64-setup.exe` from the **[latest release](https://github.com/IvHonor/axiom/releases/latest)** and run it. Axiom keeps itself up to date from then on.
+
+Windows may say it "protected your PC", because the installer isn't code-signed yet. Choose **More info → Run anyway**.
+
+**macOS and Linux:** installers are on the way. Until then, build Axiom from source: see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Your data
 

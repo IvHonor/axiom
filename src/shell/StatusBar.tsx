@@ -2,6 +2,7 @@ import type { SyncStatus } from "../lib/sync";
 import { dbDetail, dbLabel, syncDetail, syncDot, syncLabel } from "./format";
 import { useLabels } from "./theme/ThemeProvider";
 import type { ShellStatus } from "./useAppStatus";
+import type { UpdaterState } from "./useUpdater";
 import { useNow } from "./useSync";
 
 interface StatusBarProps {
@@ -9,9 +10,11 @@ interface StatusBarProps {
   sync: SyncStatus;
   /** Opens the Account sidebar, where sync lives. */
   onOpenSync: () => void;
+  updater: UpdaterState;
+  onCheckUpdates: () => void;
 }
 
-export function StatusBar({ status, sync, onOpenSync }: StatusBarProps) {
+export function StatusBar({ status, sync, onOpenSync, updater, onCheckUpdates }: StatusBarProps) {
   const { label, sep } = useLabels();
   const now = useNow();
   const { db } = status;
@@ -33,9 +36,23 @@ export function StatusBar({ status, sync, onOpenSync }: StatusBarProps) {
         </button>
       )}
       <span className="status-fill" />
-      <span className="status-item">
-        Axiom <span className="dim">{sep}</span> {status.version ?? "—"}
-      </span>
+      <button className="status-item status-button" title={updateTitle(updater)} onClick={onCheckUpdates}>
+        {updater.state === "checking"
+          ? label("Checking for updates")
+          : updater.state === "current"
+            ? label("Up to date")
+            : updater.state === "available"
+              ? label("Update available")
+              : updater.state === "error" && !updater.update
+                ? label("Couldn't check for updates")
+                : <>Axiom <span className="dim">{sep}</span> {status.version ?? "—"}</>}
+      </button>
     </footer>
   );
+}
+
+function updateTitle(updater: UpdaterState): string {
+  if (updater.state === "error") return updater.message;
+  if (updater.state === "available") return `Axiom ${updater.update.version} is ready to install.`;
+  return "Check for updates";
 }

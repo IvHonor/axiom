@@ -89,6 +89,21 @@ The server is a plain Docker image (`server/Dockerfile`), so it runs on any cont
 
 The free plan sleeps after 15 minutes without requests and takes about a minute to wake, so the first sign-in after a quiet spell is slow. The app waits for it and says so.
 
+## Releasing
+
+The app's version lives in `package.json` (`tauri.conf.json` reads it from there). To publish one:
+
+```
+npm version 0.3.0        # or: npm version patch / minor
+git push --follow-tags
+```
+
+`npm version` updates the version and makes a commit and a `v0.3.0` tag. Pushing the tag runs `.github/workflows/release.yml`, which builds the Windows installers, signs them for the updater, and publishes a GitHub Release with `latest.json`. Edit the release's notes on GitHub afterwards: installed copies show them in the update prompt.
+
+Installed copies check `releases/latest/download/latest.json` about ten seconds after launch and every six hours, or when the version in the status bar is clicked. They only install updates signed with the key whose public half is in `plugins.updater.pubkey` in `tauri.conf.json`.
+
+**The signing key.** The private key is a repository secret, `TAURI_SIGNING_PRIVATE_KEY`, generated with `npx tauri signer generate`. Keep a backup somewhere safe: without it, no update can ever reach copies already installed, and users would have to reinstall by hand. Signing is only switched on for releases (`src-tauri/tauri.release.conf.json`), so `npm run tauri build` works without the key.
+
 ## Shortcuts
 
 - `Ctrl+B`: toggle the sidebar

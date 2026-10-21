@@ -14,6 +14,8 @@ impl MigratorTrait for Migrator {
         let mut all = Vec::new();
         all.extend(project_board::migrations::all());
         all.extend(crate::sync::migrations::all());
+        // New migrations go after the ones already shipped.
+        all.extend(crate::features::daily_plan::migrations::all());
         all
     }
 }

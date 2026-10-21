@@ -17,6 +17,7 @@ pub mod migrations;
 #[cfg(test)]
 mod tests;
 
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use axiom_protocol::{PushRequest, SYNC_BATCH};
@@ -33,7 +34,9 @@ pub use commands::*;
 use local::Link;
 
 /// Every table that syncs. Features list their own; add new lists here.
-pub const TABLES: &[&str] = crate::features::project_board::SYNCED_TABLES;
+pub static TABLES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    [crate::features::project_board::SYNCED_TABLES, crate::features::daily_plan::SYNCED_TABLES].concat()
+});
 
 /// How often the loop looks for local edits.
 const TICK: Duration = Duration::from_secs(3);
@@ -53,7 +56,7 @@ pub enum SyncStatus {
     Off,
     /// This computer has data that isn't in the account yet; the user decides
     /// whether to upload it or replace it (see `Link`).
-    NeedsChoice { projects: i64 },
+    NeedsChoice { projects: i64, plan_tasks: i64 },
     Syncing { last_synced: Option<DateTime<Utc>> },
     Synced { at: DateTime<Utc> },
     Offline { last_synced: Option<DateTime<Utc>> },
@@ -129,7 +132,7 @@ async fn run(app: AppHandle) {
                     let _ = app.emit(DATA_CHANGED_EVENT, ());
                 }
             }
-            Ok(Outcome::NeedsChoice { projects }) => engine.set(&app, SyncStatus::NeedsChoice { projects }),
+            Ok(Outcome::NeedsChoice { projects, plan_tasks }) => engine.set(&app, SyncStatus::NeedsChoice { projects, plan_tasks }),
             Ok(Outcome::SignedOut) => engine.set(&app, SyncStatus::Off),
             Err(ServerError::SignedOut) => {
                 // The server ended the session, so the account signed out.
@@ -153,7 +156,7 @@ async fn run(app: AppHandle) {
 pub enum Outcome {
     /// `applied` rows changed here.
     Synced { applied: usize },
-    NeedsChoice { projects: i64 },
+    NeedsChoice { projects: i64, plan_tasks: i64 },
     SignedOut,
 }
 
@@ -178,7 +181,10 @@ pub async fn sync_once(
     // This computer's data belongs to another account, or to none yet.
     if local::state(db).await?.user_id.as_deref() != Some(user_id.as_str()) {
         if local::live_rows(db).await? > 0 {
-            return Ok(Outcome::NeedsChoice { projects: local::project_count(db).await? });
+            return Ok(Outcome::NeedsChoice {
+                projects: local::count_live(db, "project_board_projects").await?,
+                plan_tasks: local::count_live(db, "daily_plan_tasks").await?,
+            });
         }
         // Nothing here to lose: link straight away and download.
         local::link(db, &user_id, Link::Replace).await?;

@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 /** Mirrors `SyncStatus` in src-tauri/src/sync/mod.rs. Times are ISO strings. */
 export type SyncStatus =
   | { state: "off" }
-  | { state: "needs_choice"; projects: number }
+  | { state: "needs_choice"; projects: number; planTasks: number }
   | { state: "syncing"; lastSynced: string | null }
   | { state: "synced"; at: string }
   | { state: "offline"; lastSynced: string | null }

@@ -1,4 +1,5 @@
-import { CalendarClock, GraduationCap, Wallet } from "lucide-react";
+import { GraduationCap, Wallet } from "lucide-react";
+import { dailyPlan } from "../features/daily_plan";
 import { projectBoard } from "../features/project_board";
 import { emberThemes } from "../themes/ember_themes";
 import { modernThemes } from "../themes/modern_themes";
@@ -49,23 +50,7 @@ export const EXTENSIONS: ExtensionManifest[] = [
     icon: GraduationCap,
     area: {},
   },
-  {
-    id: "daily_plan",
-    name: "Daily Plan",
-    description: "Plan the day in time blocks and review what got done.",
-    about: [
-      "Give every hour a job. Daily Plan lays out your day in time blocks, then helps you look back at what actually got done.",
-    ],
-    features: [
-      "Plan your day in time blocks",
-      "Move blocks around as the day changes",
-      "Review each evening what got done",
-    ],
-    version: "0.1.0",
-    publisher: "Axiom",
-    icon: CalendarClock,
-    area: {},
-  },
+  dailyPlan,
   projectBoard,
   wireframeThemes,
   emberThemes,

@@ -22,7 +22,7 @@ const NOW_MS: &str = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
 /// every startup; existing triggers are left alone. (Deletes are soft, so
 /// they're updates too.)
 pub async fn install_triggers(db: &impl ConnectionTrait) -> Result<(), DbErr> {
-    for table in TABLES {
+    for table in TABLES.iter() {
         for event in ["INSERT", "UPDATE"] {
             db.execute_unprepared(&format!(
                 r#"CREATE TRIGGER IF NOT EXISTS "sync_{event}_{table}" AFTER {event} ON "{table}" BEGIN
@@ -68,14 +68,19 @@ pub async fn has_pending(db: &impl ConnectionTrait) -> Result<bool, DbErr> {
 /// nothing here worth asking about before linking an account.
 pub async fn live_rows(db: &impl ConnectionTrait) -> Result<i64, DbErr> {
     let mut total = 0;
-    for table in TABLES {
+    // Settings alone aren't worth asking about before linking an account.
+    for table in TABLES.iter().filter(|t| !t.ends_with("_settings")) {
         total += count(db, &format!(r#"SELECT COUNT(*) AS n FROM "{table}" WHERE deleted_at IS NULL"#)).await?;
     }
     Ok(total)
 }
 
-pub async fn project_count(db: &impl ConnectionTrait) -> Result<i64, DbErr> {
-    count(db, "SELECT COUNT(*) AS n FROM project_board_projects WHERE deleted_at IS NULL").await
+/// Rows that aren't deleted in one synced table.
+pub async fn count_live(db: &impl ConnectionTrait, table: &str) -> Result<i64, DbErr> {
+    if !TABLES.contains(&table) {
+        return Ok(0);
+    }
+    count(db, &format!(r#"SELECT COUNT(*) AS n FROM "{table}" WHERE deleted_at IS NULL"#)).await
 }
 
 /// How to join this computer's data to an account it isn't linked to yet.
@@ -95,7 +100,7 @@ pub async fn link(db: &DatabaseConnection, user_id: &str, how: Link) -> Result<(
     }
     txn.execute_unprepared("DELETE FROM sync_base; DELETE FROM sync_outbox;").await?;
     if how == Link::Merge {
-        for table in TABLES {
+        for table in TABLES.iter() {
             txn.execute_unprepared(&format!(
                 r#"INSERT INTO sync_outbox (table_name, row_id, changed_at, version)
                    SELECT '{table}', id, {NOW_MS}, 1 FROM "{table}" WHERE true
@@ -139,7 +144,7 @@ pub async fn unlink(db: &impl ConnectionTrait) -> Result<(), DbErr> {
 pub async fn export(db: &impl ConnectionTrait) -> Result<Map<String, Value>, DbErr> {
     let mut columns = Columns::default();
     let mut tables = Map::new();
-    for table in TABLES {
+    for table in TABLES.iter() {
         let pairs: Vec<String> = columns.of(db, table).await?.iter().map(|c| format!(r#"'{c}', "{c}""#)).collect();
         let query = format!(r#"SELECT json_object({}) AS j FROM "{table}" WHERE deleted_at IS NULL"#, pairs.join(", "));
         let rows = db
@@ -154,7 +159,7 @@ pub async fn export(db: &impl ConnectionTrait) -> Result<Map<String, Value>, DbE
 }
 
 async fn clear_tables(db: &impl ConnectionTrait) -> Result<(), DbErr> {
-    for table in TABLES {
+    for table in TABLES.iter() {
         db.execute_unprepared(&format!(r#"DELETE FROM "{table}""#)).await?;
     }
     Ok(())

@@ -106,3 +106,24 @@ pub async fn prepare(conn: &DatabaseConnection) -> std::result::Result<(), DbErr
     Migrator::up(conn, None).await?;
     crate::sync::local::install_triggers(conn).await
 }
+
+/// A new id: a UUIDv7, unique across devices and sortable by creation time.
+pub fn new_id() -> String {
+    uuid::Uuid::now_v7().to_string()
+}
+
+/// Stamps `updated_at` whenever a row is inserted or updated, so sync can
+/// tell what changed. (Bulk `update_many` calls set it themselves.) Call it
+/// once in each entity module: `crate::db::stamp_updated_at!();`
+macro_rules! stamp_updated_at {
+    () => {
+        #[async_trait::async_trait]
+        impl ActiveModelBehavior for ActiveModel {
+            async fn before_save<C: ConnectionTrait>(mut self, _db: &C, _insert: bool) -> Result<Self, DbErr> {
+                self.updated_at = sea_orm::ActiveValue::Set(chrono::Utc::now());
+                Ok(self)
+            }
+        }
+    };
+}
+pub(crate) use stamp_updated_at;

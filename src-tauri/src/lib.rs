@@ -6,6 +6,7 @@ mod sync;
 mod system;
 
 use account::commands as acct;
+use features::daily_plan::commands as plan;
 use features::project_board::commands as board;
 use tauri::Manager;
 
@@ -50,6 +51,20 @@ pub fn run() {
             sync::sync_status,
             sync::sync_now,
             sync::sync_link,
+            plan::plan_get_day,
+            plan::plan_summary,
+            plan::plan_quick_add,
+            plan::plan_create_task,
+            plan::plan_update_task,
+            plan::plan_set_done,
+            plan::plan_set_focus,
+            plan::plan_move_task,
+            plan::plan_carry_over,
+            plan::plan_delete_task,
+            plan::plan_create_block,
+            plan::plan_update_block,
+            plan::plan_delete_block,
+            plan::plan_update_settings,
             board::board_list_projects,
             board::board_create_project,
             board::board_rename_project,

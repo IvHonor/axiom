@@ -75,10 +75,7 @@ function SignedIn({ email, sync, onChange }: { email: string; sync: SyncStatus; 
       <Block title="Sync">
         {sync.state === "needs_choice" ? (
           <div className="account-choice">
-            <p>
-              This computer has {sync.projects === 1 ? "1 project" : `${sync.projects} projects`} that{" "}
-              {sync.projects === 1 ? "isn't" : "aren't"} in your account yet.
-            </p>
+            <p>This computer has {localItems(sync.projects, sync.planTasks)} that {sync.projects + sync.planTasks === 1 ? "isn't" : "aren't"} in your account yet.</p>
             <button className="btn btn-sm" onClick={() => link("merge")}>
               Upload to my account
             </button>
@@ -89,7 +86,7 @@ function SignedIn({ email, sync, onChange }: { email: string; sync: SyncStatus; 
             >
               Replace with my account's data
             </ConfirmButton>
-            <p className="ext-meta account-note">Replacing deletes the projects on this computer.</p>
+            <p className="ext-meta account-note">Replacing deletes them from this computer.</p>
           </div>
         ) : (
           <>
@@ -147,4 +144,12 @@ function SignedIn({ email, sync, onChange }: { email: string; sync: SyncStatus; 
       </Block>
     </div>
   );
+}
+
+/** "2 projects and 5 planner tasks", leaving out whichever is zero. */
+function localItems(projects: number, planTasks: number): string {
+  const parts = [];
+  if (projects) parts.push(projects === 1 ? "1 project" : `${projects} projects`);
+  if (planTasks) parts.push(planTasks === 1 ? "1 planner task" : `${planTasks} planner tasks`);
+  return parts.join(" and ") || "data";
 }

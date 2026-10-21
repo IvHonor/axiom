@@ -4,4 +4,5 @@
 //! commands. Register a feature's migration in `db/migrations.rs` and its
 //! commands in `lib.rs`.
 
+pub mod daily_plan;
 pub mod project_board;

@@ -158,7 +158,7 @@ async fn data_made_before_signing_in_waits_for_a_choice_then_merges() {
     board::create_project(&newcomer.db, "Groceries").await.unwrap();
     newcomer.sign_in().await;
 
-    assert_eq!(newcomer.sync().await, Outcome::NeedsChoice { projects: 1 });
+    assert_eq!(newcomer.sync().await, Outcome::NeedsChoice { projects: 1, plan_tasks: 0 });
     local::link(&newcomer.db, &newcomer.account.user_id().await.unwrap(), Link::Merge).await.unwrap();
     newcomer.sync().await;
 
@@ -214,4 +214,19 @@ async fn signing_out_and_removing_data_empties_this_computer_only() {
     desktop.sync().await;
     assert_eq!(desktop.project_names().await, ["Thesis"]);
     assert_eq!(laptop.project_names().await, ["Thesis"]);
+}
+
+#[tokio::test]
+async fn daily_plans_sync_too() {
+    use crate::features::daily_plan::service as plan;
+    let (laptop, desktop, _) = two_computers_sharing_a_task().await;
+    let today = chrono::NaiveDate::from_ymd_opt(2026, 10, 22).unwrap();
+    plan::quick_add(&laptop.db, "Write report 45m 2pm !", today, today).await.unwrap();
+    laptop.sync().await;
+    desktop.sync().await;
+
+    let day = plan::get_day(&desktop.db, today, today).await.unwrap();
+    assert_eq!(day.tasks[0].title, "Write report");
+    assert_eq!(day.tasks[0].focus_rank, Some(1));
+    assert_eq!(day.blocks[0].start_minute, 14 * 60);
 }

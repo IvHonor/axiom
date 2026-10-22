@@ -1,4 +1,7 @@
 import {
+  createContext,
+  useContext,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -6,15 +9,19 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
+import { TileMoveContext, useTileMovement, type TileMovement } from "./TileMoveHandle";
+import { TILE_GRID, type TilePosition, type TileSize } from "./tileLayout";
+export { TILE_GRID, type TileSize } from "./tileLayout";
 
-/** A tile's size in grid cells. */
-export interface TileSize {
-  w: number;
-  h: number;
+interface TileLayout {
+  size: TileSize;
+  width: number;
+  height: number;
 }
+const TileLayoutContext = createContext<TileLayout>({ size: { w: 4, h: 4 }, width: 0, height: 0 });
+/** Actual content space, excluding the panel header and padding. */
+export const useTileLayout = () => useContext(TileLayoutContext);
 
-/** The grid tiles snap to. The CSS reads these values, so this is the one place to change them. */
-export const TILE_GRID = { columns: 12, rowHeight: 48, gap: 16 };
 const MIN: TileSize = { w: 2, h: 2 };
 const MAX: TileSize = { w: TILE_GRID.columns, h: 16 };
 
@@ -42,6 +49,8 @@ export function TileGrid({ children }: { children: ReactNode }) {
 
 interface ResizableTileProps {
   size: TileSize;
+  position?: TilePosition;
+  movement?: TileMovement;
   onResize: (size: TileSize) => void;
   /** Names the tile for screen readers ("Resize Finance"). */
   label: string;
@@ -49,10 +58,22 @@ interface ResizableTileProps {
 }
 
 /** A grid cell whose bottom-right corner can be dragged to resize it, snapping to whole cells. */
-export function ResizableTile({ size, onResize, label, children }: ResizableTileProps) {
+export function ResizableTile({ size, position, movement, onResize, label, children }: ResizableTileProps) {
   const cell = useRef<HTMLDivElement>(null);
+  const { control, moving } = useTileMovement(cell, label, size, position, movement);
   const drag = useRef<{ x: number; y: number; width: number; height: number; colStep: number } | null>(null);
   const [resizing, setResizing] = useState(false);
+  const [bounds, setBounds] = useState({ width: 0, height: 0 });
+
+  useLayoutEffect(() => {
+    const body = cell.current?.querySelector(".panel-body");
+    if (!body) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setBounds({ width: Math.floor(entry.contentRect.width), height: Math.floor(entry.contentRect.height) });
+    });
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, []);
 
   function update(next: TileSize) {
     const w = clamp(next.w, MIN.w, MAX.w);
@@ -105,13 +126,18 @@ export function ResizableTile({ size, onResize, label, children }: ResizableTile
   return (
     <div
       ref={cell}
-      className={resizing ? "tile-cell is-resizing" : "tile-cell"}
-      style={{ "--w": size.w, "--h": size.h } as CSSProperties}
+      className={`tile-cell${resizing ? " is-resizing" : ""}${moving ? " is-moving" : ""}`}
+      style={{
+        "--w": size.w, "--h": size.h,
+        ...(position ? { gridColumn: `${position.col} / span ${size.w}`, gridRow: `${position.row} / span ${size.h}` } : {}),
+      } as CSSProperties}
     >
-      {children}
-      {resizing && (
+      <TileLayoutContext.Provider value={{ size, ...bounds }}>
+        <TileMoveContext.Provider value={control}>{children}</TileMoveContext.Provider>
+      </TileLayoutContext.Provider>
+      {(resizing || moving) && (
         <span className="tile-size">
-          {size.w} × {size.h}
+          {moving && position ? `Column ${position.col} · Row ${position.row}` : `${size.w} × ${size.h}`}
         </span>
       )}
       <button

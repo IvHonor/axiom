@@ -4,6 +4,11 @@ import { projectBoard } from "../features/project_board";
 import { emberThemes } from "../themes/ember_themes";
 import { modernThemes } from "../themes/modern_themes";
 import { wireframeThemes } from "../themes/wireframe_themes";
+import { catppuccinThemes } from "../themes/catppuccin_themes";
+import { tokyoNightThemes } from "../themes/tokyo_night_themes";
+import { rosePineThemes } from "../themes/rose_pine_themes";
+import { gruvboxThemes } from "../themes/gruvbox_themes";
+import { nordThemes } from "../themes/nord_themes";
 import type { ExtensionManifest } from "./types";
 
 /**
@@ -54,6 +59,11 @@ export const EXTENSIONS: ExtensionManifest[] = [
   projectBoard,
   wireframeThemes,
   emberThemes,
+  catppuccinThemes,
+  tokyoNightThemes,
+  rosePineThemes,
+  gruvboxThemes,
+  nordThemes,
   modernThemes,
 ];
 

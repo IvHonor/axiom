@@ -28,7 +28,11 @@ export interface AreaContribution {
    * area is then listed as "Coming soon" and can't be installed. */
   View?: ComponentType;
   /** Compact tile for the overview. */
-  Summary?: ComponentType;
+  Summary?: ComponentType<{ onOpen: () => void }>;
+  /** Summary manages its content within the tile's available space. */
+  fittedSummary?: boolean;
+  /** Optional overview title with area-specific controls. */
+  SummaryTitle?: ComponentType<{ onOpen: () => void }>;
   /** A sidebar of the area's own, opened from its icon in the activity bar
    * (under Extensions). The shell draws the frame and title; this is the body. */
   Sidebar?: ComponentType<AreaSidebarProps>;

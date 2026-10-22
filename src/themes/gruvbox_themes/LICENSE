@@ -1,0 +1,15 @@
+Gruvbox palette attribution
+
+Author: Pavel Pertsev (morhetz)
+Source: https://github.com/morhetz/gruvbox
+
+Upstream declares MIT/X11 in its README:
+https://github.com/morhetz/gruvbox/blob/master/README.md#license
+The upstream repository does not provide a standalone LICENSE file.
+
+Verbatim upstream declaration:
+License
+-------
+[MIT/X11][]
+
+   [MIT/X11]: https://en.wikipedia.org/wiki/MIT_License

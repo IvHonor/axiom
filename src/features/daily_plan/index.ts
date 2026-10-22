@@ -4,6 +4,7 @@ import type { ExtensionManifest } from "../../extensions/types";
 import { DailyPlanView } from "./DailyPlanView";
 import { PlanSidebar } from "./PlanSidebar";
 import { PlanSummary } from "./PlanSummary";
+import { PlanSummaryTitle } from "./overview/OverviewMenu";
 
 export const dailyPlan: ExtensionManifest = {
   id: "daily_plan",
@@ -28,5 +29,5 @@ export const dailyPlan: ExtensionManifest = {
   version: "0.1.0",
   publisher: "Axiom",
   icon: CalendarClock,
-  area: { View: DailyPlanView, Summary: PlanSummary, Sidebar: PlanSidebar },
+  area: { View: DailyPlanView, Summary: PlanSummary, SummaryTitle: PlanSummaryTitle, fittedSummary: true, Sidebar: PlanSidebar },
 };

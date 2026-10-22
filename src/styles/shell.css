@@ -853,6 +853,7 @@
 /* Column count, row height and gap are set inline from TILE_GRID in ResizableTile.tsx. */
 .tile-grid {
   display: grid;
+  overflow-anchor: none;
   grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
   grid-auto-rows: var(--row);
   grid-auto-flow: row dense;
@@ -878,6 +879,16 @@
 
 .tile-cell.is-resizing > .panel {
   border-color: var(--accent);
+}
+
+.tile-cell.is-moving { z-index: 2; }
+.tile-cell.is-moving > .panel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.tile-move-handle { cursor: grab; touch-action: none; }
+.tile-move-handle:hover, .tile-cell.is-moving .tile-move-handle { color: var(--accent); }
+.is-moving, .is-moving * { cursor: grabbing !important; user-select: none !important; }
+.tile-move-announcement {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
 
 .tile-size {

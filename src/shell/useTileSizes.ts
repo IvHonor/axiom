@@ -6,7 +6,8 @@ const DEFAULT_SIZE: TileSize = { w: 4, h: 4 };
 
 function isSize(value: unknown): value is TileSize {
   const size = value as TileSize;
-  return typeof size?.w === "number" && typeof size?.h === "number";
+  return Number.isInteger(size?.w) && size.w >= 2 && size.w <= 12 &&
+    Number.isInteger(size?.h) && size.h >= 2 && size.h <= 16;
 }
 
 /** The size of each extension's overview tile, remembered across restarts. */

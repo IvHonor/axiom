@@ -2,6 +2,7 @@ import "./board.css";
 import { SquareKanban } from "lucide-react";
 import type { ExtensionManifest } from "../../extensions/types";
 import { BoardSummary } from "./BoardSummary";
+import { BoardSummaryTitle } from "./overview/BoardOverviewMenu";
 import { ProjectBoardView } from "./ProjectBoardView";
 
 export const projectBoard: ExtensionManifest = {
@@ -23,5 +24,5 @@ export const projectBoard: ExtensionManifest = {
   version: "0.1.0",
   publisher: "Axiom",
   icon: SquareKanban,
-  area: { View: ProjectBoardView, Summary: BoardSummary },
+  area: { View: ProjectBoardView, Summary: BoardSummary, SummaryTitle: BoardSummaryTitle, fittedSummary: true },
 };

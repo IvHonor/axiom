@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Activity, Archive, ChartLine, Columns3, Ellipsis, GanttChart, Plus, SquareKanban, Table2, X, type LucideIcon } from "lucide-react";
 import { ConfirmButton } from "../../shell/ui/ConfirmButton";
 import { Dropdown } from "../../shell/ui/Dropdown";
@@ -15,8 +15,9 @@ import { TaskDrawer } from "./TaskDrawer";
 import { InsightsView } from "./InsightsView";
 import { TaskTable } from "./TaskTable";
 import { TimelineView } from "./TimelineView";
+import { consumeBoardTarget, useBoardTarget, type BoardViewKind } from "./boardNavigation";
+import { boardOverviewChanged } from "./overview/data";
 
-type BoardViewKind = "board" | "table" | "timeline" | "activity" | "insights" | "archive";
 
 /** Ways to look at a project. The filter bar applies to the first three and the archive. */
 const VIEWS: { id: BoardViewKind; label: string; icon: LucideIcon }[] = [
@@ -30,6 +31,8 @@ const VIEWS: { id: BoardViewKind; label: string; icon: LucideIcon }[] = [
 
 /** The Project Board's main view: project tabs, the board, and the card drawer. */
 export function ProjectBoardView() {
+  const destination = useBoardTarget();
+  const boardRequest = useRef(0);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [savedId, setSavedId] = usePersistentState<string | null>("axiom.board.project", (saved) =>
     typeof saved === "string" ? saved : null,
@@ -46,6 +49,17 @@ export function ProjectBoardView() {
 
   const projectId = projects?.some((p) => p.id === savedId) ? savedId : (projects?.[0]?.id ?? null);
 
+  useEffect(() => {
+    if (!destination || !projects) return;
+    if (projects.some((project) => project.id === destination.projectId)) {
+      setSavedId(destination.projectId);
+      setView(destination.view);
+      setOpenTask(destination.taskId ?? null);
+      setFilter(NO_FILTER);
+    } else setError("That project is no longer available.");
+    consumeBoardTarget(destination.sequence);
+  }, [destination, projects, setSavedId, setView]);
+
   const loadProjects = useCallback(
     () =>
       api
@@ -56,16 +70,18 @@ export function ProjectBoardView() {
   );
 
   const reload = useCallback(async () => {
+    const request = ++boardRequest.current;
     if (projectId === null) return setBoard(null);
     try {
-      setBoard(await api.getBoard(projectId));
+      const value = await api.getBoard(projectId);
+      if (request === boardRequest.current) setBoard(value);
     } catch (e) {
-      setError(errorMessage(e));
+      if (request === boardRequest.current) setError(errorMessage(e));
     }
   }, [projectId]);
 
   useEffect(() => void loadProjects(), [loadProjects]);
-  useEffect(() => void reload(), [reload]);
+  useEffect(() => { void reload(); return () => { boardRequest.current++; }; }, [reload]);
   // Another computer's changes just arrived.
   useDataChanged(() => {
     loadProjects();
@@ -77,6 +93,7 @@ export function ProjectBoardView() {
     async (change: () => Promise<unknown>) => {
       try {
         await change();
+        boardOverviewChanged();
       } catch (e) {
         setError(errorMessage(e));
       }
@@ -88,6 +105,7 @@ export function ProjectBoardView() {
   async function createProject(name: string) {
     try {
       const project = await api.createProject(name);
+      boardOverviewChanged();
       setSavedId(project.id);
       await loadProjects();
     } catch (e) {
@@ -98,6 +116,7 @@ export function ProjectBoardView() {
   async function projectAction(change: () => Promise<unknown>) {
     try {
       await change();
+      boardOverviewChanged();
     } catch (e) {
       setError(errorMessage(e));
     }

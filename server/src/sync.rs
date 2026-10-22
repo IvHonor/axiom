@@ -119,7 +119,7 @@ pub async fn push(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Pu
 #[derive(Deserialize)]
 pub struct PullQuery {
     #[serde(default)]
-    since: i64,
+    pub since: i64,
 }
 
 pub async fn pull(State(s): State<AppState>, auth: AuthUser, Query(query): Query<PullQuery>) -> Result<Json<PullResponse>, ApiError> {
@@ -153,7 +153,7 @@ pub fn merge(data: &mut Map<String, Value>, times: &mut Map<String, Value>, fiel
     }
 }
 
-fn parse(json: &str) -> Map<String, Value> {
+pub(crate) fn parse(json: &str) -> Map<String, Value> {
     serde_json::from_str(json).unwrap_or_default()
 }
 

@@ -79,3 +79,29 @@ pub fn reset_code(to: &str, code: &str, minutes: i64) -> Email {
         ),
     }
 }
+
+/// An invitation to a shared board.
+pub fn board_invite(to: &str, inviter: &str, board: &str, role: axiom_protocol::Role, days: i64) -> Email {
+    let can = match role {
+        axiom_protocol::Role::Viewer => "see",
+        axiom_protocol::Role::Editor => "work on the cards in",
+        _ => "manage",
+    };
+    let escape = |t: &str| t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+    Email {
+        to: to.into(),
+        subject: format!("{inviter} invited you to the board \"{board}\" on Axiom"),
+        text: format!(
+            "{inviter} invited you to {can} their board \"{board}\" on Axiom.
+
+             To accept, open Axiom and sign in with this email address (or create an account with it),              then open the Project Board's side panel and accept the invitation. It expires in {days} days.
+
+             If you weren't expecting this, you can ignore it."
+        ),
+        html: format!(
+            "<p><b>{inviter_html}</b> invited you to {can} their board <b>{board_html}</b> on Axiom.</p>             <p>To accept, open Axiom and sign in with this email address (or create an account with it),              then open the Project Board's side panel and accept the invitation. It expires in {days} days.</p>             <p style=\"color:#777\">If you weren't expecting this, you can ignore it.</p>",
+            inviter_html = escape(inviter),
+            board_html = escape(board),
+        ),
+    }
+}

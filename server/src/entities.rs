@@ -113,3 +113,96 @@ pub mod session {
 
     impl ActiveModelBehavior for ActiveModel {}
 }
+
+pub mod space {
+    use sea_orm::entity::prelude::*;
+
+    /// A project shared between accounts. Its id is the project's.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "spaces")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub owner_id: String,
+        /// The last sequence number handed to one of its records.
+        pub seq: i64,
+        pub created_at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub mod space_member {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "space_members")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub space_id: String,
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub user_id: String,
+        /// See `axiom_protocol::Role`.
+        pub role: String,
+        pub joined_at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub mod space_invite {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "space_invites")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub space_id: String,
+        /// Normalised; the account may not exist yet.
+        pub email: String,
+        pub role: String,
+        /// The inviter's user id.
+        pub invited_by: String,
+        pub created_at: DateTimeUtc,
+        pub expires_at: DateTimeUtc,
+        pub accepted_at: Option<DateTimeUtc>,
+        /// Declined, or withdrawn by an admin.
+        pub closed_at: Option<DateTimeUtc>,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub mod space_record {
+    use sea_orm::entity::prelude::*;
+
+    /// One row of a shared board, merged from every member's changes.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "space_records")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub space_id: String,
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub table_name: String,
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub record_id: String,
+        pub data: String,
+        pub field_times: String,
+        pub seq: i64,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}

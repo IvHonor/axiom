@@ -26,6 +26,34 @@ pub mod routes {
     pub const SYNC_PUSH: &str = "/v1/sync/push";
     /// `GET` with `?since=<cursor>`.
     pub const SYNC_PULL: &str = "/v1/sync/pull";
+
+    // Shared boards ("spaces"): a project shared with other accounts.
+    /// `GET` the spaces you're in; `POST` shares one of your projects.
+    pub const SPACES: &str = "/v1/spaces";
+    /// `DELETE` (owner): stops sharing and deletes the shared copy.
+    pub const SPACE: &str = "/v1/spaces/{id}";
+    /// `POST`: moves rows already synced to your account into the space.
+    pub const SPACE_ADOPT: &str = "/v1/spaces/{id}/adopt";
+    pub const SPACE_PUSH: &str = "/v1/spaces/{id}/push";
+    /// `GET` with `?since=<cursor>`.
+    pub const SPACE_PULL: &str = "/v1/spaces/{id}/pull";
+    /// `GET`: members, and (for admins) pending invitations.
+    pub const SPACE_MEMBERS: &str = "/v1/spaces/{id}/members";
+    /// `PATCH` changes a member's role; `DELETE` removes them (or yourself: leave).
+    pub const SPACE_MEMBER: &str = "/v1/spaces/{id}/members/{user_id}";
+    /// `POST` invites someone by email.
+    pub const SPACE_INVITES: &str = "/v1/spaces/{id}/invites";
+    /// `DELETE` withdraws an invitation.
+    pub const SPACE_INVITE: &str = "/v1/spaces/{id}/invites/{invite_id}";
+    /// `GET` invitations waiting for you.
+    pub const INVITES: &str = "/v1/invites";
+    pub const INVITE_ACCEPT: &str = "/v1/invites/{id}/accept";
+    pub const INVITE_DECLINE: &str = "/v1/invites/{id}/decline";
+}
+
+/// Fills in a route's `{name}` placeholders, e.g. `route(SPACE, &[("id", "p1")])`.
+pub fn route(template: &str, values: &[(&str, &str)]) -> String {
+    values.iter().fold(template.to_owned(), |path, (name, value)| path.replace(&format!("{{{name}}}"), value))
 }
 
 /// Most changes in one push, and most records in one pull page.
@@ -77,6 +105,137 @@ pub struct PullResponse {
 /// Table names and ids are used in SQL on the devices, so only plain ones are allowed.
 pub fn is_plain_name(name: &str) -> bool {
     (1..=64).contains(&name.len()) && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
+// ---------- Shared boards ----------
+
+/// What a member of a shared board may do. Ordered: each role can do
+/// everything the ones before it can.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Role {
+    /// Sees the board; changes nothing.
+    Viewer,
+    /// Works on cards: creates, edits, moves and completes them, with their checklists and labels.
+    Editor,
+    /// Also changes the board itself (columns, labels, templates, its name) and manages members.
+    Admin,
+    /// The person who shared it. Also makes or removes admins and can delete the board.
+    Owner,
+}
+
+impl Role {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Role::Viewer => "viewer",
+            Role::Editor => "editor",
+            Role::Admin => "admin",
+            Role::Owner => "owner",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Role> {
+        [Role::Viewer, Role::Editor, Role::Admin, Role::Owner].into_iter().find(|r| r.as_str() == text)
+    }
+}
+
+/// The tables a shared board holds, and the least role that may change each.
+/// Both the server (which enforces it) and the app (which explains it) use this.
+pub fn space_table_role(table: &str) -> Option<Role> {
+    match table {
+        "project_board_projects" | "project_board_columns" | "project_board_labels" | "project_board_templates" => Some(Role::Admin),
+        "project_board_tasks" | "project_board_task_labels" | "project_board_checklist_items" | "project_board_task_events" => {
+            Some(Role::Editor)
+        }
+        _ => None,
+    }
+}
+
+/// A shared board you're in, from `SPACES`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Space {
+    /// The shared project's id.
+    pub id: String,
+    pub name: String,
+    pub role: Role,
+    pub owner_email: String,
+    pub members: u32,
+}
+
+/// Body of `POST SPACES`: the project to share.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateSpace {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecordRef {
+    pub table: String,
+    pub id: String,
+}
+
+/// Body of `SPACE_ADOPT`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Adopt {
+    pub records: Vec<RecordRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Adopted {
+    pub moved: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Member {
+    pub user_id: String,
+    pub email: String,
+    pub role: Role,
+    pub joined_at: DateTime<Utc>,
+    /// The account asking.
+    pub you: bool,
+}
+
+/// An invitation not yet answered.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Invite {
+    pub id: String,
+    pub email: String,
+    pub role: Role,
+    /// Who sent it (their email).
+    pub invited_by: String,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+}
+
+/// What `SPACE_MEMBERS` returns. `invites` is empty unless you're an admin.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Members {
+    pub members: Vec<Member>,
+    pub invites: Vec<Invite>,
+}
+
+/// Body of `POST SPACE_INVITES`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewInvite {
+    pub email: String,
+    pub role: Role,
+}
+
+/// Body of `PATCH SPACE_MEMBER`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChangeRole {
+    pub role: Role,
+}
+
+/// An invitation waiting for you, from `INVITES`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MyInvite {
+    pub id: String,
+    pub space_id: String,
+    pub space_name: String,
+    pub role: Role,
+    pub invited_by: String,
+    pub expires_at: DateTime<Utc>,
 }
 
 /// Passwords shorter than this are rejected (NIST SP 800-63B's minimum).

@@ -76,6 +76,8 @@ pub async fn delete_account(State(s): State<AppState>, auth: AuthUser, Json(body
     // Deleted explicitly rather than relying on ON DELETE CASCADE, which
     // SQLite only honours when foreign keys are switched on.
     let txn = s.db.begin().await?;
+    // Boards they own are deleted; they leave the rest.
+    crate::spaces::forget_user(&txn, &account.id).await?;
     sync_record::Entity::delete_many().filter(sync_record::Column::UserId.eq(&account.id)).exec(&txn).await?;
     password_reset::Entity::delete_many().filter(password_reset::Column::UserId.eq(&account.id)).exec(&txn).await?;
     session::Entity::delete_many().filter(session::Column::UserId.eq(&account.id)).exec(&txn).await?;

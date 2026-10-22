@@ -20,6 +20,8 @@ pub struct Limits {
     pub failed_sign_ins: Limiter,
     /// Reset emails per address, so nobody can flood someone's inbox.
     pub reset_requests: Limiter,
+    /// Board invitations per inviting account, so nobody can use Axiom to send spam.
+    pub invites: Limiter,
 }
 
 impl Default for Limits {
@@ -28,6 +30,7 @@ impl Default for Limits {
             per_ip: Limiter::new(30, Duration::from_secs(10 * 60)),
             failed_sign_ins: Limiter::new(10, Duration::from_secs(15 * 60)),
             reset_requests: Limiter::new(3, Duration::from_secs(60 * 60)),
+            invites: Limiter::new(20, Duration::from_secs(60 * 60)),
         }
     }
 }

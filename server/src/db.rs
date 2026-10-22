@@ -3,6 +3,7 @@
 mod m001_accounts;
 mod m002_sync;
 mod m003_password_resets;
+mod m004_spaces;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
 use sea_orm_migration::prelude::*;
@@ -16,6 +17,7 @@ impl MigratorTrait for Migrator {
             Box::new(m001_accounts::Migration),
             Box::new(m002_sync::Migration),
             Box::new(m003_password_resets::Migration),
+            Box::new(m004_spaces::Migration),
         ]
     }
 

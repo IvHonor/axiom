@@ -6,3 +6,4 @@
 
 pub mod daily_plan;
 pub mod project_board;
+pub mod reading;

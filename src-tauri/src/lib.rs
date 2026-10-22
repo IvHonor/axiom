@@ -8,6 +8,7 @@ mod system;
 use account::commands as acct;
 use features::daily_plan::commands as plan;
 use features::project_board::commands as board;
+use features::reading::commands as reading;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -32,6 +33,9 @@ pub fn run() {
             // The local database lives in the app's data folder, e.g.
             // %APPDATA%\app.axiom.desktop\axiom.db on Windows.
             let file = app.path().app_data_dir()?.join("axiom.db");
+            // Book covers, downloaded once so the library shows them offline.
+            let covers = app.path().app_cache_dir().ok().map(|dir| dir.join("covers"));
+            app.manage(features::reading::library::OpenLibrary::new(covers));
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 handle.state::<db::Db>().connect(&file).await;
@@ -139,6 +143,27 @@ pub fn run() {
             board::board_create_from_template,
             board::board_activity,
             board::board_insights,
+            reading::reading_search,
+            reading::reading_editions,
+            reading::reading_cover,
+            reading::reading_list,
+            reading::reading_get,
+            reading::reading_add,
+            reading::reading_update,
+            reading::reading_choose_edition,
+            reading::reading_set_status,
+            reading::reading_log_progress,
+            reading::reading_read_again,
+            reading::reading_move,
+            reading::reading_delete,
+            reading::reading_delete_session,
+            reading::reading_add_note,
+            reading::reading_update_note,
+            reading::reading_delete_note,
+            reading::reading_search_notes,
+            reading::reading_set_goal,
+            reading::reading_summary,
+            reading::reading_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

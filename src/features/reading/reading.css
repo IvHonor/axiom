@@ -1,0 +1,1006 @@
+/* Reading Tracker. Colors, fonts and shapes come from the active theme;
+   the toolbar, segmented controls and charts reuse the Project Board's. */
+
+.rd-view {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rd-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.rd-pad {
+  padding: 16px 20px;
+}
+
+.rd-fill {
+  flex: 1;
+}
+
+.rd-small {
+  font-size: 12px;
+}
+
+.rd-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--danger);
+  user-select: text;
+}
+
+.rd-count {
+  font-family: var(--font-label);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.rd-tab-gap {
+  width: 1px;
+  height: 18px;
+  flex: none;
+  margin: 0 6px;
+  background: var(--line-strong);
+}
+
+.rd-link {
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rd-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.rd-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rd-inline label,
+.rd-log-form label,
+.rs-book-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rd-view input,
+.rd-view textarea,
+.rd-dialog input,
+.rd-dialog textarea,
+.rs-book-form input {
+  height: 28px;
+  padding: 0 8px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.rd-view input:focus,
+.rd-view textarea:focus,
+.rd-dialog input:focus,
+.rs-book-form input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+input.rd-num {
+  width: 64px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rd-textarea {
+  width: 100%;
+  height: auto !important;
+  padding: 6px 8px !important;
+  font: inherit;
+  resize: vertical;
+}
+
+/* ---------- Covers, stars and progress ---------- */
+
+.rd-cover {
+  --w: 120px;
+  width: var(--w);
+  aspect-ratio: 2 / 3;
+  flex: none;
+  display: grid;
+  overflow: hidden;
+  background: var(--hover);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius-sm) / 1.5);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+}
+
+.rd-cover.is-sm {
+  --w: 40px;
+}
+
+.rd-cover.is-lg {
+  --w: 180px;
+}
+
+.rd-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rd-cover-blank {
+  place-self: center;
+  font-size: calc(var(--w) / 3);
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.rd-stars {
+  display: inline-flex;
+  gap: 2px;
+  color: var(--accent);
+}
+
+.rd-stars button {
+  padding: 0;
+  display: grid;
+}
+
+.rd-star {
+  position: relative;
+  display: inline-block;
+}
+
+.rd-star-empty {
+  color: var(--line-strong);
+}
+
+.rd-star-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  overflow: hidden;
+}
+
+.rd-star-fill svg {
+  fill: currentColor;
+}
+
+.rd-progress {
+  width: 100%;
+  height: 4px;
+  min-width: 40px;
+  flex: none;
+  display: block;
+  overflow: hidden;
+  background: var(--line);
+  border-radius: 2px;
+}
+
+.rd-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* ---------- Shelves ---------- */
+
+.rd-shelf,
+.rd-notes-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px 24px;
+}
+
+.rd-shelf-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.rd-filter {
+  width: 280px;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.rd-filter input {
+  flex: 1;
+  min-width: 0;
+  padding: 0 !important;
+  background: none !important;
+  border: none !important;
+}
+
+.rd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 22px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rd-grid.is-reading {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+
+.rd-grid li {
+  border-radius: var(--radius-sm);
+}
+
+.rd-grid li.is-over {
+  box-shadow: -3px 0 0 var(--accent);
+}
+
+.rd-tile {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+}
+
+.rd-tile .rd-cover {
+  --w: 100%;
+  margin-bottom: 6px;
+  transition: transform 0.15s ease;
+}
+
+.rd-tile:hover .rd-cover {
+  transform: translateY(-2px);
+}
+
+.rd-tile-title {
+  width: 100%;
+  display: -webkit-box;
+  overflow: hidden;
+  font-weight: 600;
+  line-height: 1.3;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.rd-tile-author,
+.rd-tile-meta {
+  width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rd-tile-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 11.5px;
+}
+
+.rd-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 420px;
+  padding: 24px 0;
+}
+
+/* ---------- A book's page ---------- */
+
+.rd-book {
+  display: flex;
+  flex-direction: column;
+}
+
+.rd-backbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rd-book-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 28px;
+  padding: 20px 20px 32px;
+}
+
+@media (max-width: 760px) {
+  .rd-book-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rd-book-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.rd-book-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+}
+
+.rd-book-title h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.rd-book-title p {
+  margin: 4px 0 0;
+}
+
+.rd-status {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.rd-status button {
+  height: 28px;
+  padding: 0 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.rd-status button:hover {
+  color: var(--text);
+}
+
+.rd-status button.is-active {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.rd-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.rd-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rd-progress-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rd-progress-line .rd-progress {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+}
+
+.rd-progress-text {
+  flex: none;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.rd-progress-note {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.rd-log-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.rd-details {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.rd-field > span:first-child {
+  color: var(--text-dim);
+}
+
+.rd-field input:not(.rd-num) {
+  width: 100%;
+}
+
+.rd-field small {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.rd-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rd-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.rd-dates input {
+  padding: 0 4px !important;
+  font-size: 11.5px;
+}
+
+.rd-past {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.rd-past ul,
+.rd-log,
+.rd-notes,
+.rd-results,
+.rd-finished-list,
+.rt-books {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rd-past li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ---------- Notes ---------- */
+
+.rd-note-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.rd-notes {
+  display: flex;
+  flex-direction: column;
+}
+
+.rd-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 2px;
+  border-top: 1px solid var(--line);
+}
+
+.rd-notes-view .rd-note:first-child {
+  border-top: none;
+}
+
+.rd-note.is-editing {
+  display: block;
+}
+
+.rd-note-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-dim);
+}
+
+.rd-note.is-quote .rd-note-icon,
+.rd-note.is-bookmark .rd-note-icon {
+  color: var(--accent);
+}
+
+.rd-note-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.rd-note-open:hover .rd-note-text {
+  color: var(--text);
+}
+
+.rd-note-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.rd-note-page {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+
+.rd-note-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.rd-note.is-quote .rd-note-text {
+  font-style: italic;
+}
+
+.rd-note-actions {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+}
+
+.rd-note:hover .rd-note-actions,
+.rd-note-actions:focus-within {
+  opacity: 1;
+}
+
+/* ---------- Reading log ---------- */
+
+.rd-log li {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  font-size: 12.5px;
+  border-top: 1px solid var(--line);
+}
+
+.rd-log li:first-child {
+  border-top: none;
+}
+
+.rd-log-day {
+  color: var(--text-dim);
+}
+
+.rd-log-delete {
+  opacity: 0;
+}
+
+.rd-log li:hover .rd-log-delete,
+.rd-log-delete:focus-visible,
+.rd-log-delete.is-armed {
+  opacity: 1;
+}
+
+.rd-log-delete.is-armed {
+  width: auto;
+  font-size: 11px;
+  color: var(--danger);
+}
+
+/* ---------- Dialogs ---------- */
+
+.rd-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.rd-dialog {
+  width: min(520px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
+}
+
+.rd-dialog.is-wide {
+  width: min(640px, 100%);
+}
+
+.rd-dialog-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 12px 18px;
+  color: var(--accent);
+  border-bottom: 1px solid var(--line);
+}
+
+.rd-dialog-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rd-dialog-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+  font-size: 13px;
+}
+
+.rd-dialog-body > p {
+  margin: 0;
+}
+
+.rd-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--line);
+}
+
+.rd-search input {
+  flex: 1;
+  height: 32px;
+  font-size: 14px;
+  background: none !important;
+  border: none !important;
+}
+
+.rd-spin {
+  animation: rd-spin 0.9s linear infinite;
+}
+
+@keyframes rd-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.rd-results {
+  display: flex;
+  flex-direction: column;
+}
+
+.rd-results button,
+.rd-finished-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+.rd-results button:hover,
+.rd-finished-list button:hover {
+  background: var(--hover);
+}
+
+.rd-results button.is-current {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.rd-result-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rd-result-text b,
+.rd-result-text .dim {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rd-result-text .dim {
+  font-size: 12px;
+}
+
+.rd-result-meta {
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+
+.rd-manual,
+.rd-back {
+  align-self: flex-start;
+}
+
+.rd-confirm-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 20px;
+}
+
+.rd-confirm-grid .rd-cover.is-lg {
+  --w: 140px;
+}
+
+.rd-confirm-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.rd-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rd-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---------- Stats ---------- */
+
+.rd-stats {
+  padding: 16px 20px 24px;
+}
+
+.rd-year {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rd-year h2 {
+  margin: 0;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rd-goal {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+}
+
+.rd-goal-icon {
+  flex: none;
+  color: var(--accent);
+}
+
+.rd-goal-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rd-goal-body .rd-progress {
+  height: 8px;
+  border-radius: 4px;
+}
+
+.rd-goal-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rd-finished {
+  padding: 14px 18px;
+  gap: 10px;
+}
+
+.rd-finished > header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.rd-finished-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 4px 12px;
+}
+
+/* ---------- Side panel ---------- */
+
+.rs-reading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 16px 12px;
+}
+
+.rs-book {
+  display: flex;
+  gap: 10px;
+}
+
+.rs-book-open {
+  flex: none;
+  display: grid;
+}
+
+.rs-book-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rs-book-title {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rs-book-form {
+  font-size: 11.5px;
+}
+
+.rs-book-form input.rd-num {
+  width: 56px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11.5px;
+}
+
+.rs-add {
+  align-self: flex-start;
+}
+
+.rs-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 16px 12px 32px;
+  font-size: 12.5px;
+}
+
+.rs-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.rs-streak svg,
+.rt-streak svg {
+  color: var(--accent);
+}
+
+/* ---------- Overview tile ---------- */
+
+.rt-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rt-books {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rt-books button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+
+.rt-book-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rt-book-title {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rt-book-meta {
+  font-size: 11.5px;
+}
+
+.rt-more {
+  font-size: 12px;
+}
+
+.rt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  font-size: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.rt-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rd-view .is-danger {
+  color: var(--danger);
+}

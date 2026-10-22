@@ -16,6 +16,7 @@ impl MigratorTrait for Migrator {
         all.extend(crate::sync::migrations::all());
         // New migrations go after the ones already shipped.
         all.extend(crate::features::daily_plan::migrations::all());
+        all.extend(crate::features::reading::migrations::all());
         all
     }
 }

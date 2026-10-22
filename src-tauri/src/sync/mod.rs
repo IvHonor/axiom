@@ -41,7 +41,12 @@ use local::{Cursor, Link};
 
 /// Every table that syncs. Features list their own; add new lists here.
 pub static TABLES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
-    [crate::features::project_board::SYNCED_TABLES, crate::features::daily_plan::SYNCED_TABLES].concat()
+    [
+        crate::features::project_board::SYNCED_TABLES,
+        crate::features::daily_plan::SYNCED_TABLES,
+        crate::features::reading::SYNCED_TABLES,
+    ]
+    .concat()
 });
 
 /// How often the loop looks for local edits.

@@ -1,6 +1,7 @@
 import { GraduationCap, Wallet } from "lucide-react";
 import { dailyPlan } from "../features/daily_plan";
 import { projectBoard } from "../features/project_board";
+import { reading } from "../features/reading";
 import { emberThemes } from "../themes/ember_themes";
 import { modernThemes } from "../themes/modern_themes";
 import { wireframeThemes } from "../themes/wireframe_themes";
@@ -57,6 +58,7 @@ export const EXTENSIONS: ExtensionManifest[] = [
   },
   dailyPlan,
   projectBoard,
+  reading,
   wireframeThemes,
   emberThemes,
   catppuccinThemes,

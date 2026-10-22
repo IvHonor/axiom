@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Check, Moon, Plus, Star, Sunrise, X } from "lucide-react";
 import { api, MAX_FOCUS, trackedMinutes, type CarryTo, type Day, type DayPlan, type PlanTask } from "./api";
-import { Capacity } from "./DailyPlanView";
+import { Capacity } from "./Capacity";
 import { cardStatus, ProjectChip } from "./TaskPanel";
 import { addDays, duration, nowMinute, parseDuration, relativeDay } from "./time";
 

@@ -59,7 +59,7 @@ export function InsightsView({ board, onError }: InsightsViewProps) {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "danger" }) {
+export function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "danger" }) {
   return (
     <div className={`pb-stat panel${tone ? ` is-${tone}` : ""}`}>
       <div className="stat-value">{value}</div>
@@ -68,7 +68,7 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
   );
 }
 
-function ChartCard({ title, note, className, children }: { title: string; note?: string; className?: string; children: ReactNode }) {
+export function ChartCard({ title, note, className, children }: { title: string; note?: string; className?: string; children: ReactNode }) {
   return (
     <section className={`pb-chart panel${className ? ` ${className}` : ""}`}>
       <header>
@@ -81,7 +81,7 @@ function ChartCard({ title, note, className, children }: { title: string; note?:
 }
 
 /** Width of an element, kept up to date as it resizes. */
-function useWidth() {
+export function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -94,12 +94,12 @@ function useWidth() {
 }
 
 /** A "nice" axis maximum and three gridline values for counts. */
-function scale(max: number) {
+export function scale(max: number) {
   const top = Math.max(4, Math.ceil(max / 4) * 4);
   return { top, ticks: [0, top / 2, top] };
 }
 
-const PAD = { top: 12, right: 12, bottom: 24, left: 32 };
+export const PAD = { top: 12, right: 12, bottom: 24, left: 32 };
 
 /**
  * Two lines over 30 days: every task that existed (a neutral reference) and
@@ -243,7 +243,7 @@ function WeeklyBars({ weeks }: { weeks: Insights["throughput"] }) {
 }
 
 /** A bar path with its data end rounded and its baseline square. */
-function roundedTop(x: number, y: number, w: number, h: number, r: number) {
+export function roundedTop(x: number, y: number, w: number, h: number, r: number) {
   const radius = Math.min(r, w / 2, h);
   return `M${x},${y + h}V${y + radius}Q${x},${y} ${x + radius},${y}H${x + w - radius}Q${x + w},${y} ${x + w},${y + radius}V${y + h}Z`;
 }

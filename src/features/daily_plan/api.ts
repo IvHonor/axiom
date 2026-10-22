@@ -68,6 +68,58 @@ export interface Block {
   title: string;
   color: string;
   taskId: string | null;
+  /** Set when a routine laid this block out. */
+  routineId: string | null;
+}
+
+/** An event from an imported calendar: fixed and read-only. */
+export interface CalendarEvent {
+  id: string;
+  calendarId: string;
+  day: Day;
+  startMinute: number;
+  durationMinutes: number;
+  allDay: boolean;
+  /** False for events marked as free time. */
+  busy: boolean;
+  title: string;
+  color: string;
+}
+
+/** A calendar read from a private iCal link (the link itself stays in Rust). */
+export interface Calendar {
+  id: string;
+  name: string;
+  color: string;
+  refreshedAt: string | null;
+  /** Why the last read failed, ready to show. */
+  problem: string | null;
+  createdAt: string;
+}
+
+/** A block that repeats on chosen weekdays. */
+export interface Routine {
+  id: string;
+  title: string;
+  startMinute: number;
+  durationMinutes: number;
+  color: string;
+  /** Monday is bit 0 (1), Sunday bit 6 (64). */
+  weekdays: number;
+}
+
+export type RoutineFields = Omit<Routine, "id">;
+
+/** Patterns over recent weeks. Mirrors `PlanInsights`. */
+export interface PlanInsights {
+  pace: number | null;
+  pacedTasks: number;
+  weeks: { weekStart: Day; trackedMinutes: number }[];
+  days: { day: Day; planned: number; done: number }[];
+  planningStreak: number;
+  shutdownStreak: number;
+  focusTotal: number;
+  focusDone: number;
 }
 
 export interface Settings {
@@ -80,6 +132,7 @@ export interface DayPlan {
   day: Day;
   tasks: PlanTask[];
   blocks: Block[];
+  events: CalendarEvent[];
   /** Unfinished tasks from earlier days (only for today). */
   earlier: PlanTask[];
   inbox: PlanTask[];
@@ -91,6 +144,8 @@ export interface DayPlan {
   suggestions: Card[];
   /** The task being timed, on any day. */
   running: PlanTask | null;
+  /** How long tasks really take against their estimates (1.3 = 30% longer); null until known. */
+  pace: number | null;
 }
 
 export interface TodaySummary {
@@ -146,6 +201,17 @@ export const api = {
   updateDay: (day: Day, fields: DayFields) => invoke<DayInfo>("plan_update_day", { day, fields }),
   replan: (day: Day, nowMinute: number) => invoke<ScheduleResult>("plan_replan", { day, nowMinute }),
   fitIntoDay: (day: Day, fromMinute: number) => invoke<ScheduleResult>("plan_fit_into_day", { day, fromMinute }),
+  listRoutines: () => invoke<Routine[]>("plan_list_routines"),
+  createRoutine: (fields: RoutineFields) => invoke<Routine>("plan_create_routine", { fields }),
+  updateRoutine: (id: string, fields: RoutineFields, today: Day) => invoke<Routine>("plan_update_routine", { id, fields, today }),
+  deleteRoutine: (id: string, today: Day) => invoke<void>("plan_delete_routine", { id, today }),
+  insights: (today: Day) => invoke<PlanInsights>("plan_insights", { today }),
+  listCalendars: () => invoke<Calendar[]>("plan_list_calendars"),
+  addCalendar: (name: string, url: string, color: string, today: Day) =>
+    invoke<Calendar>("plan_add_calendar", { name, url, color, today }),
+  removeCalendar: (id: string) => invoke<void>("plan_remove_calendar", { id }),
+  /** Re-reads calendars that are due (or all, with `force`); true if any were. */
+  refreshCalendars: (today: Day, force: boolean) => invoke<boolean>("plan_refresh_calendars", { today, force }),
 };
 
 /** Minutes tracked on a task, including a running timer. */

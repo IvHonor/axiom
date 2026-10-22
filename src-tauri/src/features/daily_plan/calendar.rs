@@ -1,0 +1,164 @@
+//! Calendar import: events from Google Calendar, Outlook or any app that
+//! offers a private iCal (.ics) link, shown on the planner as busy time.
+//! Read-only, and kept on this computer only (see m004_calendars).
+
+use std::time::Duration;
+
+use chrono::{Days, Utc};
+use sea_orm::prelude::Date;
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait};
+
+use super::entities::{calendar, event};
+use super::ics;
+use super::service::COLORS;
+use crate::db::new_id;
+use crate::error::{Error, Result};
+
+/// Calendars are read again after this long.
+const STALE_MINUTES: i64 = 15;
+/// Events are kept from two weeks back to four months ahead.
+const DAYS_BACK: u64 = 14;
+const DAYS_AHEAD: u64 = 120;
+/// Bigger than any real calendar; stops a wrong link filling the disk.
+const MAX_BYTES: usize = 20 * 1024 * 1024;
+
+pub async fn list_calendars(db: &DatabaseConnection) -> Result<Vec<calendar::Model>> {
+    Ok(calendar::Entity::find().order_by_asc(calendar::Column::CreatedAt).all(db).await?)
+}
+
+/// Adds a calendar after checking its link really returns one.
+pub async fn add_calendar(db: &DatabaseConnection, name: &str, url: &str, color: &str, today: Date) -> Result<calendar::Model> {
+    let url = check_url(url)?;
+    let name = match name.trim() {
+        "" => "Calendar".to_owned(),
+        n => n.to_owned(),
+    };
+    let color = if COLORS.contains(&color) { color.to_owned() } else { "gray".to_owned() };
+    let text = fetch(&url).await?;
+    // Read it before saving anything, so a wrong link is caught here.
+    let events = read(&text, today)?;
+
+    let added = calendar::ActiveModel {
+        id: Set(new_id()),
+        name: Set(name),
+        url: Set(url),
+        color: Set(color),
+        refreshed_at: Set(Some(Utc::now())),
+        problem: Set(None),
+        created_at: Set(Utc::now()),
+    }
+    .insert(db)
+    .await?;
+    replace_events(db, &added, events).await?;
+    Ok(added)
+}
+
+pub async fn remove_calendar(db: &DatabaseConnection, id: &str) -> Result<()> {
+    let txn = db.begin().await?;
+    event::Entity::delete_many().filter(event::Column::CalendarId.eq(id)).exec(&txn).await?;
+    calendar::Entity::delete_by_id(id).exec(&txn).await?;
+    txn.commit().await?;
+    Ok(())
+}
+
+/// Reads every calendar that's due (or all, with `force`). A calendar that
+/// can't be read keeps its last events and notes the problem. Returns
+/// whether anything was read.
+pub async fn refresh_calendars(db: &DatabaseConnection, today: Date, force: bool) -> Result<bool> {
+    let due = chrono::Duration::minutes(STALE_MINUTES);
+    let mut refreshed = false;
+    for cal in list_calendars(db).await? {
+        if !force && cal.refreshed_at.is_some_and(|at| Utc::now() - at < due) {
+            continue;
+        }
+        let outcome = match fetch(&cal.url).await {
+            Ok(text) => read(&text, today),
+            Err(e) => Err(e),
+        };
+        let mut active: calendar::ActiveModel = cal.clone().into();
+        active.refreshed_at = Set(Some(Utc::now()));
+        match outcome {
+            Ok(events) => {
+                replace_events(db, &cal, events).await?;
+                active.problem = Set(None);
+            }
+            Err(e) => active.problem = Set(Some(e.to_string())),
+        }
+        active.update(db).await?;
+        refreshed = true;
+    }
+    Ok(refreshed)
+}
+
+/// Events for one day, all-day ones first.
+pub async fn events_on(db: &impl sea_orm::ConnectionTrait, day: Date) -> Result<Vec<event::Model>> {
+    Ok(event::Entity::find()
+        .filter(event::Column::Day.eq(day))
+        .order_by_desc(event::Column::AllDay)
+        .order_by_asc(event::Column::StartMinute)
+        .all(db)
+        .await?)
+}
+
+/// The events in a calendar's text around `today`, in this computer's time zone.
+pub(super) fn read(text: &str, today: Date) -> Result<Vec<ics::DayEvent>> {
+    ics::day_events(text, today - Days::new(DAYS_BACK), today + Days::new(DAYS_AHEAD), rrule::Tz::LOCAL).map_err(Error::Invalid)
+}
+
+pub(super) async fn replace_events(db: &DatabaseConnection, cal: &calendar::Model, events: Vec<ics::DayEvent>) -> Result<()> {
+    let txn = db.begin().await?;
+    event::Entity::delete_many().filter(event::Column::CalendarId.eq(cal.id.as_str())).exec(&txn).await?;
+    for chunk in events.chunks(200) {
+        let rows = chunk.iter().map(|e| event::ActiveModel {
+            id: Set(new_id()),
+            calendar_id: Set(cal.id.clone()),
+            day: Set(e.day),
+            start_minute: Set(e.start_minute),
+            duration_minutes: Set(e.duration_minutes),
+            all_day: Set(e.all_day),
+            busy: Set(e.busy),
+            title: Set(e.title.clone()),
+            color: Set(cal.color.clone()),
+        });
+        event::Entity::insert_many(rows).exec(&txn).await?;
+    }
+    txn.commit().await?;
+    Ok(())
+}
+
+/// Accepts https (and webcal, which is https by another name) links.
+fn check_url(url: &str) -> Result<String> {
+    let url = url.trim();
+    let url = match url.strip_prefix("webcal://") {
+        Some(rest) => format!("https://{rest}"),
+        None => url.to_owned(),
+    };
+    if !url.starts_with("https://") || url.len() < 12 || url.contains(char::is_whitespace) {
+        return Err(Error::Invalid("Paste the calendar's secret iCal address: a link starting with https:// or webcal://.".into()));
+    }
+    Ok(url)
+}
+
+async fn fetch(url: &str) -> Result<String> {
+    let unreachable = |_| Error::Invalid("Couldn't reach that calendar. Check the link and your connection.".into());
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .user_agent(concat!("Axiom/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(unreachable)?;
+    let mut response = client.get(url).send().await.map_err(unreachable)?;
+    if !response.status().is_success() {
+        return Err(Error::Invalid(match response.status().as_u16() {
+            401 | 403 | 404 => "That calendar link didn't work. It may have been reset: copy the secret address again.".into(),
+            code => format!("The calendar couldn't be read just now (error {code}). Try again later."),
+        }));
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(unreachable)? {
+        body.extend_from_slice(&chunk);
+        if body.len() > MAX_BYTES {
+            return Err(Error::Invalid("That link returned far more than a calendar. Check it's the iCal address.".into()));
+        }
+    }
+    Ok(String::from_utf8_lossy(&body).into_owned())
+}

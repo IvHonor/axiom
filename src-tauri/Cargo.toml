@@ -31,6 +31,8 @@ reqwest = { version = "0.13.5", features = ["json"] }
 # Stores the sign-in in Windows Credential Manager / macOS Keychain / Secret Service.
 keyring = "4.2.0"
 axiom-protocol = { path = "../crates/protocol" }
+rrule = "0.14"
+chrono-tz = "0.10"
 
 
 [dev-dependencies]
@@ -39,4 +41,7 @@ tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-process = "2"
-tauri-plugin-updater = "2"
+# Without the default `zip` feature: our updates are the signed setup .exe
+# (and .app.tar.gz on macOS, which doesn't need it), never zip archives, and
+# the `zip` crate it pulls in has open advisories (RUSTSEC-2026-0367..0369).
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }

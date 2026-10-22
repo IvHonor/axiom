@@ -4,18 +4,19 @@
 //! Days are passed in by the frontend (`day`, `today`) rather than read from
 //! the clock here, so "today" always matches what the user sees.
 
-use chrono::{Days, Utc};
+use chrono::{Datelike, Days, Utc};
 use sea_orm::prelude::{Date, Expr};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Select, Set,
-    TransactionTrait,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, Condition, EntityTrait, QueryFilter, QueryOrder,
+    Select, Set, TransactionTrait,
 };
 
-use super::entities::{block, day, settings, task};
+use super::calendar::events_on;
+use super::entities::{block, day, event, routine, settings, task};
 use super::parse::{self, DayHint};
 use super::types::{
-    BlockFields, CarryTo, DayFields, DayInfo, DayPlan, NextBlock, QuickAdded, ScheduleResult, Settings, TaskFields,
-    TodaySummary,
+    BlockFields, CarryTo, DayDone, DayFields, DayInfo, DayPlan, NextBlock, PlanInsights, QuickAdded, RoutineFields,
+    ScheduleResult, Settings, TaskFields, TodaySummary, WeekFocus,
 };
 use crate::features::project_board::service as board;
 use crate::db::new_id;
@@ -39,6 +40,10 @@ fn blocks() -> Select<block::Entity> {
     block::Entity::find().filter(block::Column::DeletedAt.is_null())
 }
 
+fn routines() -> Select<routine::Entity> {
+    routine::Entity::find().filter(routine::Column::DeletedAt.is_null())
+}
+
 fn days() -> Select<day::Entity> {
     day::Entity::find().filter(day::Column::DeletedAt.is_null())
 }
@@ -59,6 +64,9 @@ macro_rules! bury {
 // ---------- Reading ----------
 
 pub async fn get_day(db: &DatabaseConnection, day: Date, today: Date) -> Result<DayPlan> {
+    if day >= today {
+        lay_out_routines(db, day).await?;
+    }
     let mut day_tasks = tasks().filter(task::Column::Day.eq(day)).order_by_asc(task::Column::Position).all(db).await?;
     day_tasks.sort_by_key(|t| t.focus_rank.unwrap_or(i16::MAX));
     let blocks = blocks()
@@ -66,6 +74,7 @@ pub async fn get_day(db: &DatabaseConnection, day: Date, today: Date) -> Result<
         .order_by_asc(block::Column::StartMinute)
         .all(db)
         .await?;
+    let events = events_on(db, day).await?;
     let earlier = if day == today {
         tasks()
             .filter(task::Column::Day.lt(today))
@@ -103,6 +112,7 @@ pub async fn get_day(db: &DatabaseConnection, day: Date, today: Date) -> Result<
         day,
         tasks: day_tasks,
         blocks,
+        events,
         earlier,
         inbox,
         settings: get_settings(db).await?,
@@ -110,6 +120,7 @@ pub async fn get_day(db: &DatabaseConnection, day: Date, today: Date) -> Result<
         cards,
         suggestions,
         running,
+        pace: pace(db, today).await?.0,
     })
 }
 
@@ -117,22 +128,24 @@ pub async fn summary(db: &DatabaseConnection, today: Date, now_minute: i32) -> R
     let plan = get_day(db, today, today).await?;
     let done = plan.tasks.iter().filter(|t| t.done_at.is_some()).count();
     let focus = plan.tasks.iter().filter(|t| t.focus_rank.is_some()).cloned().collect();
-    let next_block = plan
-        .blocks
-        .iter()
-        .find(|b| b.start_minute + b.duration_minutes > now_minute)
-        .map(|b| NextBlock {
-            start_minute: b.start_minute,
-            duration_minutes: b.duration_minutes,
-            title: block_title(b, &plan.tasks),
-            in_progress: b.start_minute <= now_minute,
+    let blocks = plan.blocks.iter().map(|b| (b.start_minute, b.duration_minutes, block_title(b, &plan.tasks)));
+    let events = timed(&plan.events).map(|e| (e.start_minute, e.duration_minutes, e.title.clone()));
+    let next_block = blocks
+        .chain(events)
+        .filter(|(start, length, _)| start + length > now_minute)
+        .min_by_key(|(start, _, _)| *start)
+        .map(|(start_minute, duration_minutes, title)| NextBlock {
+            start_minute,
+            duration_minutes,
+            title,
+            in_progress: start_minute <= now_minute,
         });
     Ok(TodaySummary {
         total: plan.tasks.len(),
         done,
         focus,
         next_block,
-        planned_minutes: planned_minutes(&plan.tasks, &plan.blocks),
+        planned_minutes: planned_minutes(&plan.tasks, &plan.blocks, &plan.events, &plan.settings),
         available_minutes: plan.settings.day_end_minute - plan.settings.day_start_minute,
         running: plan.running,
     })
@@ -140,8 +153,9 @@ pub async fn summary(db: &DatabaseConnection, today: Date, now_minute: i32) -> R
 
 /// What's planned for a day: every task's estimate (or the length of its
 /// blocks when it has none), plus blocks that aren't for a task, such as
-/// meetings. What fills the day, whether done yet or not.
-pub fn planned_minutes(day_tasks: &[task::Model], day_blocks: &[block::Model]) -> i32 {
+/// lunch, plus busy calendar events within working hours. What fills the
+/// day, whether done yet or not.
+pub fn planned_minutes(day_tasks: &[task::Model], day_blocks: &[block::Model], day_events: &[event::Model], settings: &Settings) -> i32 {
     let for_tasks: i32 = day_tasks
         .iter()
         .map(|t| {
@@ -151,7 +165,20 @@ pub fn planned_minutes(day_tasks: &[task::Model], day_blocks: &[block::Model]) -
         })
         .sum();
     let other: i32 = day_blocks.iter().filter(|b| b.task_id.is_none()).map(|b| b.duration_minutes).sum();
-    for_tasks + other
+    let meetings: i32 = busy_spans(day_events)
+        .map(|(s, e)| (e.min(settings.day_end_minute) - s.max(settings.day_start_minute)).max(0))
+        .sum();
+    for_tasks + other + meetings
+}
+
+/// Calendar events with a time (not all-day ones).
+fn timed(events: &[event::Model]) -> impl Iterator<Item = &event::Model> {
+    events.iter().filter(|e| !e.all_day)
+}
+
+/// Start and end of each calendar event that takes up time.
+fn busy_spans(events: &[event::Model]) -> impl Iterator<Item = (i32, i32)> + '_ {
+    timed(events).filter(|e| e.busy).map(|e| (e.start_minute, e.start_minute + e.duration_minutes))
 }
 
 fn block_title(block: &block::Model, day_tasks: &[task::Model]) -> String {
@@ -368,6 +395,7 @@ pub async fn replan(db: &DatabaseConnection, day: Date, now_minute: i32) -> Resu
 
     let mut busy: Vec<(i32, i32)> =
         day_blocks.iter().filter(|b| !open(b)).map(|b| (b.start_minute, b.start_minute + b.duration_minutes)).collect();
+    busy.extend(busy_spans(&events_on(db, day).await?));
     // First keep every block that's still in the future and clear, so the
     // missed ones can't be placed on top of them.
     let mut to_move = Vec::new();
@@ -421,6 +449,7 @@ pub async fn fit_into_day(db: &DatabaseConnection, day: Date, from_minute: i32) 
     open.sort_by_key(|t| t.focus_rank.unwrap_or(i16::MAX));
     let day_blocks = blocks().filter(block::Column::Day.eq(day)).all(db).await?;
     let mut busy: Vec<(i32, i32)> = day_blocks.iter().map(|b| (b.start_minute, b.start_minute + b.duration_minutes)).collect();
+    busy.extend(busy_spans(&events_on(db, day).await?));
     let from = ceil_quarter(from_minute.max(settings.day_start_minute));
 
     let mut result = ScheduleResult::default();
@@ -608,6 +637,7 @@ pub async fn create_block(
         created_at: Set(now),
         updated_at: Set(now),
         deleted_at: Set(None),
+        routine_id: Set(None),
     }
     .insert(db)
     .await?)
@@ -735,4 +765,214 @@ fn check_span(start_minute: i32, duration_minutes: i32) -> Result<()> {
         return Err(Error::Invalid(format!("A block is at least {MIN_BLOCK_MINUTES} minutes and ends by midnight.")));
     }
     Ok(())
+}
+
+// ---------- Routines ----------
+
+/// Monday is bit 0, Sunday bit 6.
+fn weekday_bit(day: Date) -> i16 {
+    1 << day.weekday().num_days_from_monday()
+}
+
+/// The id of a routine's block on a day. The same on every device, so two
+/// computers laying out the same day make one block, and a skipped
+/// (deleted) occurrence stays skipped.
+fn routine_block_id(routine_id: &str, day: Date) -> String {
+    format!("r-{routine_id}-{day}")
+}
+
+/// Puts the day's routines on its timeline, once.
+async fn lay_out_routines(db: &DatabaseConnection, day: Date) -> Result<()> {
+    let bit = weekday_bit(day);
+    for routine in routines().all(db).await?.into_iter().filter(|r| r.weekdays & bit != 0) {
+        let id = routine_block_id(&routine.id, day);
+        // Deleted rows count too: deleting an occurrence skips that day.
+        if block::Entity::find_by_id(id.as_str()).one(db).await?.is_some() {
+            continue;
+        }
+        let now = Utc::now();
+        block::ActiveModel {
+            id: Set(id),
+            day: Set(day),
+            start_minute: Set(routine.start_minute),
+            duration_minutes: Set(routine.duration_minutes),
+            title: Set(routine.title.clone()),
+            color: Set(routine.color.clone()),
+            task_id: Set(None),
+            created_at: Set(now),
+            updated_at: Set(now),
+            deleted_at: Set(None),
+            routine_id: Set(Some(routine.id.clone())),
+        }
+        .insert(db)
+        .await?;
+    }
+    Ok(())
+}
+
+pub async fn list_routines(db: &DatabaseConnection) -> Result<Vec<routine::Model>> {
+    Ok(routines().order_by_asc(routine::Column::StartMinute).all(db).await?)
+}
+
+fn check_routine(fields: &RoutineFields) -> Result<(String, String)> {
+    let title = fields.title.trim();
+    if title.is_empty() {
+        return Err(Error::Invalid("Give the routine a name.".into()));
+    }
+    check_span(fields.start_minute, fields.duration_minutes)?;
+    if fields.weekdays & 0x7f == 0 {
+        return Err(Error::Invalid("Pick at least one day for the routine.".into()));
+    }
+    let color = if COLORS.contains(&fields.color.as_str()) { fields.color.clone() } else { "purple".into() };
+    Ok((title.to_owned(), color))
+}
+
+pub async fn create_routine(db: &DatabaseConnection, fields: RoutineFields) -> Result<routine::Model> {
+    let (title, color) = check_routine(&fields)?;
+    let now = Utc::now();
+    Ok(routine::ActiveModel {
+        id: Set(new_id()),
+        title: Set(title),
+        start_minute: Set(fields.start_minute),
+        duration_minutes: Set(fields.duration_minutes),
+        color: Set(color),
+        weekdays: Set(fields.weekdays & 0x7f),
+        created_at: Set(now),
+        updated_at: Set(now),
+        deleted_at: Set(None),
+    }
+    .insert(db)
+    .await?)
+}
+
+/// Changes a routine. Days from today on that are already laid out follow
+/// the change (time, name, colour); days no longer chosen lose the block.
+/// Past days keep what really happened.
+pub async fn update_routine(db: &DatabaseConnection, id: &str, fields: RoutineFields, today: Date) -> Result<routine::Model> {
+    let (title, color) = check_routine(&fields)?;
+    let found = routines().filter(routine::Column::Id.eq(id)).one(db).await?.ok_or(Error::NotFound("Routine"))?;
+    let txn = db.begin().await?;
+    let mut active: routine::ActiveModel = found.into();
+    active.title = Set(title.clone());
+    active.start_minute = Set(fields.start_minute);
+    active.duration_minutes = Set(fields.duration_minutes);
+    active.color = Set(color.clone());
+    active.weekdays = Set(fields.weekdays & 0x7f);
+    let updated = active.update(&txn).await?;
+
+    let laid_out = blocks()
+        .filter(block::Column::RoutineId.eq(id))
+        .filter(block::Column::Day.gte(today))
+        .all(&txn)
+        .await?;
+    for b in laid_out {
+        let mut b: block::ActiveModel = b.into();
+        let day = *b.day.as_ref();
+        if updated.weekdays & weekday_bit(day) == 0 {
+            b.deleted_at = Set(Some(Utc::now()));
+        } else {
+            b.title = Set(title.clone());
+            b.start_minute = Set(fields.start_minute);
+            b.duration_minutes = Set(fields.duration_minutes);
+            b.color = Set(color.clone());
+        }
+        b.update(&txn).await?;
+    }
+    txn.commit().await?;
+    Ok(updated)
+}
+
+/// Stops a routine. Its blocks from today on go; past days keep theirs.
+pub async fn delete_routine(db: &DatabaseConnection, id: &str, today: Date) -> Result<()> {
+    routines().filter(routine::Column::Id.eq(id)).one(db).await?.ok_or(Error::NotFound("Routine"))?;
+    let txn = db.begin().await?;
+    bury!(block, &txn, Condition::all().add(block::Column::RoutineId.eq(id)).add(block::Column::Day.gte(today)));
+    bury!(routine, &txn, routine::Column::Id.eq(id));
+    txn.commit().await?;
+    Ok(())
+}
+
+// ---------- Insights ----------
+
+/// Tracked time against estimates over the last 30 days, from tasks with
+/// both. None with fewer than three such tasks: too little to go on.
+async fn pace(db: &impl ConnectionTrait, today: Date) -> Result<(Option<f64>, usize)> {
+    let since = today - Days::new(30);
+    let timed: Vec<task::Model> = tasks()
+        .filter(task::Column::Day.gte(since))
+        .filter(task::Column::Day.lte(today))
+        .filter(task::Column::EstimateMinutes.gt(0))
+        .filter(task::Column::ActualMinutes.gt(0))
+        .all(db)
+        .await?;
+    let estimated: i64 = timed.iter().map(|t| t.estimate_minutes.unwrap_or(0) as i64).sum();
+    let actual: i64 = timed.iter().map(|t| t.actual_minutes as i64).sum();
+    let pace = (timed.len() >= 3 && estimated > 0).then(|| actual as f64 / estimated as f64);
+    Ok((pace, timed.len()))
+}
+
+pub async fn insights(db: &DatabaseConnection, today: Date) -> Result<PlanInsights> {
+    let (pace, paced_tasks) = pace(db, today).await?;
+
+    let this_monday = today - Days::new(today.weekday().num_days_from_monday() as u64);
+    let first_monday = this_monday - Days::new(7 * 7);
+    let recent = tasks().filter(task::Column::Day.gte(first_monday)).filter(task::Column::Day.lte(today)).all(db).await?;
+
+    let weeks = (0..8)
+        .map(|i| {
+            let week_start = first_monday + Days::new(7 * i);
+            let week_end = week_start + Days::new(7);
+            let tracked_minutes = recent
+                .iter()
+                .filter(|t| t.day.is_some_and(|d| d >= week_start && d < week_end))
+                .map(|t| t.actual_minutes)
+                .sum();
+            WeekFocus { week_start, tracked_minutes }
+        })
+        .collect();
+
+    let days = (0..14)
+        .rev()
+        .map(|back| {
+            let day = today - Days::new(back);
+            let on_day: Vec<&task::Model> = recent.iter().filter(|t| t.day == Some(day)).collect();
+            DayDone { day, planned: on_day.len(), done: on_day.iter().filter(|t| t.done_at.is_some()).count() }
+        })
+        .collect();
+
+    let month_ago = today - Days::new(30);
+    let focus: Vec<task::Model> = tasks()
+        .filter(task::Column::Day.gte(month_ago))
+        .filter(task::Column::Day.lte(today))
+        .filter(task::Column::FocusRank.is_not_null())
+        .all(db)
+        .await?;
+
+    let rows = days_table_since(db, today - Days::new(400)).await?;
+    let streak = |done: &dyn Fn(&day::Model) -> bool| {
+        let marked = |d: Date| rows.iter().any(|r| r.id == d.to_string() && done(r));
+        // Today only counts once it's done; until then the streak runs to yesterday.
+        let mut day = if marked(today) { today } else { today - Days::new(1) };
+        let mut count = 0;
+        while marked(day) {
+            count += 1;
+            day = day - Days::new(1);
+        }
+        count
+    };
+
+    Ok(PlanInsights {
+        pace,
+        paced_tasks,
+        weeks,
+        days,
+        planning_streak: streak(&|r| r.planned_at.is_some()),
+        shutdown_streak: streak(&|r| r.shutdown_at.is_some()),
+        focus_total: focus.len(),
+        focus_done: focus.iter().filter(|t| t.done_at.is_some()).count(),
+    })
+}
+
+async fn days_table_since(db: &impl ConnectionTrait, since: Date) -> Result<Vec<day::Model>> {
+    Ok(days().filter(day::Column::Id.gte(since.to_string())).all(db).await?)
 }

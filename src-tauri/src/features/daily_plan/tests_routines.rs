@@ -1,0 +1,233 @@
+//! Tests for phase 3: routines and insights. Day 22 (TODAY) is a Thursday.
+
+use sea_orm::DatabaseConnection;
+
+use super::service::*;
+use super::tests::{day, setup, TODAY};
+use super::types::{DayFields, RoutineFields};
+
+const MON: i16 = 1;
+const WED: i16 = 1 << 2;
+const THU: i16 = 1 << 3;
+const FRI: i16 = 1 << 4;
+
+fn gym(weekdays: i16) -> RoutineFields {
+    RoutineFields { title: "Gym".into(), start_minute: 7 * 60, duration_minutes: 60, color: "green".into(), weekdays }
+}
+
+async fn routine_blocks(db: &DatabaseConnection, on: u32) -> Vec<(String, i32)> {
+    let plan = get_day(db, day(on), day(TODAY)).await.unwrap();
+    plan.blocks.iter().filter(|b| b.routine_id.is_some()).map(|b| (b.title.clone(), b.start_minute)).collect()
+}
+
+#[tokio::test]
+async fn routines_appear_on_their_weekdays_once() {
+    let db = setup().await;
+    create_routine(&db, gym(THU | FRI)).await.unwrap();
+
+    assert_eq!(routine_blocks(&db, TODAY).await, [("Gym".to_owned(), 420)]);
+    assert_eq!(routine_blocks(&db, 23).await.len(), 1);
+    // Not on other weekdays, and reading a day twice doesn't double it.
+    assert!(routine_blocks(&db, 24).await.is_empty());
+    assert_eq!(routine_blocks(&db, TODAY).await.len(), 1);
+    // Past days are history: nothing is added to them.
+    assert!(routine_blocks(&db, 16).await.is_empty());
+}
+
+#[tokio::test]
+async fn deleting_one_occurrence_skips_just_that_day() {
+    let db = setup().await;
+    create_routine(&db, gym(THU)).await.unwrap();
+    let block = get_day(&db, day(TODAY), day(TODAY)).await.unwrap().blocks.remove(0);
+
+    delete_block(&db, &block.id).await.unwrap();
+    assert!(routine_blocks(&db, TODAY).await.is_empty());
+    assert_eq!(routine_blocks(&db, 29).await.len(), 1);
+}
+
+#[tokio::test]
+async fn editing_a_routine_updates_days_ahead_but_not_the_past() {
+    let db = setup().await;
+    let r = create_routine(&db, gym(MON | THU)).await.unwrap();
+    // Laid out on Monday the 19th while that was "today".
+    get_day(&db, day(19), day(19)).await.unwrap();
+    routine_blocks(&db, TODAY).await;
+    routine_blocks(&db, 26).await;
+
+    let mut later = gym(THU | FRI);
+    later.start_minute = 8 * 60;
+    later.title = "Run".into();
+    update_routine(&db, &r.id, later, day(TODAY)).await.unwrap();
+
+    assert_eq!(routine_blocks(&db, TODAY).await, [("Run".to_owned(), 480)]);
+    // Monday is no longer chosen, so next Monday loses it...
+    assert!(routine_blocks(&db, 26).await.is_empty());
+    // ...but last Monday keeps what happened.
+    assert_eq!(routine_blocks(&db, 19).await, [("Gym".to_owned(), 420)]);
+    // Newly chosen days get it.
+    assert_eq!(routine_blocks(&db, 23).await.len(), 1);
+}
+
+#[tokio::test]
+async fn deleting_a_routine_clears_days_ahead() {
+    let db = setup().await;
+    let r = create_routine(&db, gym(WED | THU)).await.unwrap();
+    get_day(&db, day(21), day(21)).await.unwrap();
+    routine_blocks(&db, TODAY).await;
+
+    delete_routine(&db, &r.id, day(TODAY)).await.unwrap();
+    assert!(routine_blocks(&db, TODAY).await.is_empty());
+    assert!(routine_blocks(&db, 29).await.is_empty());
+    assert_eq!(routine_blocks(&db, 21).await.len(), 1);
+    assert!(list_routines(&db).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn routines_are_validated() {
+    let db = setup().await;
+    assert!(create_routine(&db, gym(0)).await.is_err());
+    let mut blank = gym(MON);
+    blank.title = "  ".into();
+    assert!(create_routine(&db, blank).await.is_err());
+    let mut late = gym(MON);
+    late.start_minute = 23 * 60 + 30;
+    assert!(create_routine(&db, late).await.is_err());
+}
+
+/// Makes a task on a day with an estimate and tracked time, optionally done.
+async fn timed(db: &DatabaseConnection, on: u32, estimate: i32, actual: i32, done: bool) -> String {
+    use super::entities::task;
+    use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+    let t = create_task(db, "Work", Some(day(on)), Some(estimate)).await.unwrap();
+    let mut a: task::ActiveModel = task::Entity::find_by_id(t.id.as_str()).one(db).await.unwrap().unwrap().into();
+    a.actual_minutes = Set(actual);
+    a.update(db).await.unwrap();
+    if done {
+        set_done(db, &t.id, true).await.unwrap();
+    }
+    t.id
+}
+
+#[tokio::test]
+async fn pace_needs_a_few_timed_tasks() {
+    let db = setup().await;
+    timed(&db, 20, 60, 90, true).await;
+    timed(&db, 21, 30, 45, true).await;
+    assert_eq!(insights(&db, day(TODAY)).await.unwrap().pace, None);
+
+    timed(&db, 21, 30, 45, true).await;
+    let found = insights(&db, day(TODAY)).await.unwrap();
+    assert_eq!((found.pace, found.paced_tasks), (Some(1.5), 3));
+    // The day view carries it too, for the capacity bar.
+    assert_eq!(get_day(&db, day(TODAY), day(TODAY)).await.unwrap().pace, Some(1.5));
+}
+
+#[tokio::test]
+async fn insights_count_days_weeks_and_priorities() {
+    let db = setup().await;
+    timed(&db, TODAY, 60, 50, true).await;
+    timed(&db, TODAY, 30, 0, false).await;
+    timed(&db, 13, 30, 40, true).await;
+    let focus = timed(&db, 21, 30, 0, true).await;
+    set_focus(&db, &focus, true).await.unwrap();
+    let missed = timed(&db, 21, 30, 0, false).await;
+    set_focus(&db, &missed, true).await.unwrap();
+
+    let found = insights(&db, day(TODAY)).await.unwrap();
+    assert_eq!(found.days.len(), 14);
+    let last = found.days.last().unwrap();
+    assert_eq!((last.day, last.planned, last.done), (day(TODAY), 2, 1));
+
+    assert_eq!(found.weeks.len(), 8);
+    let this_week = found.weeks.last().unwrap();
+    assert_eq!((this_week.week_start, this_week.tracked_minutes), (day(19), 50));
+    assert_eq!(found.weeks[6].tracked_minutes, 40);
+
+    assert_eq!((found.focus_total, found.focus_done), (2, 1));
+}
+
+#[tokio::test]
+async fn streaks_run_back_from_yesterday_until_today_is_done() {
+    let db = setup().await;
+    let planned = DayFields { planned: Some(true), ..Default::default() };
+    for d in [18, 20, 21] {
+        update_day(&db, day(d), planned.clone()).await.unwrap();
+    }
+    let found = insights(&db, day(TODAY)).await.unwrap();
+    assert_eq!((found.planning_streak, found.shutdown_streak), (2, 0));
+
+    update_day(&db, day(TODAY), planned).await.unwrap();
+    assert_eq!(insights(&db, day(TODAY)).await.unwrap().planning_streak, 3);
+}
+
+/// A calendar with the given events, as if just read from its link.
+async fn calendar_with(db: &DatabaseConnection, events: Vec<super::ics::DayEvent>) -> String {
+    use super::entities::calendar;
+    use sea_orm::{ActiveModelTrait, Set};
+    let cal = calendar::ActiveModel {
+        id: Set("cal".into()),
+        name: Set("Work".into()),
+        url: Set("https://example.com/private.ics".into()),
+        color: Set("gray".into()),
+        refreshed_at: Set(Some(chrono::Utc::now())),
+        problem: Set(None),
+        created_at: Set(chrono::Utc::now()),
+    }
+    .insert(db)
+    .await
+    .unwrap();
+    super::calendar::replace_events(db, &cal, events).await.unwrap();
+    cal.id
+}
+
+fn meeting(title: &str, start_minute: i32, duration_minutes: i32, all_day: bool, busy: bool) -> super::ics::DayEvent {
+    super::ics::DayEvent { uid: title.into(), title: title.into(), day: day(TODAY), start_minute, duration_minutes, all_day, busy }
+}
+
+#[tokio::test]
+async fn calendar_events_show_count_and_are_worked_around() {
+    let db = setup().await;
+    calendar_with(
+        &db,
+        vec![
+            meeting("Stand-up", 9 * 60, 30, false, true),
+            meeting("Focus time?", 10 * 60, 60, false, false),
+            meeting("Holiday", 0, 24 * 60, true, false),
+            meeting("Dinner", 19 * 60, 120, false, true),
+        ],
+    )
+    .await;
+
+    let plan = get_day(&db, day(TODAY), day(TODAY)).await.unwrap();
+    let titles: Vec<&str> = plan.events.iter().map(|e| e.title.as_str()).collect();
+    assert_eq!(titles, ["Holiday", "Stand-up", "Focus time?", "Dinner"]);
+    // Only busy time within working hours (9 to 5) counts: the stand-up.
+    assert_eq!(planned_minutes(&plan.tasks, &plan.blocks, &plan.events, &plan.settings), 30);
+
+    // Fitting tasks in skips the stand-up but not free time.
+    create_task(&db, "Write", Some(day(TODAY)), Some(60)).await.unwrap();
+    fit_into_day(&db, day(TODAY), 9 * 60).await.unwrap();
+    let block = get_day(&db, day(TODAY), day(TODAY)).await.unwrap().blocks.remove(0);
+    assert_eq!(block.start_minute, 9 * 60 + 30);
+
+    // What's next includes meetings.
+    let next = summary(&db, day(TODAY), 8 * 60).await.unwrap().next_block.unwrap();
+    assert_eq!(next.title, "Stand-up");
+}
+
+#[tokio::test]
+async fn removing_a_calendar_removes_its_events() {
+    let db = setup().await;
+    let id = calendar_with(&db, vec![meeting("Stand-up", 540, 30, false, true)]).await;
+    super::calendar::remove_calendar(&db, &id).await.unwrap();
+    assert!(get_day(&db, day(TODAY), day(TODAY)).await.unwrap().events.is_empty());
+    assert!(super::calendar::list_calendars(&db).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn calendar_links_must_be_secure() {
+    let db = setup().await;
+    for url in ["", "calendar.google.com/x.ics", "http://example.com/a.ics", "ftp://x/y"] {
+        assert!(super::calendar::add_calendar(&db, "Work", url, "gray", day(TODAY)).await.is_err(), "{url}");
+    }
+}

@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use sea_orm::prelude::Date;
 use serde::{Deserialize, Serialize};
 
-use super::entities::{block, task};
+use super::entities::{block, event, task};
 use crate::features::project_board::types::PlannableCard;
 
 /// Everything the planner shows for one day.
@@ -16,6 +16,8 @@ pub struct DayPlan {
     /// The day's tasks: top priorities first (by rank), then in list order.
     pub tasks: Vec<task::Model>,
     pub blocks: Vec<block::Model>,
+    /// From imported calendars: fixed, read-only.
+    pub events: Vec<event::Model>,
     /// Unfinished tasks from earlier days. Only filled in for today.
     pub earlier: Vec<task::Model>,
     /// Tasks without a day.
@@ -29,6 +31,9 @@ pub struct DayPlan {
     pub suggestions: Vec<PlannableCard>,
     /// The task whose timer is running, on any day.
     pub running: Option<task::Model>,
+    /// How long tasks really take compared with their estimates (1.3 means
+    /// 30% longer), from recent history. None until there's enough of it.
+    pub pace: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -136,4 +141,51 @@ pub struct NextBlock {
     pub duration_minutes: i32,
     pub title: String,
     pub in_progress: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineFields {
+    pub title: String,
+    pub start_minute: i32,
+    pub duration_minutes: i32,
+    pub color: String,
+    /// Monday is bit 0 (1), Sunday bit 6 (64).
+    pub weekdays: i16,
+}
+
+/// Patterns over recent weeks, for the Insights view.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanInsights {
+    /// Tracked time against estimates over the last 30 days (see `DayPlan::pace`).
+    pub pace: Option<f64>,
+    /// How many tasks the pace is based on.
+    pub paced_tasks: usize,
+    /// Time tracked on each of the last 8 weeks, oldest first.
+    pub weeks: Vec<WeekFocus>,
+    /// Planned and finished tasks on each of the last 14 days, oldest first.
+    pub days: Vec<DayDone>,
+    /// Days in a row the day was planned (counting today only once it is).
+    pub planning_streak: u32,
+    pub shutdown_streak: u32,
+    /// Top priorities over the last 30 days, and how many got done.
+    pub focus_total: usize,
+    pub focus_done: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeekFocus {
+    /// The Monday the week starts on.
+    pub week_start: Date,
+    pub tracked_minutes: i32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DayDone {
+    pub day: Date,
+    pub planned: usize,
+    pub done: usize,
 }

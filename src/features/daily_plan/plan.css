@@ -1343,3 +1343,479 @@
     transition: none;
   }
 }
+
+/* ---------- Phase 3: views, routines, calendars, week, insights ---------- */
+
+.dp-toolbar .pb-segmented {
+  flex: none;
+}
+
+.dp-toolbar {
+  container-type: inline-size;
+}
+
+/* A narrow toolbar keeps the date whole: the ritual buttons show icons only. */
+@container (max-width: 1180px) {
+  .dp-btn-label {
+    display: none;
+  }
+
+  .dp-capacity {
+    width: 250px;
+  }
+}
+
+.dp-week-task .dp-check,
+.dp-week-task .dp-rank,
+.dp-week-est {
+  margin-top: 1px;
+}
+
+.dp-setup-form .menu-heading {
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.dp-settings-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.dp-settings-links .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Capacity at the usual pace: the likely extra time, hatched past the plan. */
+.dp-capacity-pace {
+  color: var(--text-dim);
+  cursor: help;
+}
+
+.dp-capacity-bar em {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: repeating-linear-gradient(135deg, var(--cap) 0 3px, transparent 3px 6px);
+  opacity: 0.6;
+}
+
+/* Calendar events: fixed, read-only, with a dashed edge. */
+.dp-event {
+  z-index: 1;
+  cursor: default;
+  background: color-mix(in srgb, var(--block) 12%, var(--panel));
+  border-style: dashed;
+  border-left-style: solid;
+}
+
+.dp-event:hover {
+  background: color-mix(in srgb, var(--block) 16%, var(--panel));
+}
+
+.dp-event.is-free {
+  opacity: 0.6;
+}
+
+.dp-block-repeat {
+  margin-right: 4px;
+  vertical-align: -1px;
+  color: var(--text-dim);
+}
+
+.dp-allday {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px 6px var(--dp-gutter);
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.dp-allday-chip,
+.dp-week-chip {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  overflow: hidden;
+  font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: color-mix(in srgb, var(--block) 18%, var(--panel));
+  border-left: 3px solid var(--block);
+  border-radius: var(--radius-sm);
+}
+
+.dp-editor-note {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* Dialogs for routines and calendars, framed like the rituals. */
+.dp-dialog {
+  width: min(560px, 100%);
+}
+
+.dp-dialog .dp-ritual-name {
+  flex: 1;
+}
+
+.dp-dialog-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 18px 20px 20px;
+}
+
+.dp-dialog-body > * {
+  align-self: stretch;
+}
+
+.dp-dialog-body > .btn {
+  align-self: flex-start;
+}
+
+.dp-dialog-error,
+.dp-setup-problem {
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.dp-setup-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.dp-setup-list:empty {
+  display: none;
+}
+
+.dp-setup-list > li + li {
+  border-top: 1px solid var(--line);
+}
+
+.dp-setup-list .dp-setup-form {
+  padding: 12px;
+}
+
+.dp-setup-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 12px;
+}
+
+.dp-setup-empty {
+  padding: 10px 12px;
+  font-size: 12.5px;
+}
+
+.dp-setup-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.dp-setup-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13px;
+}
+
+.dp-setup-main .dim {
+  font-size: 12px;
+}
+
+.dp-setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dp-setup-refresh {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dp-spin {
+  animation: dp-spin 1s linear infinite;
+}
+
+@keyframes dp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dp-weekdays {
+  display: flex;
+  gap: 4px;
+}
+
+.dp-weekdays button {
+  flex: 1;
+  height: 28px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.dp-weekdays button.is-on {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.dp-setup-help {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.dp-setup-help summary {
+  cursor: pointer;
+  color: var(--text);
+}
+
+.dp-setup-help p {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+/* ---------- Week ---------- */
+
+.dp-week {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(104px, 1fr)) minmax(120px, 0.9fr);
+  gap: 8px;
+  padding: 12px 20px 16px;
+  overflow: auto;
+}
+
+.dp-week-day {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.dp-week-day.is-today {
+  border-color: var(--accent);
+}
+
+.dp-week-day.is-past {
+  opacity: 0.7;
+}
+
+.dp-week-day.is-drop-target {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+
+.dp-week-inbox {
+  background: transparent;
+  border-style: dashed;
+}
+
+.dp-week-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  color: var(--text);
+  text-align: left;
+  background: none;
+  border: 0;
+}
+
+button.dp-week-head:hover .dp-week-date {
+  color: var(--accent);
+}
+
+.dp-week-head.is-static {
+  align-items: center;
+}
+
+.dp-week-weekday {
+  font-family: var(--font-label);
+  font-size: 11px;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.dp-week-date {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.dp-week-day.is-today .dp-week-date {
+  color: var(--accent);
+}
+
+.dp-week-planned {
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.dp-week-load {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  --cap: var(--accent);
+}
+
+.dp-week-load.is-tight {
+  --cap: #e2b203;
+}
+
+.dp-week-load.is-over {
+  --cap: var(--danger);
+  color: var(--danger);
+}
+
+.dp-week-load .dp-capacity-bar {
+  height: 4px;
+}
+
+.dp-week-fixed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+}
+
+.dp-week-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dp-week-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 6px;
+  font-size: 12.5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: grab;
+}
+
+.dp-week-task:hover {
+  border-color: var(--line-strong);
+}
+
+.dp-week-task .dp-check {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.dp-week-task.is-done .dp-week-title {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.dp-week-title {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dp-week-est {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.dp-week-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding: 4px 6px;
+  color: var(--text-faint);
+  border-radius: var(--radius-sm);
+}
+
+.dp-week-add:focus-within {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.dp-week-add input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+/* ---------- Insights ---------- */
+
+.dp-insights {
+  padding: 16px 20px 24px;
+}
+
+.dp-insights-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+/* Planned tasks: a neutral bar the done bar fills from the bottom. */
+.pb-bar.dp-bar-planned {
+  fill: color-mix(in srgb, var(--text-faint) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dp-spin {
+    animation: none;
+  }
+}

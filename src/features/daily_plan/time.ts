@@ -20,9 +20,19 @@ export function addDays(day: Day, n: number): Day {
   return dayOf(date);
 }
 
+/** The Monday of a day's week. */
+export function mondayOf(day: Day): Day {
+  return addDays(day, -((noon(day).getDay() + 6) % 7));
+}
+
 /** "Wednesday 22 October". */
 export function longDay(day: Day): string {
   return noon(day).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+}
+
+/** "Wed 22 October", for the toolbar. */
+export function mediumDay(day: Day): string {
+  return noon(day).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long" });
 }
 
 /** "Today", "Tomorrow", "Yesterday", or the weekday and date. */

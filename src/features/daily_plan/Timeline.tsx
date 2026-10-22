@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type PointerEvent } from "react";
-import { Check } from "lucide-react";
+import { CalendarDays, Check, Repeat } from "lucide-react";
 import { api, cardFromDrag, type Block, type Day, type DayPlan, type PlanTask } from "./api";
 import { BLOCK_COLORS, colorOf } from "./palette";
 import { draggedTask, TASK_DRAG } from "./TaskPanel";
@@ -167,7 +167,20 @@ export function Timeline({ plan, today, act }: TimelineProps) {
     const live = drag && drag.kind !== "create" && drag.id === b.id ? drag : null;
     return { block: b, start: live ? live.start : b.startMinute, length: live ? live.length : b.durationMinutes };
   });
-  const lanes = laneLayout(shown.map((s) => ({ id: s.block.id, start: s.start, end: s.start + s.length })));
+  // Calendar events share the lanes, so a block beside a meeting sits next to it.
+  const timedEvents = plan.events.filter((e) => !e.allDay);
+  const allDay = plan.events.filter((e) => e.allDay);
+  const lanes = laneLayout([
+    ...shown.map((s) => ({ id: s.block.id, start: s.start, end: s.start + s.length })),
+    ...timedEvents.map((e) => ({ id: e.id, start: e.startMinute, end: e.startMinute + Math.max(e.durationMinutes, SNAP) })),
+  ]);
+  const laneStyle = (id: string) => {
+    const lane = lanes.get(id) ?? { lane: 0, lanes: 1 };
+    return {
+      left: `calc(var(--dp-gutter) + (100% - var(--dp-gutter) - 8px) * ${lane.lane / lane.lanes})`,
+      width: `calc((100% - var(--dp-gutter) - 8px) / ${lane.lanes} - 4px)`,
+    };
+  };
   const creating =
     drag?.kind === "create"
       ? { start: Math.min(drag.anchor, drag.current), length: Math.max(SNAP, Math.abs(drag.current - drag.anchor)) }
@@ -175,6 +188,15 @@ export function Timeline({ plan, today, act }: TimelineProps) {
 
   return (
     <div className="dp-timeline" ref={scroller}>
+      {allDay.length > 0 && (
+        <div className="dp-allday" aria-label="All-day events">
+          {allDay.map((e) => (
+            <span key={e.id} className="dp-allday-chip" style={{ "--block": colorOf(e.color) } as CSSProperties} title={`${e.title} · all day`}>
+              <CalendarDays size={11} strokeWidth={1.75} /> {e.title}
+            </span>
+          ))}
+        </div>
+      )}
       <div
         className="dp-grid"
         ref={grid}
@@ -198,7 +220,6 @@ export function Timeline({ plan, today, act }: TimelineProps) {
         {shown.map(({ block, start, length }) => {
           const task = taskOf(block);
           const done = !!task?.doneAt;
-          const lane = lanes.get(block.id) ?? { lane: 0, lanes: 1 };
           const short = length < 40;
           return (
             <div
@@ -208,8 +229,7 @@ export function Timeline({ plan, today, act }: TimelineProps) {
                 {
                   top: start * PX,
                   height: Math.max(length * PX - 2, 12),
-                  left: `calc(var(--dp-gutter) + (100% - var(--dp-gutter) - 8px) * ${lane.lane / lane.lanes})`,
-                  width: `calc((100% - var(--dp-gutter) - 8px) / ${lane.lanes} - 4px)`,
+                  ...laneStyle(block.id),
                   "--block": colorOf(block.color),
                 } as CSSProperties
               }
@@ -229,13 +249,40 @@ export function Timeline({ plan, today, act }: TimelineProps) {
                 </button>
               )}
               <span className="dp-block-text">
-                <span className="dp-block-title">{titleOf(block)}</span>
+                <span className="dp-block-title">
+                  {block.routineId && <Repeat size={11} strokeWidth={2} className="dp-block-repeat" aria-label="Routine" />}
+                  {titleOf(block)}
+                </span>
                 <span className="dp-block-time">
                   {clock(start)}–{clock(start + length)}
                   {!short && ` · ${duration(length)}`}
                 </span>
               </span>
               <span className="dp-resize" onPointerDown={(e) => onBlockDown(e, block, true)} aria-hidden="true" />
+            </div>
+          );
+        })}
+
+        {timedEvents.map((e) => {
+          const short = e.durationMinutes < 40;
+          return (
+            <div
+              key={e.id}
+              className={`dp-block dp-event${short ? " is-short" : ""}${e.busy ? "" : " is-free"}`}
+              style={{ top: e.startMinute * PX, height: Math.max(e.durationMinutes * PX - 2, 12), ...laneStyle(e.id), "--block": colorOf(e.color) } as CSSProperties}
+              onPointerDown={(ev) => ev.stopPropagation()}
+              title={`${e.title} · ${clock(e.startMinute)}–${clock(e.startMinute + e.durationMinutes)} · from your calendar${e.busy ? "" : " (free)"}`}
+            >
+              <span className="dp-block-text">
+                <span className="dp-block-title">
+                  <CalendarDays size={11} strokeWidth={2} className="dp-block-repeat" aria-label="Calendar event" />
+                  {e.title}
+                </span>
+                <span className="dp-block-time">
+                  {clock(e.startMinute)}–{clock(e.startMinute + e.durationMinutes)}
+                  {!short && ` · ${duration(e.durationMinutes)}`}
+                </span>
+              </span>
             </div>
           );
         })}
@@ -367,6 +414,7 @@ function BlockEditor({ editing, block, taskTitle, onClose, onSave, onDelete }: B
           />
         ))}
       </div>
+      {block?.routineId && <p className="dp-editor-note">From a routine. Changes here are for this day only; edit the routine in Settings → Routines.</p>}
       {problem && <p className="dp-editor-problem">{problem}</p>}
       <div className="row">
         <button className="btn btn-sm" type="submit">
@@ -377,7 +425,7 @@ function BlockEditor({ editing, block, taskTitle, onClose, onSave, onDelete }: B
         </button>
         {editing.id && (
           <button className="btn btn-sm btn-ghost is-danger dp-editor-delete" type="button" onClick={onDelete}>
-            Delete
+            {block?.routineId ? "Skip this day" : "Delete"}
           </button>
         )}
       </div>

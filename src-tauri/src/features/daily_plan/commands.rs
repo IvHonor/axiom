@@ -5,10 +5,11 @@
 use sea_orm::prelude::Date;
 use tauri::State;
 
-use super::entities::{block, task};
-use super::service;
+use super::entities::{block, calendar as cal, routine, task};
+use super::{calendar, service};
 use super::types::{
-    BlockFields, CarryTo, DayFields, DayInfo, DayPlan, QuickAdded, ScheduleResult, Settings, TaskFields, TodaySummary,
+    BlockFields, CarryTo, DayFields, DayInfo, DayPlan, PlanInsights, QuickAdded, RoutineFields, ScheduleResult, Settings,
+    TaskFields, TodaySummary,
 };
 use crate::db::Db;
 use crate::error::Result;
@@ -118,4 +119,50 @@ pub async fn plan_replan(db: State<'_, Db>, day: Date, now_minute: i32) -> Resul
 #[tauri::command]
 pub async fn plan_fit_into_day(db: State<'_, Db>, day: Date, from_minute: i32) -> Result<ScheduleResult> {
     service::fit_into_day(&db.conn().await?, day, from_minute).await
+}
+
+#[tauri::command]
+pub async fn plan_list_routines(db: State<'_, Db>) -> Result<Vec<routine::Model>> {
+    service::list_routines(&db.conn().await?).await
+}
+
+#[tauri::command]
+pub async fn plan_create_routine(db: State<'_, Db>, fields: RoutineFields) -> Result<routine::Model> {
+    service::create_routine(&db.conn().await?, fields).await
+}
+
+#[tauri::command]
+pub async fn plan_update_routine(db: State<'_, Db>, id: String, fields: RoutineFields, today: Date) -> Result<routine::Model> {
+    service::update_routine(&db.conn().await?, &id, fields, today).await
+}
+
+#[tauri::command]
+pub async fn plan_delete_routine(db: State<'_, Db>, id: String, today: Date) -> Result<()> {
+    service::delete_routine(&db.conn().await?, &id, today).await
+}
+
+#[tauri::command]
+pub async fn plan_insights(db: State<'_, Db>, today: Date) -> Result<PlanInsights> {
+    service::insights(&db.conn().await?, today).await
+}
+
+#[tauri::command]
+pub async fn plan_list_calendars(db: State<'_, Db>) -> Result<Vec<cal::Model>> {
+    calendar::list_calendars(&db.conn().await?).await
+}
+
+#[tauri::command]
+pub async fn plan_add_calendar(db: State<'_, Db>, name: String, url: String, color: String, today: Date) -> Result<cal::Model> {
+    calendar::add_calendar(&db.conn().await?, &name, &url, &color, today).await
+}
+
+#[tauri::command]
+pub async fn plan_remove_calendar(db: State<'_, Db>, id: String) -> Result<()> {
+    calendar::remove_calendar(&db.conn().await?, &id).await
+}
+
+/// Re-reads calendars that are due (or all, with `force`); true if any were.
+#[tauri::command]
+pub async fn plan_refresh_calendars(db: State<'_, Db>, today: Date, force: bool) -> Result<bool> {
+    calendar::refresh_calendars(&db.conn().await?, today, force).await
 }

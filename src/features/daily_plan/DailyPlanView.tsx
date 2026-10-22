@@ -1,16 +1,47 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Check, ChevronLeft, ChevronRight, Moon, Plus, RotateCcw, Settings2, Sunrise, X } from "lucide-react";
+import { BarChart3, CalendarDays, CalendarRange, Check, ChevronLeft, ChevronRight, Moon, Plus, Repeat, RotateCcw, Settings2, Sunrise, X } from "lucide-react";
 import { useDataChanged } from "../../lib/sync";
 import { Dropdown } from "../../shell/ui/Dropdown";
 import { api, errorMessage, type DayPlan, type PlanTask, type Settings } from "./api";
+import { Capacity } from "./Capacity";
 import { FocusBar, FocusMode } from "./Focus";
+import { Insights } from "./Insights";
 import { PlanRitual, ShutdownRitual } from "./Rituals";
+import { CalendarsDialog, RoutinesDialog } from "./Setup";
 import { TaskPanel } from "./TaskPanel";
 import { Timeline } from "./Timeline";
-import { addDays, clock, duration, longDay, nowMinute, parseClock, relativeDay, today as todayNow } from "./time";
+import { addDays, clock, longDay, mediumDay, mondayOf, nowMinute, parseClock, relativeDay, today as todayNow } from "./time";
+import { WeekView } from "./WeekView";
 
-/** The Daily Plan: the day's tasks beside its timeline. */
+type View = "day" | "week" | "insights";
+
+const VIEWS: { id: View; label: string; icon: typeof CalendarDays }[] = [
+  { id: "day", label: "Day", icon: CalendarDays },
+  { id: "week", label: "Week", icon: CalendarRange },
+  { id: "insights", label: "Insights", icon: BarChart3 },
+];
+
+const VIEW_KEY = "axiom.dailyPlan.view";
+
+function savedView(): View {
+  try {
+    const v = localStorage.getItem(VIEW_KEY);
+    return v === "week" || v === "insights" ? v : "day";
+  } catch {
+    return "day";
+  }
+}
+
+/** How often to ask for a calendar update while the planner is open (the
+ * backend only re-reads calendars older than 15 minutes). */
+const CALENDAR_CHECK_MS = 5 * 60_000;
+
+/** The Daily Plan: the day's tasks beside its timeline, the week, and insights. */
 export function DailyPlanView() {
+  const [view, setViewState] = useState<View>(savedView);
+  /** Bumped when calendars or routines change, so every view reloads. */
+  const [version, setVersion] = useState(0);
+  const [dialog, setDialog] = useState<"routines" | "calendars" | null>(null);
   const [today, setToday] = useState(todayNow);
   const [day, setDay] = useState(todayNow);
   const [plan, setPlan] = useState<DayPlan | null>(null);
@@ -39,8 +70,33 @@ export function DailyPlanView() {
     }
   }, [day]);
 
-  useEffect(() => void reload(), [reload, today]);
+  useEffect(() => void reload(), [reload, today, version]);
   useDataChanged(reload);
+
+  const setView = (next: View) => {
+    setViewState(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      // Remembering the view is a convenience; without storage it resets.
+    }
+  };
+  const bump = useCallback(() => setVersion((v) => v + 1), []);
+  const showError = useCallback((message: string) => setError(message), []);
+
+  // Imported calendars stay fresh while the planner is open.
+  useEffect(() => {
+    const check = () =>
+      api.refreshCalendars(todayNow(), false).then(
+        (changed) => changed && bump(),
+        () => {
+          // A calendar that can't be read records why; the Calendars dialog shows it.
+        },
+      );
+    void check();
+    const timer = window.setInterval(check, CALENDAR_CHECK_MS);
+    return () => window.clearInterval(timer);
+  }, [bump]);
 
   /** Runs a change, shows any error, then reloads so the view matches the database. */
   const act = useCallback(
@@ -55,7 +111,10 @@ export function DailyPlanView() {
     [reload],
   );
 
-  // Keyboard: N or / to add, T for today, arrows for other days.
+  const step = view === "week" ? 7 : 1;
+  const unit = view === "week" ? "week" : "day";
+
+  // Keyboard: N or / to add, T for today, arrows for other days (or weeks).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -64,12 +123,12 @@ export function DailyPlanView() {
         e.preventDefault();
         quickAdd.current?.focus();
       } else if (e.key === "t") setDay(todayNow());
-      else if (e.key === "ArrowLeft") setDay((d) => addDays(d, -1));
-      else if (e.key === "ArrowRight") setDay((d) => addDays(d, 1));
+      else if (e.key === "ArrowLeft") setDay((d) => addDays(d, -step));
+      else if (e.key === "ArrowRight") setDay((d) => addDays(d, step));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [step]);
 
   // Timers tick every second while one is running, otherwise twice a minute.
   const ticking = !!plan?.running || focusId !== null;
@@ -79,6 +138,8 @@ export function DailyPlanView() {
   }, [ticking]);
 
   const isToday = day === today;
+  const weekStart = mondayOf(day);
+  const thisWeek = weekStart === mondayOf(today);
   const minute = nowMinute();
   const all = plan ? [...plan.tasks, ...plan.earlier, ...plan.inbox, ...(plan.running ? [plan.running] : [])] : [];
   const focusTask = all.find((t) => t.id === focusId);
@@ -115,19 +176,35 @@ export function DailyPlanView() {
   return (
     <div className="dp-view">
       <header className="dp-toolbar">
-        <div className="dp-nav">
-          <button className="icon-btn" aria-label="Previous day" title="Previous day (←)" onClick={() => setDay(addDays(day, -1))}>
+        <div className="pb-segmented" role="tablist" aria-label="Planner view">
+          {VIEWS.map(({ id, label, icon: Icon }) => (
+            <button key={id} role="tab" aria-selected={view === id} className={view === id ? "is-active" : undefined} onClick={() => setView(id)}>
+              <Icon size={14} strokeWidth={1.5} /> {label}
+            </button>
+          ))}
+        </div>
+        {view === "insights" ? (
+          <h2 className="dp-date dp-nav">How your planning is going</h2>
+        ) : (
+          <div className="dp-nav">
+          <button className="icon-btn" aria-label={`Previous ${unit}`} title={`Previous ${unit} (←)`} onClick={() => setDay(addDays(day, -step))}>
             <ChevronLeft size={16} strokeWidth={1.75} />
           </button>
-          <button className="btn btn-sm btn-ghost" disabled={isToday} onClick={() => setDay(today)} title="Today (T)">
-            Today
+          <button className="btn btn-sm btn-ghost" disabled={view === "week" ? thisWeek : isToday} onClick={() => setDay(today)} title="Today (T)">
+            {view === "week" ? "This week" : "Today"}
           </button>
-          <button className="icon-btn" aria-label="Next day" title="Next day (→)" onClick={() => setDay(addDays(day, 1))}>
+          <button className="icon-btn" aria-label={`Next ${unit}`} title={`Next ${unit} (→)`} onClick={() => setDay(addDays(day, step))}>
             <ChevronRight size={16} strokeWidth={1.75} />
           </button>
+          {view === "week" ? (
+            <h2 className="dp-date">
+              Week of {longDay(weekStart).replace(/^\S+ /, "")}
+              {!thisWeek && <span className="dp-date-tag">{weekStart < mondayOf(today) ? "Past" : "Ahead"}</span>}
+            </h2>
+          ) : (
           <div className="dp-date-block">
             <h2 className="dp-date">
-              {longDay(day)}
+              {mediumDay(day)}
               {!isToday && <span className="dp-date-tag">{relativeDay(day, today)}</span>}
               {plan?.info.shutdownAt && (
                 <span className="dp-date-tag is-done">
@@ -137,27 +214,36 @@ export function DailyPlanView() {
             </h2>
             {plan?.info.intention && <p className="dp-intention">{plan.info.intention}</p>}
           </div>
-        </div>
-        {isToday && plan && (
+          )}
+          </div>
+        )}
+        {view === "day" && isToday && plan && (
           <div className="dp-rituals">
             <button className="btn btn-sm btn-ghost" onClick={() => setRitual("plan")} title="Plan your day">
-              <Sunrise size={13} strokeWidth={1.75} /> Plan day
+              <Sunrise size={13} strokeWidth={1.75} /> <span className="dp-btn-label">Plan day</span>
             </button>
             <button className="btn btn-sm btn-ghost" onClick={replan} disabled={!missed} title={missed ? "Move missed work to the next free time" : "Nothing has been missed"}>
-              <RotateCcw size={13} strokeWidth={1.75} /> Replan
+              <RotateCcw size={13} strokeWidth={1.75} /> <span className="dp-btn-label">Replan</span>
             </button>
             <button className="btn btn-sm btn-ghost" onClick={() => setRitual("shutdown")} title="Wrap up the day">
-              <Moon size={13} strokeWidth={1.75} /> Shut down
+              <Moon size={13} strokeWidth={1.75} /> <span className="dp-btn-label">Shut down</span>
             </button>
           </div>
         )}
-        {plan && <Capacity plan={plan} />}
-        {plan && <SettingsMenu settings={plan.settings} onSave={(s) => act(() => api.updateSettings(s))} />}
+        {view === "day" && plan && <Capacity plan={plan} />}
+        {plan && (
+          <SettingsMenu
+            settings={plan.settings}
+            onSave={(s) => act(() => api.updateSettings(s))}
+            onRoutines={() => setDialog("routines")}
+            onCalendars={() => setDialog("calendars")}
+          />
+        )}
       </header>
 
       {plan?.running && <FocusBar task={plan.running} now={now} act={act} onOpen={() => setFocusId(plan.running!.id)} />}
 
-      {prompt && (
+      {view === "day" && prompt && (
         <div className="dp-prompt">
           {prompt === "plan" ? <Sunrise size={16} strokeWidth={1.75} /> : <Moon size={16} strokeWidth={1.75} />}
           <span>
@@ -174,7 +260,7 @@ export function DailyPlanView() {
         </div>
       )}
 
-      <QuickAdd inputRef={quickAdd} onAdd={(text) => act(() => api.quickAdd(text, day, todayNow()))} />
+      {view === "day" && <QuickAdd inputRef={quickAdd} onAdd={(text) => act(() => api.quickAdd(text, day, todayNow()))} />}
 
       {error && (
         <div className="dp-error" role="alert">
@@ -193,7 +279,20 @@ export function DailyPlanView() {
         </div>
       )}
 
-      {plan ? (
+      {view === "week" ? (
+        <WeekView
+          weekStart={weekStart}
+          today={today}
+          version={version}
+          onError={showError}
+          onOpenDay={(d) => {
+            setDay(d);
+            setView("day");
+          }}
+        />
+      ) : view === "insights" ? (
+        <Insights today={today} version={version} onError={showError} />
+      ) : plan ? (
         <div className="dp-body">
           <TaskPanel plan={plan} today={today} now={now} act={act} onFocus={focusOn} />
           <Timeline plan={plan} today={today} act={act} />
@@ -212,6 +311,8 @@ export function DailyPlanView() {
           onClose={() => setFocusId(null)}
         />
       )}
+      {dialog === "routines" && <RoutinesDialog onClose={() => setDialog(null)} onChanged={bump} />}
+      {dialog === "calendars" && <CalendarsDialog onClose={() => setDialog(null)} onChanged={bump} />}
       {plan && isToday && ritual === "plan" && <PlanRitual plan={plan} today={today} act={act} onClose={() => setRitual(null)} />}
       {plan && isToday && ritual === "shutdown" && <ShutdownRitual plan={plan} today={today} act={act} onClose={() => setRitual(null)} />}
     </div>
@@ -256,48 +357,14 @@ function QuickAdd({ inputRef, onAdd }: { inputRef: React.RefObject<HTMLInputElem
   );
 }
 
-/** Planned time against the working day, with room left for the unexpected. */
-export function Capacity({ plan }: { plan: DayPlan }) {
-  const planned = plannedMinutes(plan);
-  const available = plan.settings.dayEndMinute - plan.settings.dayStartMinute;
-  const comfortable = available * (1 - plan.settings.bufferPercent / 100);
-  const state = planned > available ? "over" : planned > comfortable ? "tight" : "ok";
-  const unsized = plan.tasks.filter((t) => !t.doneAt && t.estimateMinutes === null && !plan.blocks.some((b) => b.taskId === t.id)).length;
-  const note =
-    state === "over"
-      ? `Over by ${duration(planned - available)}. Move something to another day.`
-      : state === "tight"
-        ? "Little room left for the unexpected."
-        : `${duration(Math.max(0, Math.round(comfortable - planned)))} free, keeping ${plan.settings.bufferPercent}% spare.`;
-
-  return (
-    <div className={`dp-capacity is-${state}`} title={`Your day is ${clock(plan.settings.dayStartMinute)}–${clock(plan.settings.dayEndMinute)}.`}>
-      <div className="dp-capacity-text">
-        <span>
-          <b>{duration(planned)}</b> planned of {duration(available)}
-        </span>
-        <span className="dp-capacity-note">
-          {note}
-          {unsized > 0 && ` ${unsized} task${unsized === 1 ? "" : "s"} without a time.`}
-        </span>
-      </div>
-      <div className="dp-capacity-bar" aria-hidden="true">
-        <span style={{ width: `${Math.min(planned / available, 1) * 100}%` }} />
-        <i style={{ left: `${100 - plan.settings.bufferPercent}%` }} />
-      </div>
-    </div>
-  );
+interface SettingsMenuProps {
+  settings: Settings;
+  onSave: (s: Settings) => Promise<void>;
+  onRoutines: () => void;
+  onCalendars: () => void;
 }
 
-/** Mirrors `planned_minutes` in service.rs. */
-export function plannedMinutes(plan: DayPlan): number {
-  const blocksOf = (id: string) => plan.blocks.filter((b) => b.taskId === id).reduce((n, b) => n + b.durationMinutes, 0);
-  const forTasks = plan.tasks.reduce((n, t) => n + (t.estimateMinutes ?? blocksOf(t.id)), 0);
-  const other = plan.blocks.filter((b) => !b.taskId).reduce((n, b) => n + b.durationMinutes, 0);
-  return forTasks + other;
-}
-
-function SettingsMenu({ settings, onSave }: { settings: Settings; onSave: (s: Settings) => Promise<void> }) {
+function SettingsMenu({ settings, onSave, onRoutines, onCalendars }: SettingsMenuProps) {
   const [start, setStart] = useState(clock(settings.dayStartMinute));
   const [end, setEnd] = useState(clock(settings.dayEndMinute));
   const [buffer, setBuffer] = useState(String(settings.bufferPercent));
@@ -335,6 +402,14 @@ function SettingsMenu({ settings, onSave }: { settings: Settings; onSave: (s: Se
           <button className="btn btn-sm" type="submit">
             Save
           </button>
+          <div className="dp-settings-links">
+            <button type="button" className="menu-item" onClick={() => (close(), onRoutines())}>
+              <Repeat size={14} strokeWidth={1.75} /> Routines…
+            </button>
+            <button type="button" className="menu-item" onClick={() => (close(), onCalendars())}>
+              <CalendarDays size={14} strokeWidth={1.75} /> Calendars…
+            </button>
+          </div>
         </form>
       )}
     </Dropdown>

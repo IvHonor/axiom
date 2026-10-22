@@ -62,6 +62,37 @@ pub mod block {
         pub updated_at: DateTimeUtc,
         #[serde(skip)]
         pub deleted_at: Option<DateTimeUtc>,
+        /// The routine that laid this block out, if any.
+        pub routine_id: Option<String>,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    crate::db::stamp_updated_at!();
+}
+
+/// A block that repeats on chosen weekdays.
+pub mod routine {
+    use sea_orm::entity::prelude::*;
+    use serde::Serialize;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
+    #[sea_orm(table_name = "daily_plan_routines")]
+    #[serde(rename_all = "camelCase")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub title: String,
+        pub start_minute: i32,
+        pub duration_minutes: i32,
+        pub color: String,
+        /// Monday is bit 0 (1), Sunday bit 6 (64).
+        pub weekdays: i16,
+        pub created_at: DateTimeUtc,
+        pub updated_at: DateTimeUtc,
+        #[serde(skip)]
+        pub deleted_at: Option<DateTimeUtc>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -115,4 +146,60 @@ pub mod day {
     pub enum Relation {}
 
     crate::db::stamp_updated_at!();
+}
+
+/// A calendar read from a private iCal link. Kept on this computer only.
+pub mod calendar {
+    use sea_orm::entity::prelude::*;
+    use serde::Serialize;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
+    #[sea_orm(table_name = "daily_plan_calendars")]
+    #[serde(rename_all = "camelCase")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub name: String,
+        /// Works like a password, so it never goes to the window.
+        #[serde(skip)]
+        pub url: String,
+        pub color: String,
+        pub refreshed_at: Option<DateTimeUtc>,
+        /// Why the last read failed, ready to show.
+        pub problem: Option<String>,
+        pub created_at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+/// One calendar event's share of one day, rebuilt on every read.
+pub mod event {
+    use sea_orm::entity::prelude::*;
+    use serde::Serialize;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
+    #[sea_orm(table_name = "daily_plan_events")]
+    #[serde(rename_all = "camelCase")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub calendar_id: String,
+        pub day: Date,
+        pub start_minute: i32,
+        pub duration_minutes: i32,
+        pub all_day: bool,
+        /// False for events marked as free time.
+        pub busy: bool,
+        pub title: String,
+        pub color: String,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
 }

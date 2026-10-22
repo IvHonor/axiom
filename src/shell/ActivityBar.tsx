@@ -1,8 +1,9 @@
 import { Blocks, CircleUserRound, Layers, Palette, type LucideIcon } from "lucide-react";
 
-export type SidePanel = "areas" | "extensions" | "account" | "themes";
+/** The shell's own panels, or an area's sidebar ("area:<id>"). */
+export type SidePanel = "areas" | "extensions" | "account" | "themes" | `area:${string}`;
 
-interface Item {
+export interface Item {
   id: SidePanel;
   label: string;
   icon: LucideIcon;
@@ -20,13 +21,15 @@ const BOTTOM: Item[] = [
 
 interface ActivityBarProps {
   active: SidePanel | null;
+  /** Installed areas with a sidebar of their own, listed under Extensions. */
+  areas: Item[];
   onToggle: (panel: SidePanel) => void;
   /** Shown on the account icon's tooltip, e.g. "Account (ada@example.com)". */
   accountEmail?: string;
 }
 
 /** The far-left icon strip. Clicking an icon opens its sidebar; clicking it again closes it. */
-export function ActivityBar({ active, onToggle, accountEmail }: ActivityBarProps) {
+export function ActivityBar({ active, areas, onToggle, accountEmail }: ActivityBarProps) {
   const button = ({ id, label, icon: Icon }: Item) => {
     const title = id === "account" && accountEmail ? `${label} (${accountEmail})` : label;
     return (
@@ -47,6 +50,8 @@ export function ActivityBar({ active, onToggle, accountEmail }: ActivityBarProps
   return (
     <nav className="activitybar">
       {TOP.map(button)}
+      {areas.length > 0 && <div className="activitybar-divider" />}
+      {areas.map(button)}
       <div className="activitybar-fill" />
       {BOTTOM.map(button)}
     </nav>

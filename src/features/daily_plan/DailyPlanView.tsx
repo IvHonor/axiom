@@ -7,7 +7,7 @@ import { Capacity } from "./Capacity";
 import { FocusBar, FocusMode } from "./Focus";
 import { Insights } from "./Insights";
 import { PlanRitual, ShutdownRitual } from "./Rituals";
-import { setPlanUi, usePlanUi, type PlanView } from "./planUi";
+import { planChanged, setPlanUi, usePlanUi, type PlanView } from "./planUi";
 import { CalendarsDialog, ProviderButton, RoutinesDialog } from "./Setup";
 import { TaskPanel } from "./TaskPanel";
 import { Timeline } from "./Timeline";
@@ -99,6 +99,7 @@ export function DailyPlanView() {
       try {
         await change();
         nudgeCalendars(todayNow());
+        planChanged();
       } catch (e) {
         setError(errorMessage(e));
       }

@@ -15,6 +15,8 @@ interface PlanUi {
   dialog: PlanDialog;
   /** Bumped to send the planner back to today. */
   todayAsked: number;
+  /** Bumped whenever the plan changes here, so the sidebar re-reads it. */
+  revision: number;
 }
 
 const VIEW_KEY = "axiom.dailyPlan.view";
@@ -28,7 +30,7 @@ function savedView(): PlanView {
   }
 }
 
-let state: PlanUi = { view: savedView(), dialog: null, todayAsked: 0 };
+let state: PlanUi = { view: savedView(), dialog: null, todayAsked: 0, revision: 0 };
 const listeners = new Set<() => void>();
 
 export function setPlanUi(change: Partial<PlanUi>) {
@@ -56,4 +58,9 @@ export function usePlanUi(): PlanUi {
 /** Shows today in the day view. */
 export function showToday() {
   setPlanUi({ view: "day", todayAsked: state.todayAsked + 1 });
+}
+
+/** Tells the sidebar the plan changed. */
+export function planChanged() {
+  setPlanUi({ revision: state.revision + 1 });
 }

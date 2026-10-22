@@ -2,7 +2,7 @@ import "./plan.css";
 import { CalendarClock } from "lucide-react";
 import type { ExtensionManifest } from "../../extensions/types";
 import { DailyPlanView } from "./DailyPlanView";
-import { PlanNav } from "./PlanNav";
+import { PlanSidebar } from "./PlanSidebar";
 import { PlanSummary } from "./PlanSummary";
 
 export const dailyPlan: ExtensionManifest = {
@@ -28,5 +28,5 @@ export const dailyPlan: ExtensionManifest = {
   version: "0.1.0",
   publisher: "Axiom",
   icon: CalendarClock,
-  area: { View: DailyPlanView, Summary: PlanSummary, Nav: PlanNav },
+  area: { View: DailyPlanView, Summary: PlanSummary, Sidebar: PlanSidebar },
 };

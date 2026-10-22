@@ -1631,20 +1631,10 @@
   }
 }
 
-/* An area's own items under it in the sidebar (AreaContribution.Nav). */
-.section .nav-item.nav-sub {
-  height: 28px;
-  gap: 8px;
-  padding-left: 52px;
-  font-size: 12.5px;
-}
-
-.nav-sub.is-current {
-  color: var(--text);
-  background: var(--hover);
-}
-
-.nav-warn {
-  margin-left: auto;
-  color: var(--danger);
+/* Between the shell's icons and the areas' own (AreaContribution.Sidebar). */
+.activitybar-divider {
+  width: 24px;
+  height: 1px;
+  margin: 4px 0;
+  background: var(--line-strong);
 }

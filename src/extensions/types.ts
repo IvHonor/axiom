@@ -29,11 +29,12 @@ export interface AreaContribution {
   View?: ComponentType;
   /** Compact tile for the overview. */
   Summary?: ComponentType;
-  /** Items listed under the area in the sidebar, like its views. */
-  Nav?: ComponentType<AreaNavProps>;
+  /** A sidebar of the area's own, opened from its icon in the activity bar
+   * (under Extensions). The shell draws the frame and title; this is the body. */
+  Sidebar?: ComponentType<AreaSidebarProps>;
 }
 
-export interface AreaNavProps {
+export interface AreaSidebarProps {
   /** Whether the area's tab is the one showing. */
   active: boolean;
   /** Opens (or focuses) the area's tab. */

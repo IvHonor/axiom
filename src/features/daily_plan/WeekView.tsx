@@ -4,6 +4,7 @@ import { useDataChanged } from "../../lib/sync";
 import { api, cardFromDrag, errorMessage, nudgeCalendars, type Day, type DayPlan, type PlanTask } from "./api";
 import { capacityState, expectedMinutes, plannedMinutes } from "./Capacity";
 import { colorOf } from "./palette";
+import { planChanged } from "./planUi";
 import { draggedTask, TASK_DRAG } from "./TaskPanel";
 import { addDays, duration, today as todayNow } from "./time";
 
@@ -41,6 +42,7 @@ export function WeekView({ weekStart, today, version, onOpenDay, onError }: Week
       try {
         await change();
         nudgeCalendars(todayNow());
+        planChanged();
       } catch (e) {
         onError(errorMessage(e));
       }

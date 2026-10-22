@@ -36,6 +36,9 @@ export default function App() {
     ...installedIds.map(findExtension).filter((ext): ext is ExtensionManifest => !!ext),
   ];
   const areas = installed.filter((ext) => ext.area);
+  const withSidebar = areas.filter((ext) => ext.area?.Sidebar);
+  const shownArea = withSidebar.find((ext) => panel === `area:${ext.id}`);
+  const AreaSidebar = shownArea?.area?.Sidebar;
   const isInstalled = (ext: ExtensionManifest) => !!ext.builtIn || installedIds.includes(ext.id);
   const current = active.kind === "overview" ? undefined : findExtension(active.id);
 
@@ -55,6 +58,11 @@ export default function App() {
       }
     }
   }, [tabs, installedIds, closeExtension]);
+
+  // An area's own sidebar closes when the area is uninstalled.
+  useEffect(() => {
+    if (panel?.startsWith("area:") && !shownArea) setPanel("areas");
+  }, [panel, shownArea]);
 
   // The shortcut handler is registered once, so it reads the latest state through a ref.
   const latest = useRef({ active, close });
@@ -124,6 +132,7 @@ export default function App() {
         <div className="workbench">
           <ActivityBar
             active={panel}
+            areas={withSidebar.map((ext) => ({ id: `area:${ext.id}` as const, label: ext.name, icon: ext.icon }))}
             onToggle={togglePanel}
             accountEmail={account?.state === "signed_in" ? account.email : undefined}
           />
@@ -145,6 +154,17 @@ export default function App() {
           )}
           {panel === "account" && <AccountPanel status={account} sync={sync} onChange={setAccount} />}
           {panel === "themes" && <ThemesPanel onBrowse={browseThemes} />}
+          {shownArea && AreaSidebar && (
+            <aside className="sidebar" aria-label={shownArea.name}>
+              <header className="sidebar-head">{shownArea.name}</header>
+              <div className="sidebar-body">
+                <AreaSidebar
+                  active={active.kind === "extension" && active.id === shownArea.id}
+                  onOpen={() => open({ kind: "extension", id: shownArea.id })}
+                />
+              </div>
+            </aside>
+          )}
           <main className="main">{main}</main>
         </div>
         {updater.offered && <UpdatePrompt status={updater.status} onInstall={updater.install} onLater={updater.later} />}

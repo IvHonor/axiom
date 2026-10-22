@@ -142,7 +142,7 @@ async fn an_unpushed_edit_is_never_overwritten_by_a_pull() {
 
     // The laptop pulls the desktop's version while its own edit is unpushed.
     let page = laptop.account.pull(0).await.unwrap();
-    local::apply(&laptop.db, &page.records, page.cursor).await.unwrap();
+    local::apply(&laptop.db, &page.records, local::Cursor::Account(page.cursor)).await.unwrap();
     assert_eq!(laptop.task(&project_id).await.task.title, "Laptop", "the local edit is kept");
 
     // Its next sync pushes the edit and brings back the merged row.
@@ -229,4 +229,174 @@ async fn daily_plans_sync_too() {
     assert_eq!(day.tasks[0].title, "Write report");
     assert_eq!(day.tasks[0].focus_rank, Some(1));
     assert_eq!(day.blocks[0].start_minute, 14 * 60);
+}
+
+// ---------- Shared boards ----------
+
+use axiom_protocol::{Change, NewInvite, Role};
+
+impl Computer {
+    async fn sign_in_as(&self, email: &str) {
+        if self.account.sign_in(email, PASSWORD).await.is_err() {
+            self.account.sign_up(email, PASSWORD).await.unwrap();
+        }
+        assert!(matches!(self.sync().await, Outcome::Synced { .. }));
+    }
+
+    /// A row as exported, to build others from.
+    async fn exported(&self, table: &str, id: &str) -> serde_json::Map<String, serde_json::Value> {
+        let tables = local::export(&self.db).await.unwrap();
+        tables[table].as_array().unwrap().iter().find(|r| r["id"] == id).unwrap().as_object().unwrap().clone()
+    }
+}
+
+/// Ada shares "Website" (one card) with Bob as `role`.
+async fn shared_with_bob(role: Role) -> (Computer, Computer, String, String) {
+    let server = start_server().await;
+    let (ada, bob) = (Computer::new(&server).await, Computer::new(&server).await);
+    ada.sign_in_as("ada@example.com").await;
+    bob.sign_in_as("bob@example.com").await;
+    let project = board::create_project(&ada.db, "Website").await.unwrap();
+    let column = board::get_board(&ada.db, &project.id).await.unwrap().columns[0].id.clone();
+    let card = board::create_task(&ada.db, &column, "Fix footer").await.unwrap().task.id;
+    // Synced to her account first, so sharing has rows to move.
+    ada.sync().await;
+    sharing::share(&ada.db, &ada.account, &project.id).await.unwrap();
+    ada.sync().await;
+    ada.account.invite(&project.id, &NewInvite { email: "bob@example.com".into(), role }).await.unwrap();
+    let invite = bob.account.my_invites().await.unwrap().remove(0);
+    assert_eq!(invite.space_name, "Website");
+    sharing::accept_invite(&bob.db, &bob.account, &invite.id).await.unwrap();
+    bob.sync().await;
+    (ada, bob, project.id, card)
+}
+
+#[tokio::test]
+async fn a_shared_board_reaches_the_people_on_it() {
+    let (ada, bob, project, card) = shared_with_bob(Role::Editor).await;
+    assert_eq!(bob.project_names().await, ["Website"]);
+    assert_eq!(bob.task(&project).await.task.title, "Fix footer");
+
+    // Bob edits the card; Ada gets it.
+    let mut fields = fields_of(&bob.task(&project).await);
+    fields.title = "Fix footer links".into();
+    board::update_task(&bob.db, &card, fields).await.unwrap();
+    bob.sync().await;
+    ada.sync().await;
+    assert_eq!(ada.task(&project).await.task.title, "Fix footer links");
+
+    // Ada's other computer gets the board once, through the board, not her account.
+    let laptop = Computer::new(&ada.server).await;
+    laptop.sign_in_as("ada@example.com").await;
+    assert_eq!(laptop.project_names().await, ["Website"]);
+    assert_eq!(board::get_board(&laptop.db, &project).await.unwrap().tasks.len(), 1);
+    assert_eq!(spaces::role_of(&laptop.db, &project).await.unwrap(), Some(Role::Owner));
+}
+
+#[tokio::test]
+async fn viewers_see_a_shared_board_but_cannot_change_it() {
+    use crate::features::project_board::access::{self, Need};
+    let (ada, bob, project, card) = shared_with_bob(Role::Viewer).await;
+    assert_eq!(bob.task(&project).await.task.title, "Fix footer");
+
+    // The app says no straight away...
+    let refused = access::task(&bob.db, &card, Need::Cards).await.unwrap_err();
+    assert!(refused.to_string().contains("view this board"), "{refused}");
+
+    // ...and an edit that gets past it anyway is refused by the server, and
+    // the board's own version comes back.
+    let mut fields = fields_of(&bob.task(&project).await);
+    fields.title = "Changed by a viewer".into();
+    board::update_task(&bob.db, &card, fields).await.unwrap();
+    bob.sync().await;
+    assert_eq!(bob.task(&project).await.task.title, "Fix footer");
+    ada.sync().await;
+    assert_eq!(ada.task(&project).await.task.title, "Fix footer");
+
+    // Made an editor, Bob can.
+    let bob_id = ada.account.members(&project).await.unwrap().members.into_iter().find(|m| !m.you).unwrap().user_id;
+    ada.account.change_role(&project, &bob_id, Role::Editor).await.unwrap();
+    bob.sync().await;
+    assert!(access::task(&bob.db, &card, Need::Cards).await.is_ok());
+    assert!(access::task(&bob.db, &card, Need::Board).await.is_err());
+}
+
+#[tokio::test]
+async fn removed_members_lose_the_board_and_the_owner_keeps_it() {
+    let (ada, bob, project, _) = shared_with_bob(Role::Editor).await;
+    let bob_id = ada.account.members(&project).await.unwrap().members.into_iter().find(|m| !m.you).unwrap().user_id;
+    ada.account.remove_member(&project, &bob_id).await.unwrap();
+    bob.sync().await;
+    assert!(bob.project_names().await.is_empty());
+    assert!(spaces::list(&bob.db).await.unwrap().is_empty());
+
+    // Stopping sharing: Ada keeps the board, back among her own projects.
+    sharing::stop_sharing(&ada.db, &ada.account, &project).await.unwrap();
+    ada.sync().await;
+    assert_eq!(ada.project_names().await, ["Website"]);
+    let laptop = Computer::new(&ada.server).await;
+    laptop.sign_in_as("ada@example.com").await;
+    assert_eq!(laptop.project_names().await, ["Website"]);
+    assert_eq!(laptop.task(&project).await.task.title, "Fix footer");
+    assert!(spaces::list(&laptop.db).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_shared_board_cannot_reach_into_your_own_projects() {
+    let (ada, bob, project, card) = shared_with_bob(Role::Editor).await;
+    let mine = board::create_project(&bob.db, "Private").await.unwrap();
+    let my_column = board::get_board(&bob.db, &mine.id).await.unwrap().columns[0].id.clone();
+    let secret = board::create_task(&bob.db, &my_column, "Secret").await.unwrap().task.id;
+    bob.sync().await;
+    board::add_checklist_item(&ada.db, &card, "Real item").await.unwrap();
+    ada.sync().await;
+
+    // Ada's app turns hostile: rows aimed at Bob's own project and card,
+    // next to one honest row that should arrive.
+    let task = ada.exported("project_board_tasks", &card).await;
+    let item_id = local::export(&ada.db).await.unwrap()["project_board_checklist_items"][0]["id"].as_str().unwrap().to_owned();
+    let item = ada.exported("project_board_checklist_items", &item_id).await;
+    let with = |mut row: serde_json::Map<String, serde_json::Value>, changes: serde_json::Value| {
+        for (k, v) in changes.as_object().unwrap() {
+            row.insert(k.clone(), v.clone());
+        }
+        row
+    };
+    let change = |table: &str, fields: serde_json::Map<String, serde_json::Value>| Change {
+        table: table.into(),
+        id: fields["id"].as_str().unwrap().into(),
+        fields,
+        changed_at: chrono::Utc::now().timestamp_millis(),
+    };
+    let rows = vec![
+        change("project_board_tasks", with(task.clone(), serde_json::json!({ "id": "honest-1", "title": "Honest card" }))),
+        change(
+            "project_board_tasks",
+            with(task.clone(), serde_json::json!({ "id": "evil-1", "project_id": mine.id, "column_id": my_column, "title": "Injected" })),
+        ),
+        change("project_board_checklist_items", with(item, serde_json::json!({ "id": "evil-2", "task_id": secret, "text": "Injected" }))),
+        // Bob's own card, claimed for the shared board.
+        change("project_board_tasks", with(task, serde_json::json!({ "id": secret, "title": "Taken over" }))),
+    ];
+    ada.account.space_push(&project, &PushRequest { changes: rows }).await.unwrap();
+    bob.sync().await;
+
+    let shared: Vec<String> = board::get_board(&bob.db, &project).await.unwrap().tasks.into_iter().map(|t| t.task.title).collect();
+    assert!(shared.contains(&"Honest card".to_owned()), "{shared:?}");
+    let private = board::get_board(&bob.db, &mine.id).await.unwrap();
+    let titles: Vec<&str> = private.tasks.iter().map(|t| t.task.title.as_str()).collect();
+    assert_eq!(titles, ["Secret"]);
+    assert_eq!(private.tasks[0].checklist_total, 0);
+}
+
+#[tokio::test]
+async fn signing_in_as_someone_else_removes_shared_boards() {
+    let (_ada, bob, _project, _) = shared_with_bob(Role::Editor).await;
+    bob.account.sign_out().await;
+    bob.account.sign_up("cy@example.com", PASSWORD).await.unwrap();
+    // Cy keeps what's on this computer, but not boards shared with Bob.
+    local::link(&bob.db, &bob.account.user_id().await.unwrap(), Link::Merge).await.unwrap();
+    bob.sync().await;
+    assert!(bob.project_names().await.is_empty());
+    assert!(spaces::list(&bob.db).await.unwrap().is_empty());
 }

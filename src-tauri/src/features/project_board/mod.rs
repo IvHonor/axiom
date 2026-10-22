@@ -6,6 +6,7 @@
 //! - `types.rs` holds the shapes sent to React
 //! - `commands.rs` exposes the logic to React
 
+pub(crate) mod access;
 pub mod commands;
 mod entities;
 pub mod migrations;

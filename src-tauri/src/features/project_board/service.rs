@@ -1115,6 +1115,10 @@ pub async fn cards_by_id(db: &DatabaseConnection, ids: &[String]) -> Result<Vec<
 /// the card's history, as if dragged on the board.
 pub async fn set_card_done(db: &DatabaseConnection, id: &str, done: bool) -> Result<()> {
     let card = find_task(db, id).await?;
+    // A viewer of a shared board ticks off their own plan, not the card.
+    if !super::access::allowed(db, &card.project_id, super::access::Need::Cards).await? {
+        return Ok(());
+    }
     let columns = columns_of(db, &card.project_id).await?;
     let current_is_done = columns.iter().any(|c| c.id == card.column_id && c.is_done);
     if done == current_is_done {

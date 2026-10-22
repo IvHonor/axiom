@@ -95,6 +95,11 @@ pub enum Link {
 
 pub async fn link(db: &DatabaseConnection, user_id: &str, how: Link) -> Result<(), DbErr> {
     let txn = db.begin().await?;
+    // Shared boards belong to the account this computer was linked to; they
+    // come back if the new account is on them too, and never get merged in.
+    for board in super::spaces::list(&txn).await? {
+        super::spaces::remove_board(&txn, &board.id).await?;
+    }
     if how == Link::Replace {
         clear_tables(&txn).await?;
     }
@@ -122,7 +127,7 @@ pub async fn wipe(db: &DatabaseConnection) -> Result<(), DbErr> {
     let txn = db.begin().await?;
     clear_tables(&txn).await?;
     txn.execute_unprepared(
-        "DELETE FROM sync_base; DELETE FROM sync_outbox;
+        "DELETE FROM sync_base; DELETE FROM sync_outbox; DELETE FROM sync_spaces;
          UPDATE sync_state SET user_id = NULL, cursor = 0, last_synced_at = NULL WHERE id = 1;",
     )
     .await?;
@@ -133,7 +138,7 @@ pub async fn wipe(db: &DatabaseConnection) -> Result<(), DbErr> {
 /// Used after the account is deleted.
 pub async fn unlink(db: &impl ConnectionTrait) -> Result<(), DbErr> {
     db.execute_unprepared(
-        "DELETE FROM sync_base; DELETE FROM sync_outbox;
+        "DELETE FROM sync_base; DELETE FROM sync_outbox; DELETE FROM sync_spaces;
          UPDATE sync_state SET user_id = NULL, cursor = 0, last_synced_at = NULL WHERE id = 1;",
     )
     .await?;
@@ -167,10 +172,11 @@ async fn clear_tables(db: &impl ConnectionTrait) -> Result<(), DbErr> {
 
 /// A row waiting to be pushed, with the full row as it is now.
 pub struct Outgoing {
-    table: String,
-    id: String,
+    pub table: String,
+    pub id: String,
     version: i64,
-    row: Option<Row>,
+    /// The whole row as it is now (None if it's gone).
+    pub row: Option<Row>,
     pub change: Option<Change>,
 }
 
@@ -228,7 +234,19 @@ pub async fn pushed(db: &DatabaseConnection, sent: &[Outgoing]) -> Result<(), Db
 ///
 /// A row with unpushed edits is skipped: its push will merge those edits on
 /// the server and bring it back in a later pull, so nothing is lost.
-pub async fn apply(db: &DatabaseConnection, records: &[Record], cursor: i64) -> Result<usize, DbErr> {
+#[cfg(test)]
+pub async fn apply(db: &DatabaseConnection, records: &[Record], cursor: Cursor<'_>) -> Result<usize, DbErr> {
+    apply_some(db, records.iter().collect(), cursor).await
+}
+
+/// Where a page of pulled records came from, so its cursor moves.
+pub enum Cursor<'a> {
+    Account(i64),
+    Board(&'a str, i64),
+}
+
+/// Like `apply`, for records already checked by the caller.
+pub async fn apply_some(db: &DatabaseConnection, records: Vec<&Record>, cursor: Cursor<'_>) -> Result<usize, DbErr> {
     let txn = db.begin().await?;
     let mut columns = Columns::default();
     let mut applied = 0;
@@ -268,7 +286,12 @@ pub async fn apply(db: &DatabaseConnection, records: &[Record], cursor: i64) -> 
         write_base(&txn, table, &record.id, &record.data).await?;
         applied += 1;
     }
-    txn.execute_raw(sql("UPDATE sync_state SET cursor = ? WHERE id = 1", [cursor.into()])).await?;
+    match cursor {
+        Cursor::Account(at) => {
+            txn.execute_raw(sql("UPDATE sync_state SET cursor = ? WHERE id = 1", [at.into()])).await?;
+        }
+        Cursor::Board(id, at) => super::spaces::set_cursor(&txn, id, at).await?,
+    }
     txn.commit().await?;
     Ok(applied)
 }

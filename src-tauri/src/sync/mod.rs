@@ -10,17 +10,23 @@
 //! It runs at launch, a few seconds after any edit, every minute, and when
 //! the app asks (signing in, coming back online). The server merges per
 //! field, so two devices editing different fields of a task both keep theirs.
+//!
+//! Shared boards (see `spaces`) sync the same way, with the board instead
+//! of the account: their rows are pushed to and pulled from the board.
 
 mod commands;
 pub mod local;
 pub mod migrations;
+pub mod sharing;
+pub mod spaces;
 #[cfg(test)]
 mod tests;
 
+use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use axiom_protocol::{PushRequest, SYNC_BATCH};
+use axiom_protocol::{PushRequest, Record, RecordRef, Role, SYNC_BATCH};
 use chrono::{DateTime, Utc};
 use sea_orm::{DatabaseConnection, DbErr};
 use serde::Serialize;
@@ -31,7 +37,7 @@ use tokio::time::Instant;
 use crate::account::{Account, ServerError};
 use crate::db::Db;
 pub use commands::*;
-use local::Link;
+use local::{Cursor, Link};
 
 /// Every table that syncs. Features list their own; add new lists here.
 pub static TABLES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
@@ -191,32 +197,129 @@ pub async fn sync_once(
     }
     on_network();
 
+    // Which boards this account is on, before deciding where rows go.
+    let mut applied = refresh_boards(db, account).await?;
+    let shared: HashSet<String> = spaces::list(db).await?.into_iter().map(|b| b.id).collect();
+
     loop {
         let mut batch = local::outgoing(db, SYNC_BATCH).await?;
         if batch.is_empty() {
             break;
         }
-        let changes: Vec<_> = batch.iter_mut().filter_map(|o| o.change.take()).collect();
-        if !changes.is_empty() {
-            account.push(&PushRequest { changes }).await?;
+        let mut own = Vec::new();
+        let mut boards: HashMap<String, (Vec<_>, Vec<RecordRef>)> = HashMap::new();
+        for item in batch.iter_mut() {
+            let Some(change) = item.change.take() else { continue };
+            let board = match &item.row {
+                Some(row) => spaces::project_of(db, &item.table, &item.id, row).await?.filter(|p| shared.contains(p)),
+                None => None,
+            };
+            match board {
+                Some(board) => {
+                    let (changes, rows) = boards.entry(board).or_default();
+                    rows.push(RecordRef { table: item.table.clone(), id: item.id.clone() });
+                    changes.push(change);
+                }
+                None => own.push(change),
+            }
+        }
+        if !own.is_empty() {
+            account.push(&PushRequest { changes: own }).await?;
+        }
+        let mut refused = Vec::new();
+        for (board, (changes, rows)) in boards {
+            match account.space_push(&board, &PushRequest { changes }).await {
+                Ok(_) => {}
+                // Your role no longer allows it, or the board went: the
+                // board's own version comes back on this sync's pull.
+                Err(ServerError::Forbidden(_) | ServerError::Missing(_)) => {
+                    refused.extend(rows);
+                    spaces::set_cursor(db, &board, 0).await?;
+                }
+                Err(err) => return Err(err),
+            }
         }
         local::pushed(db, &batch).await?;
+        spaces::discard_edits(db, &refused).await?;
         if batch.len() < SYNC_BATCH {
             break;
         }
     }
 
     let mut cursor = local::state(db).await?.cursor;
-    let mut applied = 0;
     loop {
         let page = account.pull(cursor).await?;
-        applied += local::apply(db, &page.records, page.cursor).await?;
+        let skip = spaces::shared_rows_in(db, &page.records, &shared).await?;
+        let keep = page.records.iter().filter(|r| !skip.contains(&(r.table.clone(), r.id.clone()))).collect();
+        applied += local::apply_some(db, keep, Cursor::Account(page.cursor)).await?;
         cursor = page.cursor;
         if !page.more {
             break;
         }
     }
 
+    for board in spaces::list(db).await? {
+        let mut cursor = board.cursor;
+        loop {
+            let page = match account.space_pull(&board.id, cursor).await {
+                Ok(page) => page,
+                // Removed from it since the list was read: the next sync tidies up.
+                Err(ServerError::Missing(_) | ServerError::Forbidden(_)) => break,
+                Err(err) => return Err(err),
+            };
+            // Cards in this page that pass the check themselves: a checklist
+            // item may hang off one of them. (Trusting every card in the page
+            // would let one claim someone's private card, and then attach
+            // items to it.)
+            let mut tasks_in_page: HashMap<String, String> = HashMap::new();
+            for card in page.records.iter().filter(|r| r.table == "project_board_tasks") {
+                if spaces::belongs(db, &board.id, card, &HashMap::new()).await? {
+                    tasks_in_page.insert(card.id.clone(), board.id.clone());
+                }
+            }
+            let mut keep: Vec<&Record> = Vec::new();
+            for record in &page.records {
+                if spaces::belongs(db, &board.id, record, &tasks_in_page).await? {
+                    keep.push(record);
+                } else {
+                    eprintln!("sync: ignored {}/{} from a shared board it isn't part of", record.table, record.id);
+                }
+            }
+            applied += local::apply_some(db, keep, Cursor::Board(&board.id, page.cursor)).await?;
+            cursor = page.cursor;
+            if !page.more {
+                break;
+            }
+        }
+    }
+
     local::mark_synced(db, Utc::now()).await?;
     Ok(Outcome::Synced { applied })
+}
+
+/// Brings the list of shared boards up to date. A board you've left (or
+/// that stopped being shared) leaves this computer, unless it's yours: then
+/// it goes back to being one of your own projects. Returns how many boards
+/// were removed here.
+async fn refresh_boards(db: &DatabaseConnection, account: &Account) -> Result<usize, ServerError> {
+    let found = match account.spaces().await {
+        Ok(found) => found,
+        // A server from before shared boards.
+        Err(ServerError::Missing(_)) => return Ok(0),
+        Err(err) => return Err(err),
+    };
+    let ids: HashSet<&str> = found.iter().map(|s| s.id.as_str()).collect();
+    let mut removed = 0;
+    for gone in spaces::list(db).await?.into_iter().filter(|b| !ids.contains(b.id.as_str())) {
+        if gone.role == Role::Owner {
+            spaces::make_personal(db, &gone.id).await?;
+        } else {
+            spaces::remove_board(db, &gone.id).await?;
+            removed += 1;
+        }
+    }
+    for space in &found {
+        spaces::upsert(db, space).await?;
+    }
+    Ok(removed)
 }

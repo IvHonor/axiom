@@ -3,8 +3,8 @@
 use std::time::Duration;
 
 use axiom_protocol::{
-    ApiError, ChangePassword, Credentials, DeleteAccount, Device, ForgotPassword, PullResponse, PushRequest, PushResponse,
-    RefreshRequest, ResetPassword, Session, routes,
+    Adopt, Adopted, ApiError, ChangePassword, ChangeRole, CreateSpace, Credentials, DeleteAccount, Device, ForgotPassword, Invite, Members,
+    MyInvite, NewInvite, PullResponse, PushRequest, PushResponse, RefreshRequest, ResetPassword, Role, Session, Space, route, routes,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -36,6 +36,13 @@ impl ClientError {
     /// The server no longer accepts this sign-in.
     pub fn is_unauthorized(&self) -> bool {
         matches!(self, ClientError::Rejected { status: 401, .. })
+    }
+
+    pub fn status(&self) -> Option<u16> {
+        match self {
+            ClientError::Rejected { status, .. } => Some(*status),
+            ClientError::Offline => None,
+        }
     }
 }
 
@@ -108,6 +115,71 @@ impl Client {
 
     pub async fn delete_account(&self, token: &str, request: &DeleteAccount) -> Result<(), ClientError> {
         empty(self.http.delete(self.url(routes::ACCOUNT)).bearer_auth(token).json(request).send().await).await
+    }
+
+    // ---------- Shared boards ----------
+
+    pub async fn spaces(&self, token: &str) -> Result<Vec<Space>, ClientError> {
+        read(self.http.get(self.url(routes::SPACES)).bearer_auth(token).send().await).await
+    }
+
+    pub async fn create_space(&self, token: &str, id: &str) -> Result<Space, ClientError> {
+        read(self.http.post(self.url(routes::SPACES)).bearer_auth(token).json(&CreateSpace { id: id.into() }).send().await).await
+    }
+
+    pub async fn adopt(&self, token: &str, id: &str, request: &Adopt) -> Result<Adopted, ClientError> {
+        let url = self.url(&route(routes::SPACE_ADOPT, &[("id", id)]));
+        read(self.http.post(url).bearer_auth(token).json(request).send().await).await
+    }
+
+    pub async fn delete_space(&self, token: &str, id: &str) -> Result<(), ClientError> {
+        empty(self.http.delete(self.url(&route(routes::SPACE, &[("id", id)]))).bearer_auth(token).send().await).await
+    }
+
+    pub async fn space_push(&self, token: &str, id: &str, request: &PushRequest) -> Result<PushResponse, ClientError> {
+        let url = self.url(&route(routes::SPACE_PUSH, &[("id", id)]));
+        read(self.http.post(url).bearer_auth(token).json(request).send().await).await
+    }
+
+    pub async fn space_pull(&self, token: &str, id: &str, since: i64) -> Result<PullResponse, ClientError> {
+        let url = format!("{}?since={since}", self.url(&route(routes::SPACE_PULL, &[("id", id)])));
+        read(self.http.get(url).bearer_auth(token).send().await).await
+    }
+
+    pub async fn members(&self, token: &str, id: &str) -> Result<Members, ClientError> {
+        read(self.http.get(self.url(&route(routes::SPACE_MEMBERS, &[("id", id)]))).bearer_auth(token).send().await).await
+    }
+
+    pub async fn invite(&self, token: &str, id: &str, request: &NewInvite) -> Result<Invite, ClientError> {
+        let url = self.url(&route(routes::SPACE_INVITES, &[("id", id)]));
+        read(self.http.post(url).bearer_auth(token).json(request).send().await).await
+    }
+
+    pub async fn withdraw_invite(&self, token: &str, id: &str, invite_id: &str) -> Result<(), ClientError> {
+        let url = self.url(&route(routes::SPACE_INVITE, &[("id", id), ("invite_id", invite_id)]));
+        empty(self.http.delete(url).bearer_auth(token).send().await).await
+    }
+
+    pub async fn change_role(&self, token: &str, id: &str, user_id: &str, role: Role) -> Result<(), ClientError> {
+        let url = self.url(&route(routes::SPACE_MEMBER, &[("id", id), ("user_id", user_id)]));
+        empty(self.http.patch(url).bearer_auth(token).json(&ChangeRole { role }).send().await).await
+    }
+
+    pub async fn remove_member(&self, token: &str, id: &str, user_id: &str) -> Result<(), ClientError> {
+        let url = self.url(&route(routes::SPACE_MEMBER, &[("id", id), ("user_id", user_id)]));
+        empty(self.http.delete(url).bearer_auth(token).send().await).await
+    }
+
+    pub async fn my_invites(&self, token: &str) -> Result<Vec<MyInvite>, ClientError> {
+        read(self.http.get(self.url(routes::INVITES)).bearer_auth(token).send().await).await
+    }
+
+    pub async fn accept_invite(&self, token: &str, id: &str) -> Result<Space, ClientError> {
+        read(self.http.post(self.url(&route(routes::INVITE_ACCEPT, &[("id", id)]))).bearer_auth(token).send().await).await
+    }
+
+    pub async fn decline_invite(&self, token: &str, id: &str) -> Result<(), ClientError> {
+        empty(self.http.post(self.url(&route(routes::INVITE_DECLINE, &[("id", id)]))).bearer_auth(token).send().await).await
     }
 
     async fn post<B: Serialize, T: DeserializeOwned>(&self, path: &str, body: &B) -> Result<T, ClientError> {

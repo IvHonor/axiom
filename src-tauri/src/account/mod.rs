@@ -12,8 +12,8 @@ mod tests;
 use std::time::{Duration, Instant};
 
 use axiom_protocol::{
-    ChangePassword, Credentials, DeleteAccount, Device, PullResponse, PushRequest, PushResponse, ResetPassword, Session,
-    check_email, check_password, normalize_email,
+    Adopt, Adopted, ChangePassword, Credentials, DeleteAccount, Device, Invite, Members, MyInvite, NewInvite, PullResponse, PushRequest,
+    PushResponse, ResetPassword, Role, Session, Space, check_email, check_password, normalize_email,
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -193,6 +193,93 @@ impl Account {
         self.after_call(result).await
     }
 
+    // ---------- Shared boards ----------
+    // Each takes a fresh token and signs out here if the server ended the session.
+
+    pub async fn spaces(&self) -> std::result::Result<Vec<Space>, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.spaces(&token).await;
+        self.after_call(result).await
+    }
+
+    pub async fn create_space(&self, id: &str) -> std::result::Result<Space, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.create_space(&token, id).await;
+        self.after_call(result).await
+    }
+
+    pub async fn adopt(&self, id: &str, request: &Adopt) -> std::result::Result<Adopted, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.adopt(&token, id, request).await;
+        self.after_call(result).await
+    }
+
+    pub async fn delete_space(&self, id: &str) -> std::result::Result<(), ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.delete_space(&token, id).await;
+        self.after_call(result).await
+    }
+
+    pub async fn space_push(&self, id: &str, request: &PushRequest) -> std::result::Result<PushResponse, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.space_push(&token, id, request).await;
+        self.after_call(result).await
+    }
+
+    pub async fn space_pull(&self, id: &str, since: i64) -> std::result::Result<PullResponse, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.space_pull(&token, id, since).await;
+        self.after_call(result).await
+    }
+
+    pub async fn members(&self, id: &str) -> std::result::Result<Members, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.members(&token, id).await;
+        self.after_call(result).await
+    }
+
+    pub async fn invite(&self, id: &str, request: &NewInvite) -> std::result::Result<Invite, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.invite(&token, id, request).await;
+        self.after_call(result).await
+    }
+
+    pub async fn withdraw_invite(&self, id: &str, invite_id: &str) -> std::result::Result<(), ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.withdraw_invite(&token, id, invite_id).await;
+        self.after_call(result).await
+    }
+
+    pub async fn change_role(&self, id: &str, user_id: &str, role: Role) -> std::result::Result<(), ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.change_role(&token, id, user_id, role).await;
+        self.after_call(result).await
+    }
+
+    pub async fn remove_member(&self, id: &str, user_id: &str) -> std::result::Result<(), ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.remove_member(&token, id, user_id).await;
+        self.after_call(result).await
+    }
+
+    pub async fn my_invites(&self) -> std::result::Result<Vec<MyInvite>, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.my_invites(&token).await;
+        self.after_call(result).await
+    }
+
+    pub async fn accept_invite(&self, id: &str) -> std::result::Result<Space, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.accept_invite(&token, id).await;
+        self.after_call(result).await
+    }
+
+    pub async fn decline_invite(&self, id: &str) -> std::result::Result<(), ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.decline_invite(&token, id).await;
+        self.after_call(result).await
+    }
+
     /// A refused token means the session was ended elsewhere: sign out here.
     async fn after_call<T>(&self, result: std::result::Result<T, ClientError>) -> std::result::Result<T, ServerError> {
         let result = result.map_err(ServerError::from);
@@ -280,7 +367,7 @@ impl From<ServerError> for Error {
         Error::Account(match err {
             ServerError::Offline => ClientError::Offline.message(),
             ServerError::SignedOut => "You've been signed out. Sign in again to continue.".into(),
-            ServerError::Failed(message) => message,
+            ServerError::Failed(message) | ServerError::Forbidden(message) | ServerError::Missing(message) => message,
         })
     }
 }
@@ -294,6 +381,11 @@ pub enum ServerError {
     SignedOut,
     /// The server answered with an error, ready to show.
     Failed(String),
+    /// Not allowed (403), e.g. a viewer pushing to a shared board.
+    Forbidden(String),
+    /// Not there (404), e.g. a shared board that stopped being shared, or a
+    /// server too old to know the route.
+    Missing(String),
 }
 
 impl From<ClientError> for ServerError {
@@ -301,6 +393,8 @@ impl From<ClientError> for ServerError {
         match err {
             ClientError::Offline => ServerError::Offline,
             err if err.is_unauthorized() => ServerError::SignedOut,
+            err if err.status() == Some(403) => ServerError::Forbidden(err.message()),
+            err if err.status() == Some(404) => ServerError::Missing(err.message()),
             err => ServerError::Failed(err.message()),
         }
     }

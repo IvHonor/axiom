@@ -125,6 +125,9 @@ pub struct Tokens {
     /// Sent on first sign-in, and by Microsoft on every refresh.
     #[serde(default)]
     pub refresh_token: Option<String>,
+    /// The permissions granted, space-separated.
+    #[serde(default)]
+    pub scope: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]

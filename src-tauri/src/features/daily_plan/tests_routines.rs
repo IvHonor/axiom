@@ -172,6 +172,7 @@ async fn calendar_with(db: &DatabaseConnection, events: Vec<super::calendars::ic
         refreshed_at: Set(Some(chrono::Utc::now())),
         problem: Set(None),
         created_at: Set(chrono::Utc::now()),
+        mine: Set(true),
         account_id: Set(None),
         remote_id: Set(None),
         writable: Set(false),
@@ -187,7 +188,7 @@ async fn calendar_with(db: &DatabaseConnection, events: Vec<super::calendars::ic
 }
 
 fn meeting(title: &str, start_minute: i32, duration_minutes: i32, all_day: bool, busy: bool) -> super::calendars::ics::DayEvent {
-    super::calendars::ics::DayEvent { uid: title.into(), title: title.into(), day: day(TODAY), start_minute, duration_minutes, all_day, busy }
+    super::calendars::ics::DayEvent { uid: title.into(), title: title.into(), day: day(TODAY), start_minute, duration_minutes, all_day, busy, ..Default::default() }
 }
 
 #[tokio::test]

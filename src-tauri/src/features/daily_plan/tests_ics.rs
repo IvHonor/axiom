@@ -4,7 +4,7 @@
 use chrono::NaiveDate;
 use rrule::Tz;
 
-use super::calendars::ics::{day_events, DayEvent};
+use super::calendars::ics::{day_events, edit_event, DayEvent, EventChange};
 
 const LONDON: Tz = Tz::Tz(chrono_tz::Europe::London);
 
@@ -129,4 +129,44 @@ fn late_events_split_at_midnight_and_free_time_is_not_busy() {
 #[test]
 fn a_web_page_is_not_a_calendar() {
     assert!(day_events("<html>Sign in</html>", d(10, 1), d(10, 2), LONDON).is_err());
+}
+
+#[test]
+fn details_come_with_the_event() {
+    let found = read(
+        "BEGIN:VEVENT\r\nUID:d1\r\nSUMMARY:Viewing\r\nLOCATION:12 Oak Road\\, Leeds\r\nDESCRIPTION:Bring ID\\nAsk about parking\r\nURL:https://example.com/v\r\nDTSTART:20261022T090000Z\r\nDTEND:20261022T100000Z\r\nEND:VEVENT\r\n",
+        d(10, 19),
+        d(10, 25),
+    );
+    let e = &found[0];
+    assert_eq!(e.details.location, "12 Oak Road, Leeds");
+    assert_eq!(e.details.description, "Bring ID\nAsk about parking");
+    assert_eq!(e.details.link.as_deref(), Some("https://example.com/v"));
+    assert!(!e.details.recurring);
+    assert_eq!(e.start_at.to_rfc3339(), "2026-10-22T09:00:00+00:00");
+}
+
+#[test]
+fn editing_changes_only_what_was_asked() {
+    let text = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:e\r\nSUMMARY:Old\r\nDTSTART;TZID=Europe/London:20261022T090000\r\nDURATION:PT1H\r\nSEQUENCE:3\r\nBEGIN:VALARM\r\nSUMMARY:Alarm text\r\nTRIGGER:-PT5M\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    let change = EventChange {
+        title: Some("New".into()),
+        times: Some(("2026-10-22T10:00:00Z".parse().unwrap(), "2026-10-22T11:30:00Z".parse().unwrap())),
+        ..Default::default()
+    };
+    let out = edit_event(text, &change).unwrap();
+    assert!(out.contains("SUMMARY:New") && !out.contains("SUMMARY:Old"));
+    assert!(out.contains("DTSTART:20261022T100000Z") && out.contains("DTEND:20261022T113000Z") && !out.contains("DURATION"));
+    assert!(out.contains("SEQUENCE:4") && !out.contains("SEQUENCE:3"));
+    // The alarm's own lines are left alone.
+    assert!(out.contains("SUMMARY:Alarm text") && out.contains("TRIGGER:-PT5M"));
+    // And it still reads as the changed event.
+    let read_back = day_events(&out, d(10, 22), d(10, 22), LONDON).unwrap();
+    assert_eq!((read_back[0].title.as_str(), read_back[0].start_minute, read_back[0].duration_minutes), ("New", 11 * 60, 90));
+}
+
+#[test]
+fn repeating_events_are_not_edited_as_text() {
+    let text = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:r\r\nSUMMARY:Weekly\r\nDTSTART:20261001T090000Z\r\nRRULE:FREQ=WEEKLY\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    assert!(edit_event(text, &EventChange { title: Some("x".into()), ..Default::default() }).is_err());
 }

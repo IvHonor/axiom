@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use chrono::{Days, Utc};
 use rrule::Tz;
 use sea_orm::prelude::Date;
+use serde::Deserialize;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait};
 use serde::Serialize;
 use tokio::sync::{oneshot, Mutex};
@@ -14,6 +15,7 @@ use tokio::sync::{oneshot, Mutex};
 use super::caldav::{self, CalDav};
 use super::google::{self, Google};
 use super::microsoft::{self, Microsoft};
+use super::ics::EventChange;
 use super::oauth::{random_token, Loopback, OAuthApp, Pkce};
 use super::publish::{self, plan_events};
 use super::remote::Remote;
@@ -123,14 +125,18 @@ impl CalendarHub {
                 return Ok(token.clone());
             }
         }
-        let Some(Secret::OAuth { refresh_token }) = self.secrets.load(&account.id) else {
+        let Some(Secret::OAuth { refresh_token, scope }) = self.secrets.load(&account.id) else {
             return Err(Error::Account("Axiom isn't signed in to this calendar any more. Reconnect it.".into()));
         };
         let app = self.app(&account.provider)?;
         let tokens = app.refresh(&self.http, &refresh_token).await?;
-        // Microsoft hands out a new refresh token each time.
-        if let Some(next) = tokens.refresh_token.filter(|t| t != &refresh_token) {
-            self.secrets.save(&account.id, &Secret::OAuth { refresh_token: next }).map_err(Error::Invalid)?;
+        // Microsoft hands out a new refresh token each time; either may say what's allowed.
+        let next = Secret::OAuth {
+            refresh_token: tokens.refresh_token.clone().unwrap_or_else(|| refresh_token.clone()),
+            scope: tokens.scope.clone().or_else(|| scope.clone()),
+        };
+        if next != (Secret::OAuth { refresh_token, scope }) {
+            self.secrets.save(&account.id, &next).map_err(Error::Invalid)?;
         }
         self.remember(&account.id, &tokens.access_token, tokens.expires_in).await;
         Ok(tokens.access_token)
@@ -142,9 +148,12 @@ impl CalendarHub {
         self.tokens.lock().await.insert(account_id.to_owned(), (token.to_owned(), Instant::now() + life));
     }
 
-    fn remote_with(&self, provider: &str, token: String) -> Box<dyn Remote> {
+    fn remote_with(&self, provider: &str, token: String, scope: Option<&str>) -> Box<dyn Remote> {
         match provider {
-            "google" => Box::new(Google::new(self.http.clone(), &self.providers.google_api, token)),
+            "google" => {
+                let can_edit = scope.is_some_and(|s| s.split_whitespace().any(|g| g == google::EDIT_SCOPE));
+                Box::new(Google::new(self.http.clone(), &self.providers.google_api, token, can_edit))
+            }
             _ => Box::new(Microsoft::new(self.http.clone(), &self.providers.graph_api, token)),
         }
     }
@@ -157,7 +166,11 @@ impl CalendarHub {
             return Ok(Box::new(CalDav::new(&account.server, &username, &password)));
         }
         let token = self.access_token(account).await?;
-        Ok(self.remote_with(&account.provider, token))
+        let scope = match self.secrets.load(&account.id) {
+            Some(Secret::OAuth { scope, .. }) => scope,
+            _ => None,
+        };
+        Ok(self.remote_with(&account.provider, token, scope.as_deref()))
     }
 
     /// Stops a sign-in that's waiting on the browser.
@@ -193,11 +206,11 @@ pub async fn connect_oauth(
     let refresh_token = tokens
         .refresh_token
         .ok_or_else(|| Error::Invalid(format!("{} didn't let Axiom stay signed in. Try connecting again.", app.provider)))?;
-    let remote = hub.remote_with(provider, tokens.access_token.clone());
+    let remote = hub.remote_with(provider, tokens.access_token.clone(), tokens.scope.as_deref());
     let name = remote.account_name().await?;
 
     let saved = save_account(db, provider, &name, "").await?;
-    hub.secrets.save(&saved.id, &Secret::OAuth { refresh_token }).map_err(Error::Invalid)?;
+    hub.secrets.save(&saved.id, &Secret::OAuth { refresh_token, scope: tokens.scope.clone() }).map_err(Error::Invalid)?;
     hub.remember(&saved.id, &tokens.access_token, tokens.expires_in).await;
     finish_connecting(db, hub, &saved, remote.as_ref(), today).await?;
     Ok(saved)
@@ -273,6 +286,7 @@ async fn sync_calendar_list(db: &DatabaseConnection, account: &account::Model, r
                 let mut active: calendar::ActiveModel = ours.clone().into();
                 active.name = Set(theirs.name.clone());
                 active.writable = Set(theirs.writable);
+                active.mine = Set(theirs.mine);
                 active.update(&txn).await?;
             }
             None => {
@@ -291,6 +305,7 @@ async fn sync_calendar_list(db: &DatabaseConnection, account: &account::Model, r
                     shown: Set((theirs.mine || theirs.primary) && theirs.name != AXIOM_CALENDAR),
                     publish: Set(false),
                     published_hash: Set(None),
+                    mine: Set(theirs.mine),
                 }
                 .insert(&txn)
                 .await?;
@@ -319,7 +334,10 @@ async fn pull(db: &DatabaseConnection, hub: &CalendarHub, account: &account::Mod
             continue;
         }
         match remote.events(cal.remote_id.as_deref().unwrap_or_default(), from, to, hub.zone).await {
-            Ok(events) => {
+            Ok(mut events) => {
+                for e in &mut events {
+                    e.editable = cal.mine && remote.can_edit_events() && (remote.edits_occurrences() || !e.details.recurring);
+                }
                 if replace_events(db, &cal, events).await.is_err() {
                     continue;
                 }
@@ -457,6 +475,7 @@ pub async fn create_plan_calendar(db: &DatabaseConnection, hub: &CalendarHub, ac
                 shown: Set(false),
                 publish: Set(false),
                 published_hash: Set(None),
+                mine: Set(true),
             }
             .insert(db)
             .await?
@@ -490,7 +509,7 @@ pub async fn set_shown(db: &DatabaseConnection, hub: &CalendarHub, calendar_id: 
 pub async fn remove_account(db: &DatabaseConnection, hub: &CalendarHub, account_id: &str) -> Result<()> {
     let account = account::Entity::find_by_id(account_id).one(db).await?.ok_or(Error::NotFound("Calendar account"))?;
     if account.provider == "google" {
-        if let Some(Secret::OAuth { refresh_token }) = hub.secrets.load(account_id) {
+        if let Some(Secret::OAuth { refresh_token, .. }) = hub.secrets.load(account_id) {
             let _ = hub.http.post(&hub.providers.google_revoke).form(&[("token", refresh_token)]).send().await;
         }
     }
@@ -514,4 +533,74 @@ pub async fn list_accounts(db: &DatabaseConnection) -> Result<Vec<account::Model
 /// Serialises refreshes: the planner asks on a timer and after changes.
 pub async fn exclusive(hub: &CalendarHub) -> tokio::sync::MutexGuard<'_, ()> {
     hub.busy.lock().await
+}
+
+// ---------- Changing events ----------
+
+/// A change to a calendar event from the event panel. Leave a field out to
+/// keep it; `when` moves an event that has a time.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventEdit {
+    pub title: Option<String>,
+    pub location: Option<String>,
+    pub description: Option<String>,
+    pub when: Option<EventWhen>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventWhen {
+    pub day: Date,
+    pub start_minute: i32,
+    pub end_minute: i32,
+}
+
+/// The event, its calendar and a way to reach the provider, if Axiom may change it.
+async fn editable_event(db: &DatabaseConnection, hub: &CalendarHub, event_id: &str) -> Result<(event::Model, calendar::Model, account::Model, Box<dyn Remote>)> {
+    let found = event::Entity::find_by_id(event_id).one(db).await?.ok_or(Error::NotFound("Event"))?;
+    if !found.editable {
+        return Err(Error::Invalid("Axiom can't change this event. Change it in your calendar instead.".into()));
+    }
+    let cal = calendar::Entity::find_by_id(found.calendar_id.as_str()).one(db).await?.ok_or(Error::NotFound("Calendar"))?;
+    let account = account_of(db, &cal).await?;
+    let remote = hub.remote(&account).await?;
+    Ok((found, cal, account, remote))
+}
+
+/// Changes an event in its calendar, then reads the account again.
+pub async fn update_event(db: &DatabaseConnection, hub: &CalendarHub, event_id: &str, edit: EventEdit, today: Date) -> Result<()> {
+    let (found, cal, account, remote) = editable_event(db, hub, event_id).await?;
+    let times = match &edit.when {
+        Some(when) if !found.all_day => {
+            if when.end_minute <= when.start_minute || when.start_minute < 0 || when.end_minute > 24 * 60 {
+                return Err(Error::Invalid("The event has to end after it starts, by midnight.".into()));
+            }
+            let at = |minute: i32| {
+                when.day
+                    .and_hms_opt(0, 0, 0)
+                    .and_then(|midnight| super::ics::in_zone(hub.zone, midnight + chrono::Duration::minutes(minute as i64)))
+                    .map(|t| t.with_timezone(&Utc))
+                    .ok_or_else(|| Error::Invalid("That time doesn't exist on that day.".into()))
+            };
+            Some((at(when.start_minute)?, at(when.end_minute)?))
+        }
+        _ => None,
+    };
+    let title = edit.title.map(|t| t.trim().to_owned());
+    if title.as_deref() == Some("") {
+        return Err(Error::Invalid("Give the event a name.".into()));
+    }
+    let change = EventChange { title, location: edit.location, description: edit.description, times };
+    remote.update_event(cal.remote_id.as_deref().unwrap_or_default(), found.remote_id.as_deref().unwrap_or_default(), &change).await?;
+    pull(db, hub, &account, remote.as_ref(), today).await;
+    Ok(())
+}
+
+/// Deletes an event (or one occurrence) from its calendar.
+pub async fn delete_event(db: &DatabaseConnection, hub: &CalendarHub, event_id: &str, today: Date) -> Result<()> {
+    let (found, cal, account, remote) = editable_event(db, hub, event_id).await?;
+    remote.delete_event(cal.remote_id.as_deref().unwrap_or_default(), found.remote_id.as_deref().unwrap_or_default()).await?;
+    pull(db, hub, &account, remote.as_ref(), today).await;
+    Ok(())
 }

@@ -103,12 +103,12 @@ Put them in `src-tauri/.env` (copy `src-tauri/.env.example`; git ignores `.env`)
 **Google.** In the [Google Cloud console](https://console.cloud.google.com):
 
 1. Create a project, then under **APIs & Services → Library** enable the **Google Calendar API**.
-2. Under **Google Auth Platform**: fill in **Branding**; in **Audience** choose *External* and add your Google account as a test user; in **Data access** add the scopes `calendar.calendarlist.readonly`, `calendar.events.readonly` and `calendar.app.created`.
+2. Under **Google Auth Platform**: fill in **Branding**; in **Audience** choose *External* and add your Google account as a test user; in **Data access** add the scopes `calendar.calendarlist.readonly`, `calendar.events.readonly`, `calendar.events.owned` and `calendar.app.created`.
 3. Under **Clients**, create a client of type **Desktop app** and copy its id and secret.
 
 While the app is in *Testing*, only test users (up to 100) can connect, and Google expires their sign-in after 7 days, so they reconnect weekly. Publishing it for everyone needs Google's verification of those (sensitive) scopes: a privacy policy and a verified domain.
 
-Axiom only asks to see calendars and events and to manage calendars it creates, so the plan goes into an "Axiom" calendar and nothing else in the account is ever changed.
+Axiom asks to see calendars and events, to change events on the user's own calendars (only when they edit one in the event panel), and to manage calendars it creates. The plan goes into an "Axiom" calendar, so publishing never touches the user's other calendars. Accounts connected before `calendar.events.owned` was added can read but not edit until they connect again.
 
 **Microsoft.** In the [Microsoft Entra admin center](https://entra.microsoft.com), **App registrations → New registration**:
 

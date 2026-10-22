@@ -8,7 +8,12 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum Secret {
     /// Google or Microsoft: exchanged for short-lived access tokens.
-    OAuth { refresh_token: String },
+    OAuth {
+        refresh_token: String,
+        /// What the user allowed, as the provider last said.
+        #[serde(default)]
+        scope: Option<String>,
+    },
     /// CalDAV (iCloud): an app-specific password.
     Password { username: String, password: String },
 }

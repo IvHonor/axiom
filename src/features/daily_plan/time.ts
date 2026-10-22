@@ -44,9 +44,9 @@ export function longDay(day: Day): string {
   return noon(day).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 }
 
-/** "Wed 22 October", for the toolbar. */
+/** "Wed 22 Oct", for the toolbar. */
 export function mediumDay(day: Day): string {
-  return noon(day).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long" });
+  return noon(day).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
 /** "Today", "Tomorrow", "Yesterday", or the weekday and date. */

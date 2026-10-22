@@ -93,6 +93,8 @@ pub fn run() {
             plan::plan_show_calendar,
             plan::plan_publish_to,
             plan::plan_create_plan_calendar,
+            plan::plan_update_event,
+            plan::plan_delete_event,
             board::board_list_projects,
             board::board_create_project,
             board::board_rename_project,

@@ -9,6 +9,7 @@ import { Insights } from "./Insights";
 import { PlanRitual, ShutdownRitual } from "./Rituals";
 import { planChanged, setPlanUi, usePlanUi, type PlanView } from "./planUi";
 import { CalendarsDialog, ProviderButton, RoutinesDialog } from "./Setup";
+import { EventPanel } from "./EventPanel";
 import { TaskPanel } from "./TaskPanel";
 import { Timeline } from "./Timeline";
 import { addDays, addMonths, clock, longDay, mediumDay, mondayOf, monthName, monthOf, nowMinute, parseClock, relativeDay, today as todayNow } from "./time";
@@ -42,7 +43,7 @@ const CALENDAR_CHECK_MS = 5 * 60_000;
 
 /** The Daily Plan: the day's tasks beside its timeline, the week, and insights. */
 export function DailyPlanView() {
-  const { view, dialog, todayAsked } = usePlanUi();
+  const { view, dialog, todayAsked, event: eventId } = usePlanUi();
   /** Bumped when calendars or routines change, so every view reloads. */
   const [version, setVersion] = useState(0);
   const [calendars, setCalendars] = useState<CalendarSetup | null>(null);
@@ -316,7 +317,26 @@ export function DailyPlanView() {
         <Insights today={today} version={version} onError={showError} />
       ) : plan ? (
         <div className="dp-body">
-          <TaskPanel plan={plan} today={today} now={now} act={act} onFocus={focusOn} />
+          <TaskPanel plan={plan} today={today} now={now} act={act} onFocus={focusOn}>
+            {(() => {
+              const open = plan.events.find((e) => e.id === eventId);
+              return (
+                open && (
+                  <EventPanel
+                    key={open.id}
+                    event={open}
+                    setup={calendars}
+                    today={today}
+                    act={async (change) => {
+                      await act(change);
+                      bump();
+                    }}
+                    onClose={() => setPlanUi({ event: null })}
+                  />
+                )
+              );
+            })()}
+          </TaskPanel>
           <Timeline plan={plan} today={today} act={act} />
         </div>
       ) : (

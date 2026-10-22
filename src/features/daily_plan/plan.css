@@ -2493,3 +2493,113 @@ button.dp-year-day:hover {
 .dp-ag-body .dp-ag-time {
   line-height: 14px;
 }
+
+/* ---------- The open calendar event (EventPanel) ---------- */
+
+.dp-event-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.dp-event-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.dp-event-source {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dp-event-title {
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.dp-event-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.dp-event-line svg {
+  flex: none;
+  color: var(--text-dim);
+}
+
+.dp-event-notes {
+  margin: 2px 0 0;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-dim);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  user-select: text;
+}
+
+.dp-event-readonly {
+  margin: 4px 0 0;
+}
+
+.dp-event-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dp-event-notes-input {
+  width: 100%;
+  min-height: 80px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+  resize: vertical;
+}
+
+.dp-event-notes-input:focus {
+  border-color: var(--accent);
+}
+
+/* Events can be clicked for their details; the open one is marked. */
+.dp-event {
+  cursor: pointer;
+}
+
+.dp-event.is-selected,
+.dp-allday-chip.is-selected {
+  outline: 2px solid var(--block);
+  outline-offset: 1px;
+}
+
+button.dp-allday-chip {
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text);
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  cursor: pointer;
+}

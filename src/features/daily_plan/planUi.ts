@@ -19,6 +19,8 @@ interface PlanUi {
   todayAsked: number;
   /** Bumped whenever the plan changes here, so the sidebar re-reads it. */
   revision: number;
+  /** The calendar event open in the event panel. */
+  event: string | null;
 }
 
 const VIEW_KEY = "axiom.dailyPlan.view";
@@ -32,7 +34,7 @@ function savedView(): PlanView {
   }
 }
 
-let state: PlanUi = { view: savedView(), dialog: null, todayAsked: 0, revision: 0 };
+let state: PlanUi = { view: savedView(), dialog: null, todayAsked: 0, revision: 0, event: null };
 const listeners = new Set<() => void>();
 
 export function setPlanUi(change: Partial<PlanUi>) {

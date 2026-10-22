@@ -180,6 +180,8 @@ pub mod calendar {
         pub publish: bool,
         #[serde(skip)]
         pub published_hash: Option<String>,
+        /// The user's own, not shared with them read-only.
+        pub mine: bool,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -208,6 +210,19 @@ pub mod event {
         pub busy: bool,
         pub title: String,
         pub color: String,
+        /// The provider's id for it (an occurrence, for repeats), or its CalDAV address.
+        #[serde(skip)]
+        pub remote_id: Option<String>,
+        /// When the whole event starts and ends, across days.
+        pub start_at: Option<DateTimeUtc>,
+        pub end_at: Option<DateTimeUtc>,
+        pub location: String,
+        pub description: String,
+        /// The event in the provider's own app or site.
+        pub link: Option<String>,
+        pub recurring: bool,
+        /// Whether Axiom may change it.
+        pub editable: bool,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

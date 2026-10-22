@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
 use rrule::Tz;
 
-use super::ics::DayEvent;
+use super::ics::{DayEvent, EventChange};
 use crate::error::{Error, Result};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -57,6 +57,19 @@ pub trait Remote: Send + Sync {
     async fn delete(&self, calendar: &str, existing: &Published) -> Result<()>;
     /// Makes a new calendar for the plan.
     async fn create_calendar(&self, name: &str) -> Result<RemoteCalendar>;
+
+    /// Whether this sign-in may change the user's own events (Google asks
+    /// for that separately).
+    fn can_edit_events(&self) -> bool {
+        true
+    }
+    /// Whether one occurrence of a repeating event can be changed on its own.
+    fn edits_occurrences(&self) -> bool {
+        true
+    }
+    /// Changes one event (or one occurrence), by its `DayEvent::uid`.
+    async fn update_event(&self, calendar: &str, event: &str, change: &EventChange) -> Result<()>;
+    async fn delete_event(&self, calendar: &str, event: &str) -> Result<()>;
 }
 
 /// The planner colour closest to a provider's "#rrggbb".

@@ -7,7 +7,7 @@ use chrono::{DateTime, Days, NaiveDate, Utc};
 use roxmltree::{Document, Node};
 use rrule::Tz;
 
-use super::ics::{self, midnight, DayEvent};
+use super::ics::{self, midnight, DayEvent, EventChange};
 use super::remote::{nearest_color, PlanEvent, Published, Remote, RemoteCalendar};
 use super::AXIOM_CALENDAR;
 use crate::error::{Error, Result};
@@ -189,10 +189,11 @@ impl Remote for CalDav {
         let start = midnight(from, zone).with_timezone(&Utc);
         let end = midnight(to + Days::new(1), zone).with_timezone(&Utc);
         let mut out = Vec::new();
-        for (_, data) in self.query(calendar, start, end).await? {
+        for (url, data) in self.query(calendar, start, end).await? {
             // One unreadable event doesn't hide the rest.
             if let Ok(events) = ics::day_events(&data, from, to, zone) {
-                out.extend(events);
+                // The resource's address is what's needed to change it.
+                out.extend(events.into_iter().map(|e| DayEvent { uid: url.to_string(), ..e }));
             }
         }
         Ok(out)
@@ -253,6 +254,40 @@ impl Remote for CalDav {
         }
         Ok(RemoteCalendar { remote_id: at.to_string(), name: name.into(), color: "purple".into(), writable: true, primary: false, mine: true })
     }
+
+    /// A CalDAV event and all its repeats are one object, so a single
+    /// occurrence can't be changed here.
+    fn edits_occurrences(&self) -> bool {
+        false
+    }
+
+    async fn update_event(&self, _calendar: &str, event: &str, change: &EventChange) -> Result<()> {
+        let url = reqwest::Url::parse(event).map_err(|_| Error::NotFound("Event"))?;
+        let (at, response) = self.dav("GET", url, None, None, &[]).await?;
+        if !response.status().is_success() {
+            return Err(Error::NotFound("Event"));
+        }
+        let etag = response.headers().get("ETag").and_then(|e| e.to_str().ok()).map(str::to_owned);
+        let text = response.text().await.map_err(|_| Error::Invalid(format!("{} stopped replying.", self.label)))?;
+        let changed = ics::edit_event(&text, change).map_err(Error::Invalid)?;
+        // Only if nobody changed it in the meantime.
+        let condition: Vec<(&str, &str)> = etag.as_deref().map(|e| vec![("If-Match", e)]).unwrap_or_default();
+        let (_, saved) = self.dav("PUT", at, None, Some(changed), &condition).await?;
+        match saved.status().as_u16() {
+            200..=299 => Ok(()),
+            412 => Err(Error::Invalid("That event changed in the calendar meanwhile. Update and try again.".into())),
+            code => Err(Error::Invalid(format!("{} didn't save the change (error {code}).", self.label))),
+        }
+    }
+
+    async fn delete_event(&self, _calendar: &str, event: &str) -> Result<()> {
+        let url = reqwest::Url::parse(event).map_err(|_| Error::NotFound("Event"))?;
+        let (_, response) = self.dav("DELETE", url, None, None, &[]).await?;
+        if response.status().is_success() || response.status().as_u16() == 404 {
+            return Ok(());
+        }
+        Err(Error::Invalid(format!("{} didn't delete it (error {}).", self.label, response.status().as_u16())))
+    }
 }
 
 // ---------- Requests ----------
@@ -312,22 +347,7 @@ pub fn event_text(event: &PlanEvent) -> String {
         "END:VEVENT".into(),
         "END:VCALENDAR".into(),
     ];
-    lines.iter().map(|l| fold(l)).collect::<Vec<_>>().join("\r\n") + "\r\n"
-}
-
-/// Splits a line into 75-byte pieces, continuations starting with a space.
-fn fold(line: &str) -> String {
-    let mut out = String::new();
-    let mut width = 0;
-    for c in line.chars() {
-        if width + c.len_utf8() > 75 {
-            out.push_str("\r\n ");
-            width = 1;
-        }
-        out.push(c);
-        width += c.len_utf8();
-    }
-    out
+    lines.iter().map(|l| ics::fold(l)).collect::<Vec<_>>().join("\r\n") + "\r\n"
 }
 
 // ---------- Replies ----------

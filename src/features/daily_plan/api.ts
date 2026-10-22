@@ -84,6 +84,27 @@ export interface CalendarEvent {
   busy: boolean;
   title: string;
   color: string;
+  /** When the whole event starts and ends (ISO), across days. */
+  startAt: string | null;
+  endAt: string | null;
+  location: string;
+  /** Notes; may hold HTML from Google. */
+  description: string;
+  /** The event in its own calendar app or site. */
+  link: string | null;
+  /** One of a repeating series. */
+  recurring: boolean;
+  /** Whether Axiom can change it. */
+  editable: boolean;
+}
+
+/** A change to a calendar event; anything left out stays as it is. */
+export interface EventEdit {
+  title?: string;
+  location?: string;
+  description?: string;
+  /** Moves an event that has a time. */
+  when?: { day: Day; startMinute: number; endMinute: number };
 }
 
 /** A calendar from an account, or read from a private iCal link (the link
@@ -104,6 +125,8 @@ export interface Calendar {
   shown: boolean;
   /** The calendar the plan is published into. */
   publish: boolean;
+  /** The user's own, not shared with them read-only. */
+  mine: boolean;
 }
 
 export type CalendarProvider = "google" | "microsoft" | "caldav";
@@ -276,6 +299,9 @@ export const api = {
   publishTo: (calendarId: string | null, today: Day) => invoke<void>("plan_publish_to", { calendarId, today }),
   /** Makes an "Axiom" calendar in an account and publishes the plan there. */
   createPlanCalendar: (accountId: string, today: Day) => invoke<Calendar>("plan_create_plan_calendar", { accountId, today }),
+  /** Changes an event in its own calendar. */
+  updateEvent: (id: string, edit: EventEdit, today: Day) => invoke<void>("plan_update_event", { id, edit, today }),
+  deleteEvent: (id: string, today: Day) => invoke<void>("plan_delete_event", { id, today }),
 };
 
 let nudge: number | undefined;

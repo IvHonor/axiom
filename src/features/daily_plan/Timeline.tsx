@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { CalendarDays, Check, Repeat } from "lucide-react";
 import { api, cardFromDrag, type Block, type Day, type DayPlan, type PlanTask } from "./api";
 import { BLOCK_COLORS, colorOf } from "./palette";
+import { setPlanUi, usePlanUi } from "./planUi";
 import { draggedTask, TASK_DRAG } from "./TaskPanel";
 import { clock, duration, nowMinute, parseClock, parseDuration } from "./time";
 
@@ -39,6 +40,8 @@ interface TimelineProps {
 
 /** The day as a timeline of blocks you drag to create, move and resize. */
 export function Timeline({ plan, today, act }: TimelineProps) {
+  const selected = usePlanUi().event;
+  const select = (id: string) => setPlanUi({ event: id });
   const grid = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -191,9 +194,15 @@ export function Timeline({ plan, today, act }: TimelineProps) {
       {allDay.length > 0 && (
         <div className="dp-allday" aria-label="All-day events">
           {allDay.map((e) => (
-            <span key={e.id} className="dp-allday-chip" style={{ "--block": colorOf(e.color) } as CSSProperties} title={`${e.title} · all day`}>
+            <button
+              key={e.id}
+              className={`dp-allday-chip${selected === e.id ? " is-selected" : ""}`}
+              style={{ "--block": colorOf(e.color) } as CSSProperties}
+              title={`${e.title} · all day`}
+              onClick={() => select(e.id)}
+            >
               <CalendarDays size={11} strokeWidth={1.75} /> {e.title}
-            </span>
+            </button>
           ))}
         </div>
       )}
@@ -268,9 +277,14 @@ export function Timeline({ plan, today, act }: TimelineProps) {
           return (
             <div
               key={e.id}
-              className={`dp-block dp-event${short ? " is-short" : ""}${e.busy ? "" : " is-free"}`}
+              className={`dp-block dp-event${short ? " is-short" : ""}${e.busy ? "" : " is-free"}${selected === e.id ? " is-selected" : ""}`}
               style={{ top: e.startMinute * PX, height: Math.max(e.durationMinutes * PX - 2, 12), ...laneStyle(e.id), "--block": colorOf(e.color) } as CSSProperties}
               onPointerDown={(ev) => ev.stopPropagation()}
+              onClick={() => select(e.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(ev) => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), select(e.id))}
+              aria-label={`${e.title}, ${clock(e.startMinute)} to ${clock(e.startMinute + e.durationMinutes)}. Show details`}
               title={`${e.title} · ${clock(e.startMinute)}–${clock(e.startMinute + e.durationMinutes)} · from your calendar${e.busy ? "" : " (free)"}`}
             >
               <span className="dp-block-text">

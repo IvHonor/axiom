@@ -19,6 +19,8 @@ use crate::features::daily_plan::service;
 use crate::features::daily_plan::tests::{day, setup, TODAY};
 
 const LONDON: Tz = Tz::Tz(chrono_tz::Europe::London);
+/// What the stand-in Google grants: reading, and editing the user's own events.
+const G_SCOPES: &str = "https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.events.owned";
 
 fn hub(server: &MockServer, secrets: Memory) -> CalendarHub {
     let base = server.uri();
@@ -119,7 +121,7 @@ fn publishing_changes_only_what_differs() {
 async fn google_basics(server: &MockServer) {
     Mock::given(method("POST"))
         .and(path("/google/token"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "access_token": "at-1", "expires_in": 3600, "refresh_token": "rt-1" })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "access_token": "at-1", "expires_in": 3600, "refresh_token": "rt-1", "scope": "https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.events.owned" })))
         .mount(server)
         .await;
     Mock::given(method("GET"))
@@ -140,13 +142,14 @@ async fn google_basics(server: &MockServer) {
         .and(path("/calendar/v3/calendars/me@gmail.com/events"))
         .and(query_param("singleEvents", "true"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "items": [
-            { "id": "e1", "status": "confirmed", "summary": "Dentist",
+            { "id": "e1", "status": "confirmed", "summary": "Dentist", "location": "High Street Dental",
+              "description": "Bring the form", "htmlLink": "https://calendar.google.com/event?eid=e1",
               "start": { "dateTime": "2026-10-22T14:00:00+01:00" }, "end": { "dateTime": "2026-10-22T14:45:00+01:00" } },
             { "id": "e2", "status": "confirmed", "summary": "Offsite",
               "start": { "date": "2026-10-23" }, "end": { "date": "2026-10-24" } },
             { "id": "e3", "status": "cancelled", "summary": "Called off",
               "start": { "dateTime": "2026-10-22T10:00:00Z" }, "end": { "dateTime": "2026-10-22T11:00:00Z" } },
-            { "id": "e4", "status": "confirmed", "summary": "Maybe gym", "transparency": "transparent",
+            { "id": "e4", "status": "confirmed", "summary": "Maybe gym", "transparency": "transparent", "recurringEventId": "gym",
               "start": { "dateTime": "2026-10-22T18:00:00+01:00" }, "end": { "dateTime": "2026-10-22T19:00:00+01:00" } },
             { "id": "e5", "status": "confirmed", "summary": "Plan block from Axiom",
               "start": { "dateTime": "2026-10-22T09:00:00+01:00" }, "end": { "dateTime": "2026-10-22T10:00:00+01:00" },
@@ -164,7 +167,7 @@ async fn google_connects_and_reads_events() {
 
     let account = accounts::connect_oauth(&db, &hub, "google", day(TODAY), browser("google-code")).await.unwrap();
     assert_eq!((account.provider.as_str(), account.name.as_str()), ("google", "me@gmail.com"));
-    assert_eq!(secrets.load(&account.id), Some(Secret::OAuth { refresh_token: "rt-1".into() }));
+    assert_eq!(secrets.load(&account.id), Some(Secret::OAuth { refresh_token: "rt-1".into(), scope: Some(G_SCOPES.into()) }));
     let exchange = server.received_requests().await.unwrap().into_iter().find(|r| r.url.path() == "/google/token").unwrap();
     let form = String::from_utf8(exchange.body).unwrap();
     assert!(form.contains("code=google-code") && form.contains("code_verifier=") && form.contains("client_secret=google-secret"));
@@ -255,7 +258,7 @@ async fn an_expired_sign_in_shows_on_the_account() {
         .mount(&server)
         .await;
     let fresh_hub = self::hub(&server, Memory(std::sync::Arc::new(std::sync::Mutex::new(
-        [(account.id.clone(), Secret::OAuth { refresh_token: "rt-1".into() })].into_iter().collect(),
+        [(account.id.clone(), Secret::OAuth { refresh_token: "rt-1".into(), scope: None })].into_iter().collect(),
     ))));
     refresh_calendars(&db, &fresh_hub, day(TODAY), true).await.unwrap();
     let problem = account::Entity::find_by_id(account.id.as_str()).one(&db).await.unwrap().unwrap().problem.unwrap();
@@ -344,7 +347,7 @@ async fn microsoft_reads_pages_and_all_day_events_and_keeps_new_sign_ins() {
         .await;
     let later = self::hub(&server, secrets.clone());
     refresh_calendars(&db, &later, day(TODAY), true).await.unwrap();
-    assert_eq!(secrets.load(&account.id), Some(Secret::OAuth { refresh_token: "rt-2".into() }));
+    assert_eq!(secrets.load(&account.id), Some(Secret::OAuth { refresh_token: "rt-2".into(), scope: None }));
 }
 
 // ---------- CalDAV (iCloud) ----------
@@ -442,4 +445,207 @@ async fn caldav_reports_a_wrong_password_plainly() {
     let error = accounts::connect_caldav(&db, &hub, &format!("{}/", server.uri()), "me@icloud.com", "wrong", day(TODAY)).await.unwrap_err();
     assert!(error.to_string().contains("app-specific password"), "{error}");
     assert!(account::Entity::find().all(&db).await.unwrap().is_empty());
+}
+
+// ---------- Changing events ----------
+
+async fn event_titled(db: &DatabaseConnection, title: &str) -> event::Model {
+    event::Entity::find().filter(event::Column::Title.eq(title)).one(db).await.unwrap().unwrap()
+}
+
+fn at_three(title: Option<&str>) -> accounts::EventEdit {
+    accounts::EventEdit {
+        title: title.map(str::to_owned),
+        location: None,
+        description: None,
+        when: Some(accounts::EventWhen { day: day(TODAY), start_minute: 15 * 60, end_minute: 15 * 60 + 45 }),
+    }
+}
+
+#[tokio::test]
+async fn google_events_keep_their_details_and_can_be_changed() {
+    let (db, server, secrets) = (setup().await, MockServer::start().await, Memory::default());
+    google_basics(&server).await;
+    let hub = hub(&server, secrets);
+    accounts::connect_oauth(&db, &hub, "google", day(TODAY), browser("code")).await.unwrap();
+
+    let dentist = event_titled(&db, "Dentist").await;
+    assert_eq!(dentist.location, "High Street Dental");
+    assert_eq!(dentist.description, "Bring the form");
+    assert_eq!(dentist.link.as_deref(), Some("https://calendar.google.com/event?eid=e1"));
+    assert_eq!(dentist.start_at, Some(utc("2026-10-22T13:00:00Z")));
+    assert!(dentist.editable && !dentist.recurring);
+    let gym = event_titled(&db, "Maybe gym").await;
+    // One occurrence of a repeat can still be changed in Google.
+    assert!(gym.recurring && gym.editable);
+
+    Mock::given(method("PATCH"))
+        .and(path("/calendar/v3/calendars/me@gmail.com/events/e1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Afterwards Google has it at the new time (and takes priority over the earlier list).
+    Mock::given(method("GET"))
+        .and(path("/calendar/v3/calendars/me@gmail.com/events"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "items": [
+            { "id": "e1", "status": "confirmed", "summary": "Dentist (moved)",
+              "start": { "dateTime": "2026-10-22T15:00:00+01:00" }, "end": { "dateTime": "2026-10-22T15:45:00+01:00" } }
+        ]})))
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    accounts::update_event(&db, &hub, &dentist.id, at_three(Some("Dentist (moved)")), day(TODAY)).await.unwrap();
+    let patch = server.received_requests().await.unwrap().into_iter().find(|r| r.method.as_str() == "PATCH").unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&patch.body).unwrap();
+    // 3pm in London is 2pm UTC; untouched fields aren't sent.
+    assert_eq!(body["summary"], "Dentist (moved)");
+    assert_eq!(body["start"]["dateTime"], "2026-10-22T14:00:00+00:00");
+    assert_eq!(body["end"]["dateTime"], "2026-10-22T14:45:00+00:00");
+    assert!(body.get("location").is_none() && body.get("description").is_none());
+    // Read again at its new time, the event keeps its id, so it stays open in the panel.
+    let moved = event_titled(&db, "Dentist (moved)").await;
+    assert_eq!((moved.id.as_str(), moved.start_minute), (dentist.id.as_str(), 15 * 60));
+
+    let mut nameless = at_three(Some("  "));
+    nameless.when = None;
+    assert!(accounts::update_event(&db, &hub, &dentist.id, nameless, day(TODAY)).await.is_err());
+}
+
+#[tokio::test]
+async fn google_accounts_connected_without_edit_permission_stay_read_only() {
+    let (db, server, secrets) = (setup().await, MockServer::start().await, Memory::default());
+    // Mounted first, so it answers instead of the one in google_basics.
+    Mock::given(method("POST"))
+        .and(path("/google/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({ "access_token": "at-1", "expires_in": 3600, "refresh_token": "rt-1", "scope": "https://www.googleapis.com/auth/calendar.events.readonly" }),
+        ))
+        .mount(&server)
+        .await;
+    google_basics(&server).await;
+    let hub = hub(&server, secrets);
+    accounts::connect_oauth(&db, &hub, "google", day(TODAY), browser("code")).await.unwrap();
+
+    let dentist = event_titled(&db, "Dentist").await;
+    assert!(!dentist.editable);
+    let refused = accounts::update_event(&db, &hub, &dentist.id, at_three(None), day(TODAY)).await.unwrap_err();
+    assert!(refused.to_string().contains("can't change"), "{refused}");
+}
+
+#[tokio::test]
+async fn microsoft_sends_only_what_changed() {
+    let (db, server, secrets) = (setup().await, MockServer::start().await, Memory::default());
+    Mock::given(method("POST"))
+        .and(path("/ms/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "access_token": "at-1", "expires_in": 3600, "refresh_token": "rt-1" })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/graph/me/calendars"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "value": [
+            { "id": "cal-1", "name": "Calendar", "canEdit": true, "isDefaultCalendar": true, "owner": { "address": "me@outlook.com" } }
+        ]})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/graph/me/calendars/cal-1/calendarView"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "value": [{
+            "id": "m1", "subject": "Standup", "isAllDay": false, "showAs": "busy", "isCancelled": false, "type": "occurrence",
+            "location": { "displayName": "Room 4" }, "bodyPreview": "Agenda in the doc", "webLink": "https://outlook.live.com/m1",
+            "start": { "dateTime": "2026-10-22T08:30:00.0000000", "timeZone": "UTC" },
+            "end": { "dateTime": "2026-10-22T08:45:00.0000000", "timeZone": "UTC" } }] })))
+        .mount(&server)
+        .await;
+    Mock::given(method("PATCH")).and(path("/graph/me/events/m1")).respond_with(ResponseTemplate::new(200).set_body_json(json!({}))).expect(1).mount(&server).await;
+    let hub = hub(&server, secrets);
+    accounts::connect_oauth(&db, &hub, "microsoft", day(TODAY), browser("code")).await.unwrap();
+
+    let standup = event_titled(&db, "Standup").await;
+    assert_eq!((standup.location.as_str(), standup.description.as_str()), ("Room 4", "Agenda in the doc"));
+    assert!(standup.recurring && standup.editable);
+    let edit = accounts::EventEdit { title: None, location: Some("Room 5".into()), description: None, when: None };
+    accounts::update_event(&db, &hub, &standup.id, edit, day(TODAY)).await.unwrap();
+    let patch = server.received_requests().await.unwrap().into_iter().find(|r| r.method.as_str() == "PATCH").unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&patch.body).unwrap();
+    // Notes untouched: Axiom only had a preview of them, so it mustn't send them back.
+    assert_eq!(body, json!({ "location": { "displayName": "Room 5" } }));
+}
+
+#[tokio::test]
+async fn caldav_edits_whole_events_only_if_unchanged_meanwhile() {
+    let (db, server, secrets) = (setup().await, MockServer::start().await, Memory::default());
+    let base = server.uri();
+    Mock::given(method("PROPFIND"))
+        .and(path("/"))
+        .respond_with(multistatus(r#"<d:multistatus xmlns:d="DAV:"><d:response><d:href>/</d:href><d:propstat><d:prop><d:current-user-principal><d:href>/p/</d:href></d:current-user-principal></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>"#))
+        .mount(&server)
+        .await;
+    Mock::given(method("PROPFIND"))
+        .and(path("/p/"))
+        .respond_with(multistatus(r#"<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/p/</d:href><d:propstat><d:prop><c:calendar-home-set><d:href>/cals/</d:href></c:calendar-home-set></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>"#))
+        .mount(&server)
+        .await;
+    Mock::given(method("PROPFIND"))
+        .and(path("/cals/"))
+        .respond_with(multistatus(r#"<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/cals/home/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/><c:calendar/></d:resourcetype><d:displayname>Home</d:displayname></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>"#))
+        .mount(&server)
+        .await;
+    let single = "BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:s1
+SUMMARY:Haircut
+LOCATION:Old Town
+DTSTART:20261022T100000Z
+DTEND:20261022T103000Z
+BEGIN:VALARM
+TRIGGER:-PT10M
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+";
+    let weekly = "BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:w1
+SUMMARY:Choir
+DTSTART:20261001T180000Z
+DTEND:20261001T190000Z
+RRULE:FREQ=WEEKLY
+END:VEVENT
+END:VCALENDAR
+";
+    Mock::given(method("REPORT"))
+        .and(path("/cals/home/"))
+        .respond_with(multistatus(&format!(
+            r#"<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+            <d:response><d:href>/cals/home/s1.ics</d:href><d:propstat><d:prop><c:calendar-data>{single}</c:calendar-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
+            <d:response><d:href>/cals/home/w1.ics</d:href><d:propstat><d:prop><c:calendar-data>{weekly}</c:calendar-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
+            </d:multistatus>"#
+        )))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/cals/home/s1.ics"))
+        .respond_with(ResponseTemplate::new(200).insert_header("ETag", "\"7\"").set_body_string(single))
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT")).and(path("/cals/home/s1.ics")).and(header("If-Match", "\"7\"")).respond_with(ResponseTemplate::new(204)).expect(1).mount(&server).await;
+
+    let hub = hub(&server, secrets);
+    accounts::connect_caldav(&db, &hub, &format!("{base}/"), "me@icloud.com", "pass", day(TODAY)).await.unwrap();
+    let haircut = event_titled(&db, "Haircut").await;
+    assert!(haircut.editable && haircut.location == "Old Town");
+    let choir = event_titled(&db, "Choir").await;
+    // A repeat is one object in CalDAV: changing one occurrence isn't possible here.
+    assert!(choir.recurring && !choir.editable);
+
+    let edit = accounts::EventEdit { title: Some("Haircut, Ali's".into()), location: Some("New Town".into()), description: None, when: None };
+    accounts::update_event(&db, &hub, &haircut.id, edit, day(TODAY)).await.unwrap();
+    let put = server.received_requests().await.unwrap().into_iter().find(|r| r.method.as_str() == "PUT").unwrap();
+    let text = String::from_utf8(put.body).unwrap();
+    assert!(text.contains("SUMMARY:Haircut\\, Ali's") && text.contains("LOCATION:New Town") && text.contains("SEQUENCE:1"), "{text}");
+    assert!(!text.contains("Old Town") && text.contains("BEGIN:VALARM") && text.contains("DTSTART:20261022T100000Z"));
 }

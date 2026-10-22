@@ -13,7 +13,7 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::json;
 
-use super::ics::{midnight, split_into_days, DayEvent, Occurrence};
+use super::ics::{midnight, split_into_days, DayEvent, Details, EventChange, Occurrence};
 use super::oauth::OAuthApp;
 use super::remote::{checked, nearest_color, unreachable, PlanEvent, Published, Remote, RemoteCalendar};
 use super::{AXIOM_CALENDAR, AXIOM_CALENDAR_ABOUT, MARKER};
@@ -24,7 +24,12 @@ const PROVIDER: &str = "Google";
 /// See https://developers.google.com/workspace/calendar/api/auth
 pub const SCOPES: &str = "https://www.googleapis.com/auth/calendar.calendarlist.readonly \
      https://www.googleapis.com/auth/calendar.events.readonly \
+     https://www.googleapis.com/auth/calendar.events.owned \
      https://www.googleapis.com/auth/calendar.app.created";
+
+/// The permission to change events on the user's own calendars. Accounts
+/// connected before Axiom asked for it can read but not edit until they reconnect.
+pub const EDIT_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events.owned";
 
 pub fn app(client_id: &str, client_secret: &str, auth_url: &str, token_url: &str) -> OAuthApp {
     OAuthApp {
@@ -45,11 +50,13 @@ pub struct Google {
     http: reqwest::Client,
     api: String,
     token: String,
+    /// Whether the sign-in includes `EDIT_SCOPE`.
+    can_edit: bool,
 }
 
 impl Google {
-    pub fn new(http: reqwest::Client, api: &str, token: String) -> Self {
-        Self { http, api: api.into(), token }
+    pub fn new(http: reqwest::Client, api: &str, token: String, can_edit: bool) -> Self {
+        Self { http, api: api.into(), token, can_edit }
     }
 
     /// The API address for some path segments, each escaped (calendar ids
@@ -165,11 +172,18 @@ impl Remote for Google {
                 }
                 _ => continue,
             };
+            let details = Details {
+                location: item.location.clone().unwrap_or_default(),
+                description: item.description.clone().unwrap_or_default(),
+                link: item.html_link.clone(),
+                recurring: item.recurring_event_id.is_some(),
+            };
             let what = Occurrence {
                 uid: &item.id,
                 title: &title,
                 all_day,
                 busy: !all_day && item.transparency.as_deref() != Some("transparent"),
+                details: &details,
             };
             split_into_days(&what, begins, length, zone, from, to, &mut out);
         }
@@ -230,6 +244,42 @@ impl Remote for Google {
             .await?;
         Ok(RemoteCalendar { remote_id: made.id, name: name.into(), color: "purple".into(), writable: true, primary: false, mine: true })
     }
+
+    fn can_edit_events(&self) -> bool {
+        self.can_edit
+    }
+
+    async fn update_event(&self, calendar: &str, event: &str, change: &EventChange) -> Result<()> {
+        let mut body = serde_json::Map::new();
+        if let Some(t) = &change.title {
+            body.insert("summary".into(), json!(t));
+        }
+        if let Some(l) = &change.location {
+            body.insert("location".into(), json!(l));
+        }
+        if let Some(d) = &change.description {
+            body.insert("description".into(), json!(d));
+        }
+        if let Some((start, end)) = change.times {
+            body.insert("start".into(), json!({ "dateTime": start.to_rfc3339() }));
+            body.insert("end".into(), json!({ "dateTime": end.to_rfc3339() }));
+        }
+        let request = self.http.patch(self.url(&["calendars", calendar, "events", event])).json(&body);
+        let response = request.bearer_auth(&self.token).send().await.map_err(unreachable(PROVIDER))?;
+        if response.status() == reqwest::StatusCode::FORBIDDEN {
+            return Err(Error::Invalid(
+                "Google didn't let Axiom change that event. If it's your own, reconnect Google in Calendars to allow editing.".into(),
+            ));
+        }
+        checked(response, PROVIDER).await.map(|_| ())
+    }
+
+    async fn delete_event(&self, calendar: &str, event: &str) -> Result<()> {
+        match self.send(self.http.delete(self.url(&["calendars", calendar, "events", event]))).await {
+            Ok(_) | Err(Error::NotFound(_)) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -264,6 +314,10 @@ struct EventItem {
     end: Option<When>,
     transparency: Option<String>,
     extended_properties: Option<Extended>,
+    location: Option<String>,
+    description: Option<String>,
+    html_link: Option<String>,
+    recurring_event_id: Option<String>,
 }
 
 impl EventItem {

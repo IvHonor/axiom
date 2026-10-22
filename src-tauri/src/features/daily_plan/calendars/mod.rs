@@ -89,6 +89,7 @@ pub async fn add_calendar(db: &DatabaseConnection, name: &str, url: &str, color:
         shown: Set(true),
         publish: Set(false),
         published_hash: Set(None),
+        mine: Set(false),
     }
     .insert(db)
     .await?;
@@ -162,9 +163,25 @@ pub(super) fn read(text: &str, today: Date) -> Result<Vec<ics::DayEvent>> {
 pub(super) async fn replace_events(db: &DatabaseConnection, cal: &calendar::Model, events: Vec<ics::DayEvent>) -> Result<()> {
     let txn = db.begin().await?;
     event::Entity::delete_many().filter(event::Column::CalendarId.eq(cal.id.as_str())).exec(&txn).await?;
-    for chunk in events.chunks(200) {
-        let rows = chunk.iter().map(|e| event::ActiveModel {
-            id: Set(new_id()),
+    let mut used = std::collections::HashSet::new();
+    let ids: Vec<String> = events
+        .iter()
+        .map(|e| {
+            // The same id each refresh, so an event open in the panel stays
+            // open, even after its time is changed.
+            let base = format!("{}:{}:{}", cal.id, e.uid, e.day);
+            let mut id = base.clone();
+            let mut n = 1;
+            while !used.insert(id.clone()) {
+                n += 1;
+                id = format!("{base}:{n}");
+            }
+            id
+        })
+        .collect();
+    for (chunk, chunk_ids) in events.chunks(200).zip(ids.chunks(200)) {
+        let rows = chunk.iter().zip(chunk_ids).map(|(e, id)| event::ActiveModel {
+            id: Set(id.clone()),
             calendar_id: Set(cal.id.clone()),
             day: Set(e.day),
             start_minute: Set(e.start_minute),
@@ -173,6 +190,14 @@ pub(super) async fn replace_events(db: &DatabaseConnection, cal: &calendar::Mode
             busy: Set(e.busy),
             title: Set(e.title.clone()),
             color: Set(cal.color.clone()),
+            remote_id: Set(Some(e.uid.clone())),
+            start_at: Set(Some(e.start_at)),
+            end_at: Set(Some(e.end_at)),
+            location: Set(e.details.location.clone()),
+            description: Set(e.details.description.clone()),
+            link: Set(e.details.link.clone()),
+            recurring: Set(e.details.recurring),
+            editable: Set(e.editable),
         });
         event::Entity::insert_many(rows).exec(&txn).await?;
     }

@@ -8,7 +8,7 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::json;
 
-use super::ics::{midnight, split_into_days, DayEvent, Occurrence};
+use super::ics::{midnight, split_into_days, DayEvent, Details, EventChange, Occurrence};
 use super::oauth::OAuthApp;
 use super::remote::{checked, nearest_color, unreachable, PlanEvent, Published, Remote, RemoteCalendar};
 use super::{AXIOM_CALENDAR, MARKER};
@@ -86,7 +86,7 @@ impl Microsoft {
             ("startDateTime", from.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
             ("endDateTime", to.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
             ("$top", "500".into()),
-            ("$select", "id,subject,start,end,isAllDay,showAs,isCancelled".into()),
+            ("$select", "id,subject,start,end,isAllDay,showAs,isCancelled,location,bodyPreview,webLink,type".into()),
             ("$expand", expand),
         ]);
         self.all(request).await
@@ -152,11 +152,18 @@ impl Remote for Microsoft {
             } else {
                 (s.with_timezone(&zone), (e - s).max(chrono::Duration::zero()))
             };
+            let details = Details {
+                location: item.location.as_ref().map(|l| l.display_name.clone()).unwrap_or_default(),
+                description: item.body_preview.clone().unwrap_or_default(),
+                link: item.web_link.clone(),
+                recurring: matches!(item.kind.as_deref(), Some("occurrence" | "exception")),
+            };
             let what = Occurrence {
                 uid: &item.id,
                 title: &title,
                 all_day: item.is_all_day,
                 busy: !item.is_all_day && item.show_as.as_deref() != Some("free"),
+                details: &details,
             };
             split_into_days(&what, begins, length, zone, from, to, &mut out);
         }
@@ -217,6 +224,34 @@ impl Remote for Microsoft {
             mine: true,
         })
     }
+
+    async fn update_event(&self, _calendar: &str, event: &str, change: &EventChange) -> Result<()> {
+        let mut body = serde_json::Map::new();
+        if let Some(t) = &change.title {
+            body.insert("subject".into(), json!(t));
+        }
+        if let Some(l) = &change.location {
+            body.insert("location".into(), json!({ "displayName": l }));
+        }
+        // Only when it was changed: Axiom only saw a preview of the notes.
+        if let Some(d) = &change.description {
+            body.insert("body".into(), json!({ "contentType": "text", "content": d }));
+        }
+        if let Some((start, end)) = change.times {
+            let at = |t: DateTime<Utc>| json!({ "dateTime": t.format("%Y-%m-%dT%H:%M:%S").to_string(), "timeZone": "UTC" });
+            body.insert("start".into(), at(start));
+            body.insert("end".into(), at(end));
+        }
+        self.send(self.http.patch(self.url(&["me", "events", event])).json(&body)).await?;
+        Ok(())
+    }
+
+    async fn delete_event(&self, _calendar: &str, event: &str) -> Result<()> {
+        match self.send(self.http.delete(self.url(&["me", "events", event]))).await {
+            Ok(_) | Err(Error::NotFound(_)) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -261,6 +296,19 @@ struct EventItem {
     is_cancelled: bool,
     #[serde(default)]
     single_value_extended_properties: Vec<Property>,
+    location: Option<Location>,
+    body_preview: Option<String>,
+    web_link: Option<String>,
+    /// "singleInstance", "occurrence", "exception" or "seriesMaster".
+    #[serde(rename = "type")]
+    kind: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Location {
+    #[serde(default)]
+    display_name: String,
 }
 
 impl EventItem {

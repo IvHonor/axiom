@@ -22,10 +22,12 @@ interface TaskPanelProps {
   act: Act;
   /** Opens focus mode on a task, starting its timer. */
   onFocus: (task: PlanTask) => void;
+  /** Shown under the inbox, such as the open event's details. */
+  children?: ReactNode;
 }
 
 /** The left column: top priorities, the day's tasks, board suggestions, leftovers and the inbox. */
-export function TaskPanel({ plan, today, now, act, onFocus }: TaskPanelProps) {
+export function TaskPanel({ plan, today, now, act, onFocus, children }: TaskPanelProps) {
   const isToday = plan.day === today;
   const focus = plan.tasks.filter((t) => t.focusRank !== null);
   const rest = plan.tasks.filter((t) => t.focusRank === null);
@@ -162,6 +164,7 @@ export function TaskPanel({ plan, today, now, act, onFocus }: TaskPanelProps) {
           <p className="dp-hint">Tasks without a day wait here until you plan them. End a quick add with "inbox" to put one here.</p>
         )}
       </section>
+      {children}
     </div>
   );
 }

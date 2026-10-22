@@ -9,8 +9,9 @@ use chrono::{DateTime, Days, Duration, NaiveDate, NaiveDateTime, TimeZone, Timel
 use rrule::{RRule, RRuleSet, Tz, Unvalidated};
 
 /// One event's share of one day, in the user's own time.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct DayEvent {
+    /// The provider's id for the event (an occurrence, for repeats), or the iCalendar UID.
     pub uid: String,
     pub title: String,
     pub day: NaiveDate,
@@ -19,6 +20,23 @@ pub struct DayEvent {
     pub all_day: bool,
     /// False for events marked as free time (TRANSP:TRANSPARENT).
     pub busy: bool,
+    /// When the whole event starts and ends, across days.
+    pub start_at: DateTime<chrono::Utc>,
+    pub end_at: DateTime<chrono::Utc>,
+    pub details: Details,
+    /// Whether Axiom may change it (set by the account sync).
+    pub editable: bool,
+}
+
+/// What an event says beyond its time.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Details {
+    pub location: String,
+    pub description: String,
+    /// The event in the provider's own app or site.
+    pub link: Option<String>,
+    /// One of a repeating series.
+    pub recurring: bool,
 }
 
 /// Most occurrences one event can produce in the window.
@@ -56,11 +74,18 @@ pub fn day_events(text: &str, from: NaiveDate, to: NaiveDate, zone: Tz) -> Resul
         } else {
             vec![start]
         };
+        let details = Details {
+            location: event.location.clone(),
+            description: event.description.clone(),
+            link: event.url.clone(),
+            recurring: !event.rrules.is_empty() || !event.rdates.is_empty() || event.recurrence_id.is_some(),
+        };
         let what = Occurrence {
             uid: &event.uid,
             title: &event.title,
             all_day: event.all_day,
             busy: !event.transparent && !event.all_day,
+            details: &details,
         };
         for s in starts {
             split_into_days(&what, s, length, zone, from, to, &mut out);
@@ -76,6 +101,7 @@ pub struct Occurrence<'a> {
     pub title: &'a str,
     pub all_day: bool,
     pub busy: bool,
+    pub details: &'a Details,
 }
 
 /// Cuts one occurrence into a piece per day it touches, within the window.
@@ -89,6 +115,7 @@ pub fn split_into_days(
     to: NaiveDate,
     out: &mut Vec<DayEvent>,
 ) {
+    let (start_at, end_at) = (start.with_timezone(&chrono::Utc), (start + length).with_timezone(&chrono::Utc));
     let piece = |day: NaiveDate, start_minute: i32, duration_minutes: i32| DayEvent {
         uid: event.uid.to_owned(),
         title: event.title.to_owned(),
@@ -97,6 +124,10 @@ pub fn split_into_days(
         duration_minutes,
         all_day: event.all_day,
         busy: event.busy,
+        start_at,
+        end_at,
+        details: event.details.clone(),
+        editable: false,
     };
     let local = start.with_timezone(&zone).naive_local();
     if event.all_day {
@@ -143,6 +174,9 @@ struct Event {
     transparent: bool,
     /// X-AXIOM-BLOCK: the plan block Axiom published this event for.
     axiom_block: Option<String>,
+    location: String,
+    description: String,
+    url: Option<String>,
 }
 
 impl Event {
@@ -244,6 +278,9 @@ fn collect_events(lines: &[Line], zone: Tz) -> Vec<Event> {
             "STATUS" => e.cancelled = line.value.eq_ignore_ascii_case("CANCELLED"),
             "TRANSP" => e.transparent = line.value.eq_ignore_ascii_case("TRANSPARENT"),
             "X-AXIOM-BLOCK" => e.axiom_block = Some(line.value.clone()),
+            "LOCATION" => e.location = unescape(&line.value),
+            "DESCRIPTION" => e.description = unescape_multiline(&line.value),
+            "URL" => e.url = Some(line.value.clone()),
             _ => {}
         }
     }
@@ -344,6 +381,11 @@ fn parse_line(line: &str) -> Option<Line> {
         .map(|(k, v)| (k.trim().to_ascii_uppercase(), v.trim().trim_matches('"').to_owned()))
         .collect();
     Some(Line { name, params, value: value.trim().to_owned() })
+}
+
+/// Like `unescape`, but keeps line breaks (for notes).
+fn unescape_multiline(text: &str) -> String {
+    unescape(&text.replace("\\n", "\u{1}").replace("\\N", "\u{1}")).replace('\u{1}', "\n")
 }
 
 fn unescape(text: &str) -> String {
@@ -511,3 +553,101 @@ const WINDOWS_ZONES: &[(&str, &str)] = &[
     ("Tasmania Standard Time", "Australia/Hobart"),
     ("New Zealand Standard Time", "Pacific/Auckland"),
 ];
+
+// ---------- Editing ----------
+
+/// A change to one event. Fields left `None` stay as they are.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct EventChange {
+    pub title: Option<String>,
+    pub location: Option<String>,
+    pub description: Option<String>,
+    /// New start and end, for an event with a time.
+    pub times: Option<(DateTime<chrono::Utc>, DateTime<chrono::Utc>)>,
+}
+
+/// Applies a change to a calendar object holding one event that doesn't
+/// repeat (CalDAV stores each event as such an object). Returns the new text.
+pub fn edit_event(text: &str, change: &EventChange) -> Result<String, String> {
+    let lines = unfold(text);
+    let events = lines.iter().filter(|l| l.trim().eq_ignore_ascii_case("BEGIN:VEVENT")).count();
+    let repeats = lines.iter().filter_map(|l| parse_line(l)).any(|l| matches!(l.name.as_str(), "RRULE" | "RDATE" | "RECURRENCE-ID"));
+    if events != 1 || repeats {
+        return Err("Repeating events can only be changed in the calendar's own app.".into());
+    }
+    let mut replaced: Vec<(&str, String)> = Vec::new();
+    let escape = |t: &str| t.replace('\\', "\\\\").replace(';', "\\;").replace(',', "\\,").replace('\n', "\\n");
+    if let Some(t) = &change.title {
+        replaced.push(("SUMMARY", format!("SUMMARY:{}", escape(t))));
+    }
+    if let Some(l) = &change.location {
+        replaced.push(("LOCATION", format!("LOCATION:{}", escape(l))));
+    }
+    if let Some(d) = &change.description {
+        replaced.push(("DESCRIPTION", format!("DESCRIPTION:{}", escape(d))));
+    }
+    let stamp = |t: DateTime<chrono::Utc>| t.format("%Y%m%dT%H%M%SZ").to_string();
+    if let Some((start, end)) = change.times {
+        replaced.push(("DTSTART", format!("DTSTART:{}", stamp(start))));
+        replaced.push(("DTEND", format!("DTEND:{}", stamp(end))));
+        // DTEND replaces any DURATION.
+        replaced.push(("DURATION", String::new()));
+    }
+    let now = stamp(chrono::Utc::now());
+    replaced.push(("LAST-MODIFIED", format!("LAST-MODIFIED:{now}")));
+    replaced.push(("DTSTAMP", format!("DTSTAMP:{now}")));
+
+    let mut out = Vec::new();
+    let mut depth: Vec<String> = Vec::new();
+    let mut sequence = 0;
+    for raw in &lines {
+        let Some(line) = parse_line(raw) else {
+            out.push(raw.clone());
+            continue;
+        };
+        let in_event = depth.last().map(String::as_str) == Some("VEVENT");
+        match line.name.as_str() {
+            "BEGIN" => depth.push(line.value.to_ascii_uppercase()),
+            "END" if line.value.eq_ignore_ascii_case("VEVENT") && in_event => {
+                // The changed properties go in just before the event ends.
+                for (_, new) in replaced.iter().filter(|(_, l)| !l.is_empty()) {
+                    out.push(new.clone());
+                }
+                out.push(format!("SEQUENCE:{}", sequence + 1));
+                depth.pop();
+                out.push(raw.clone());
+                continue;
+            }
+            "END" => {
+                depth.pop();
+            }
+            name if in_event => {
+                if name == "SEQUENCE" {
+                    sequence = line.value.trim().parse().unwrap_or(0);
+                    continue;
+                }
+                if replaced.iter().any(|(n, _)| *n == name) {
+                    continue;
+                }
+            }
+            _ => {}
+        }
+        out.push(raw.clone());
+    }
+    Ok(out.iter().map(|l| fold(l)).collect::<Vec<_>>().join("\r\n") + "\r\n")
+}
+
+/// Splits a line into 75-byte pieces, continuations starting with a space.
+pub fn fold(line: &str) -> String {
+    let mut out = String::new();
+    let mut width = 0;
+    for c in line.chars() {
+        if width + c.len_utf8() > 75 {
+            out.push_str("\r\n ");
+            width = 1;
+        }
+        out.push(c);
+        width += c.len_utf8();
+    }
+    out
+}

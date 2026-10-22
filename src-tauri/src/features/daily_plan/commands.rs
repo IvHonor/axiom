@@ -239,3 +239,17 @@ pub async fn plan_create_plan_calendar(db: State<'_, Db>, hub: State<'_, Calenda
 pub async fn plan_range(db: State<'_, Db>, from: Date, to: Date, today: Date) -> Result<RangePlan> {
     service::range(&db.conn().await?, from, to, today).await
 }
+
+/// Changes a calendar event in its own calendar (title, time, location, notes).
+#[tauri::command]
+pub async fn plan_update_event(db: State<'_, Db>, hub: State<'_, CalendarHub>, id: String, edit: accounts::EventEdit, today: Date) -> Result<()> {
+    let _one_at_a_time = accounts::exclusive(&hub).await;
+    accounts::update_event(&db.conn().await?, &hub, &id, edit, today).await
+}
+
+/// Deletes a calendar event (or one occurrence) from its calendar.
+#[tauri::command]
+pub async fn plan_delete_event(db: State<'_, Db>, hub: State<'_, CalendarHub>, id: String, today: Date) -> Result<()> {
+    let _one_at_a_time = accounts::exclusive(&hub).await;
+    accounts::delete_event(&db.conn().await?, &hub, &id, today).await
+}

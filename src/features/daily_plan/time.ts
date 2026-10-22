@@ -25,6 +25,20 @@ export function mondayOf(day: Day): Day {
   return addDays(day, -((noon(day).getDay() + 6) % 7));
 }
 
+/** The first of the month `n` months from `day`'s. */
+export function addMonths(day: Day, n: number): Day {
+  const date = noon(day);
+  return dayOf(new Date(date.getFullYear(), date.getMonth() + n, 1, 12));
+}
+
+/** The first of a day's month. */
+export const monthOf = (day: Day): Day => `${day.slice(0, 7)}-01`;
+
+/** "October 2026". */
+export function monthName(day: Day, withYear = true): string {
+  return noon(day).toLocaleDateString("en-GB", withYear ? { month: "long", year: "numeric" } : { month: "long" });
+}
+
 /** "Wednesday 22 October". */
 export function longDay(day: Day): string {
   return noon(day).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });

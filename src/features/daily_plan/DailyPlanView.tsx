@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { BarChart3, CalendarDays, CalendarRange, Check, ChevronLeft, ChevronRight, Moon, Plus, Repeat, RotateCcw, Settings2, Sunrise, X } from "lucide-react";
+import { BarChart3, Calendar, CalendarDays, CalendarRange, Check, ChevronLeft, ChevronRight, Moon, Plus, Repeat, RotateCcw, Settings2, Sun, Sunrise, X } from "lucide-react";
 import { useDataChanged } from "../../lib/sync";
 import { Dropdown } from "../../shell/ui/Dropdown";
 import { api, errorMessage, nudgeCalendars, type CalendarSetup, type DayPlan, type PlanTask, type Settings } from "./api";
@@ -11,14 +11,27 @@ import { planChanged, setPlanUi, usePlanUi, type PlanView } from "./planUi";
 import { CalendarsDialog, ProviderButton, RoutinesDialog } from "./Setup";
 import { TaskPanel } from "./TaskPanel";
 import { Timeline } from "./Timeline";
-import { addDays, clock, longDay, mediumDay, mondayOf, nowMinute, parseClock, relativeDay, today as todayNow } from "./time";
+import { addDays, addMonths, clock, longDay, mediumDay, mondayOf, monthName, monthOf, nowMinute, parseClock, relativeDay, today as todayNow } from "./time";
+import { MonthView } from "./MonthView";
 import { WeekView } from "./WeekView";
+import { YearView } from "./YearView";
 
-const VIEWS: { id: PlanView; label: string; icon: typeof CalendarDays }[] = [
-  { id: "day", label: "Day", icon: CalendarDays },
+export const VIEWS: { id: PlanView; label: string; icon: typeof CalendarDays }[] = [
+  { id: "day", label: "Day", icon: Sun },
   { id: "week", label: "Week", icon: CalendarRange },
+  { id: "month", label: "Month", icon: CalendarDays },
+  { id: "year", label: "Year", icon: Calendar },
   { id: "insights", label: "Insights", icon: BarChart3 },
 ];
+
+/** What the arrows step by in each view. */
+const UNITS: Record<PlanView, { name: string; move: (day: string, n: number) => string; current: string }> = {
+  day: { name: "day", move: (d, n) => addDays(d, n), current: "Today" },
+  week: { name: "week", move: (d, n) => addDays(d, 7 * n), current: "This week" },
+  month: { name: "month", move: (d, n) => addMonths(d, n), current: "This month" },
+  year: { name: "year", move: (d, n) => addMonths(d, 12 * n), current: "This year" },
+  insights: { name: "day", move: (d) => d, current: "Today" },
+};
 
 /** "Not now" on the connect-a-calendar card, remembered on this computer. */
 const CONNECT_HINT_KEY = "axiom.dailyPlan.connectHintDismissed";
@@ -108,8 +121,7 @@ export function DailyPlanView() {
     [reload],
   );
 
-  const step = view === "week" ? 7 : 1;
-  const unit = view === "week" ? "week" : "day";
+  const unit = UNITS[view];
 
   // Keyboard: N or / to add, T for today, arrows for other days (or weeks).
   useEffect(() => {
@@ -120,12 +132,12 @@ export function DailyPlanView() {
         e.preventDefault();
         quickAdd.current?.focus();
       } else if (e.key === "t") setDay(todayNow());
-      else if (e.key === "ArrowLeft") setDay((d) => addDays(d, -step));
-      else if (e.key === "ArrowRight") setDay((d) => addDays(d, step));
+      else if (e.key === "ArrowLeft") setDay((d) => unit.move(d, -1));
+      else if (e.key === "ArrowRight") setDay((d) => unit.move(d, 1));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [step]);
+  }, [unit]);
 
   // Timers tick every second while one is running, otherwise twice a minute.
   const ticking = !!plan?.running || focusId !== null;
@@ -136,7 +148,13 @@ export function DailyPlanView() {
 
   const isToday = day === today;
   const weekStart = mondayOf(day);
-  const thisWeek = weekStart === mondayOf(today);
+  /** Whether the week, month or year shown is the current one. */
+  const atCurrent =
+    view === "week" ? weekStart === mondayOf(today) : view === "month" ? monthOf(day) === monthOf(today) : view === "year" ? day.slice(0, 4) === today.slice(0, 4) : isToday;
+  const openDay = (d: string) => {
+    setDay(d);
+    setView("day");
+  };
   const minute = nowMinute();
   const all = plan ? [...plan.tasks, ...plan.earlier, ...plan.inbox, ...(plan.running ? [plan.running] : [])] : [];
   const focusTask = all.find((t) => t.id === focusId);
@@ -175,8 +193,8 @@ export function DailyPlanView() {
       <header className="dp-toolbar">
         <div className="pb-segmented" role="tablist" aria-label="Planner view">
           {VIEWS.map(({ id, label, icon: Icon }) => (
-            <button key={id} role="tab" aria-selected={view === id} className={view === id ? "is-active" : undefined} onClick={() => setView(id)}>
-              <Icon size={14} strokeWidth={1.5} /> {label}
+            <button key={id} role="tab" aria-selected={view === id} className={view === id ? "is-active" : undefined} onClick={() => setView(id)} title={label}>
+              <Icon size={14} strokeWidth={1.5} /> <span className="dp-seg-label">{label}</span>
             </button>
           ))}
         </div>
@@ -184,19 +202,19 @@ export function DailyPlanView() {
           <h2 className="dp-date dp-nav">How your planning is going</h2>
         ) : (
           <div className="dp-nav">
-          <button className="icon-btn" aria-label={`Previous ${unit}`} title={`Previous ${unit} (←)`} onClick={() => setDay(addDays(day, -step))}>
+          <button className="icon-btn" aria-label={`Previous ${unit.name}`} title={`Previous ${unit.name} (←)`} onClick={() => setDay(unit.move(day, -1))}>
             <ChevronLeft size={16} strokeWidth={1.75} />
           </button>
-          <button className="btn btn-sm btn-ghost" disabled={view === "week" ? thisWeek : isToday} onClick={() => setDay(today)} title="Today (T)">
-            {view === "week" ? "This week" : "Today"}
+          <button className="btn btn-sm btn-ghost" disabled={atCurrent} onClick={() => setDay(today)} title="Today (T)">
+            {unit.current}
           </button>
-          <button className="icon-btn" aria-label={`Next ${unit}`} title={`Next ${unit} (→)`} onClick={() => setDay(addDays(day, step))}>
+          <button className="icon-btn" aria-label={`Next ${unit.name}`} title={`Next ${unit.name} (→)`} onClick={() => setDay(unit.move(day, 1))}>
             <ChevronRight size={16} strokeWidth={1.75} />
           </button>
-          {view === "week" ? (
+          {view === "week" || view === "month" || view === "year" ? (
             <h2 className="dp-date">
-              Week of {longDay(weekStart).replace(/^\S+ /, "")}
-              {!thisWeek && <span className="dp-date-tag">{weekStart < mondayOf(today) ? "Past" : "Ahead"}</span>}
+              {view === "week" ? `Week of ${longDay(weekStart).replace(/^\S+ /, "")}` : view === "month" ? monthName(day) : day.slice(0, 4)}
+              {!atCurrent && <span className="dp-date-tag">{day < today ? "Past" : "Ahead"}</span>}
             </h2>
           ) : (
           <div className="dp-date-block">
@@ -279,14 +297,19 @@ export function DailyPlanView() {
       )}
 
       {view === "week" ? (
-        <WeekView
-          weekStart={weekStart}
+        <WeekView weekStart={weekStart} today={today} version={version} onError={showError} onOpenDay={openDay} />
+      ) : view === "month" ? (
+        <MonthView month={day} today={today} version={version} onError={showError} onOpenDay={openDay} />
+      ) : view === "year" ? (
+        <YearView
+          year={day}
           today={today}
           version={version}
           onError={showError}
-          onOpenDay={(d) => {
+          onOpenDay={openDay}
+          onOpenMonth={(d) => {
             setDay(d);
-            setView("day");
+            setView("month");
           }}
         />
       ) : view === "insights" ? (

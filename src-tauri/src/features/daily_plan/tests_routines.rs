@@ -237,3 +237,30 @@ async fn calendar_links_must_be_secure() {
         assert!(super::calendars::add_calendar(&db, "Work", url, "gray", day(TODAY)).await.is_err(), "{url}");
     }
 }
+
+#[tokio::test]
+async fn a_range_shows_routines_ahead_without_writing_them() {
+    use super::entities::block;
+    use sea_orm::EntityTrait;
+    let db = setup().await;
+    create_routine(&db, gym(THU)).await.unwrap();
+    create_task(&db, "Write", Some(day(23)), Some(60)).await.unwrap();
+    // This Thursday's gym is laid out and then skipped.
+    let today_block = get_day(&db, day(TODAY), day(TODAY)).await.unwrap().blocks.remove(0);
+    delete_block(&db, &today_block.id).await.unwrap();
+    let rows_before = block::Entity::find().all(&db).await.unwrap().len();
+
+    let found = range(&db, day(15), day(31), day(TODAY)).await.unwrap();
+    assert_eq!(found.days.len(), 17);
+    let on = |d: u32| found.days.iter().find(|s| s.day == day(d)).unwrap();
+    // Skipped stays skipped; next Thursday shows; last Thursday (the past) doesn't.
+    assert!(on(TODAY).blocks.is_empty());
+    assert_eq!(on(29).blocks.len(), 1);
+    assert_eq!(on(29).planned_minutes, 60);
+    assert!(on(15).blocks.is_empty());
+    assert_eq!(on(23).tasks[0].title, "Write");
+    // Looking ahead didn't write anything.
+    assert_eq!(block::Entity::find().all(&db).await.unwrap().len(), rows_before);
+
+    assert!(range(&db, day(19), day(1) + chrono::Days::new(500), day(TODAY)).await.is_err());
+}

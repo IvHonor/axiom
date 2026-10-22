@@ -178,6 +178,25 @@ export interface DayPlan {
   pace: number | null;
 }
 
+/** One day of a range (week, month, year). Mirrors `DaySlice`. */
+export interface DaySlice {
+  day: Day;
+  tasks: PlanTask[];
+  /** Includes routines on days ahead, shown before they're written down. */
+  blocks: Block[];
+  events: CalendarEvent[];
+  plannedMinutes: number;
+  /** Whether the morning planning was done. */
+  planned: boolean;
+}
+
+export interface RangePlan {
+  days: DaySlice[];
+  inbox: PlanTask[];
+  settings: Settings;
+  pace: number | null;
+}
+
 export interface TodaySummary {
   total: number;
   done: number;
@@ -207,6 +226,8 @@ export const MAX_FOCUS = 3;
 
 export const api = {
   getDay: (day: Day, today: Day) => invoke<DayPlan>("plan_get_day", { day, today }),
+  /** Many days at once (up to about a year). */
+  range: (from: Day, to: Day, today: Day) => invoke<RangePlan>("plan_range", { from, to, today }),
   summary: (today: Day, nowMinute: number) => invoke<TodaySummary>("plan_summary", { today, nowMinute }),
   quickAdd: (text: string, day: Day, today: Day) =>
     invoke<{ task: PlanTask; block: Block | null }>("plan_quick_add", { text, day, today }),

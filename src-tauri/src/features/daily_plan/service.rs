@@ -15,7 +15,7 @@ use super::calendars::events_on;
 use super::entities::{block, day, event, routine, settings, task};
 use super::parse::{self, DayHint};
 use super::types::{
-    BlockFields, CarryTo, DayDone, DayFields, DayInfo, DayPlan, NextBlock, PlanInsights, QuickAdded, RoutineFields,
+    BlockFields, CarryTo, DayDone, DaySlice, RangePlan, DayFields, DayInfo, DayPlan, NextBlock, PlanInsights, QuickAdded, RoutineFields,
     ScheduleResult, Settings, TaskFields, TodaySummary, WeekFocus,
 };
 use crate::features::project_board::service as board;
@@ -975,4 +975,106 @@ pub async fn insights(db: &DatabaseConnection, today: Date) -> Result<PlanInsigh
 
 async fn days_table_since(db: &impl ConnectionTrait, since: Date) -> Result<Vec<day::Model>> {
     Ok(days().filter(day::Column::Id.gte(since.to_string())).all(db).await?)
+}
+
+// ---------- Ranges ----------
+
+/// The most days one request may cover: a year, with room for the weeks
+/// either side of it.
+const MAX_RANGE_DAYS: i64 = 400;
+
+/// Every day from `from` to `to` (both included). Routines show on days
+/// from today on; they're only written down when a day is opened.
+pub async fn range(db: &DatabaseConnection, from: Date, to: Date, today: Date) -> Result<RangePlan> {
+    if to < from || (to - from).num_days() > MAX_RANGE_DAYS {
+        return Err(Error::Invalid("That's too many days to show at once.".into()));
+    }
+    let all_tasks = tasks()
+        .filter(task::Column::Day.gte(from))
+        .filter(task::Column::Day.lte(to))
+        .order_by_asc(task::Column::Position)
+        .all(db)
+        .await?;
+    let all_blocks = blocks()
+        .filter(block::Column::Day.gte(from))
+        .filter(block::Column::Day.lte(to))
+        .order_by_asc(block::Column::StartMinute)
+        .all(db)
+        .await?;
+    // Every routine block ever made in the range, deleted ones included: a
+    // deleted one is a skipped day.
+    let made: std::collections::HashSet<String> = block::Entity::find()
+        .filter(block::Column::RoutineId.is_not_null())
+        .filter(block::Column::Day.gte(from))
+        .filter(block::Column::Day.lte(to))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|b| b.id)
+        .collect();
+    let all_routines = routines().all(db).await?;
+    let all_events = event::Entity::find()
+        .filter(event::Column::Day.gte(from))
+        .filter(event::Column::Day.lte(to))
+        .order_by_desc(event::Column::AllDay)
+        .order_by_asc(event::Column::StartMinute)
+        .all(db)
+        .await?;
+    let planned_days: std::collections::HashSet<String> = days()
+        .filter(day::Column::Id.gte(from.to_string()))
+        .filter(day::Column::Id.lte(to.to_string()))
+        .filter(day::Column::PlannedAt.is_not_null())
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|d| d.id)
+        .collect();
+    let settings = get_settings(db).await?;
+
+    let mut out = Vec::new();
+    let mut date = from;
+    while date <= to {
+        let mut day_tasks: Vec<task::Model> = all_tasks.iter().filter(|t| t.day == Some(date)).cloned().collect();
+        day_tasks.sort_by_key(|t| t.focus_rank.unwrap_or(i16::MAX));
+        let mut day_blocks: Vec<block::Model> = all_blocks.iter().filter(|b| b.day == date).cloned().collect();
+        if date >= today {
+            for r in all_routines.iter().filter(|r| r.weekdays & weekday_bit(date) != 0) {
+                let id = routine_block_id(&r.id, date);
+                if !made.contains(&id) {
+                    day_blocks.push(block::Model {
+                        id,
+                        day: date,
+                        start_minute: r.start_minute,
+                        duration_minutes: r.duration_minutes,
+                        title: r.title.clone(),
+                        color: r.color.clone(),
+                        task_id: None,
+                        created_at: r.created_at,
+                        updated_at: r.updated_at,
+                        deleted_at: None,
+                        routine_id: Some(r.id.clone()),
+                    });
+                }
+            }
+            day_blocks.sort_by_key(|b| b.start_minute);
+        }
+        let day_events: Vec<event::Model> = all_events.iter().filter(|e| e.day == date).cloned().collect();
+        out.push(DaySlice {
+            day: date,
+            planned_minutes: planned_minutes(&day_tasks, &day_blocks, &day_events, &settings),
+            planned: planned_days.contains(&date.to_string()),
+            tasks: day_tasks,
+            blocks: day_blocks,
+            events: day_events,
+        });
+        date = date + Days::new(1);
+    }
+
+    let inbox = tasks()
+        .filter(task::Column::Day.is_null())
+        .filter(task::Column::DoneAt.is_null())
+        .order_by_asc(task::Column::Position)
+        .all(db)
+        .await?;
+    Ok(RangePlan { days: out, inbox, settings, pace: pace(db, today).await?.0 })
 }

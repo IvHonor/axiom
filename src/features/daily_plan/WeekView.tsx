@@ -1,14 +1,11 @@
-import { useCallback, useEffect, useState, type DragEvent, type FormEvent } from "react";
-import { Check, Inbox, Plus } from "lucide-react";
-import { useDataChanged } from "../../lib/sync";
-import { api, cardFromDrag, errorMessage, nudgeCalendars, type Day, type DayPlan, type PlanTask } from "./api";
-import { capacityState, expectedMinutes, plannedMinutes } from "./Capacity";
+import { Check, Inbox } from "lucide-react";
+import type { CSSProperties } from "react";
+import type { Day, DaySlice, PlanTask, Settings } from "./api";
+import { agenda, likelyMinutes } from "./agenda";
+import { capacityState } from "./Capacity";
 import { colorOf } from "./palette";
-import { planChanged } from "./planUi";
-import { draggedTask, TASK_DRAG } from "./TaskPanel";
-import { addDays, duration, today as todayNow } from "./time";
-
-type Act = (change: () => Promise<unknown>) => Promise<void>;
+import { AddLine, AgendaRow, useDropTarget, useRange, type Act } from "./RangeParts";
+import { addDays, duration } from "./time";
 
 interface WeekViewProps {
   /** The Monday the week starts on. */
@@ -20,135 +17,106 @@ interface WeekViewProps {
   onError: (message: string) => void;
 }
 
-/** Seven days side by side, to spread work over the week: drag tasks
- * between days, or from the inbox, and see which days are full. */
+/** Seven days side by side, each listing what's on it in time order: drag
+ * tasks between days, or from the inbox, and see which days are full. */
 export function WeekView({ weekStart, today, version, onOpenDay, onError }: WeekViewProps) {
-  const [plans, setPlans] = useState<DayPlan[] | null>(null);
-
-  const reload = useCallback(async () => {
-    try {
-      const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-      setPlans(await Promise.all(days.map((d) => api.getDay(d, todayNow()))));
-    } catch (e) {
-      onError(errorMessage(e));
-    }
-  }, [weekStart, onError]);
-
-  useEffect(() => void reload(), [reload, version, today]);
-  useDataChanged(reload);
-
-  const act: Act = useCallback(
-    async (change) => {
-      try {
-        await change();
-        nudgeCalendars(todayNow());
-        planChanged();
-      } catch (e) {
-        onError(errorMessage(e));
-      }
-      await reload();
-    },
-    [reload, onError],
-  );
-
-  if (!plans) return <p className="dim dp-loading">Loading your week…</p>;
+  const { data, act } = useRange(weekStart, addDays(weekStart, 6), today, version, onError);
+  if (!data) return <p className="dim dp-loading">Loading your week…</p>;
 
   return (
     <div className="dp-week">
-      {plans.map((plan) => (
-        <DayColumn key={plan.day} plan={plan} today={today} act={act} onOpen={() => onOpenDay(plan.day)} />
+      {data.days.map((slice) => (
+        <DayColumn
+          key={slice.day}
+          slice={slice}
+          settings={data.settings}
+          pace={data.pace}
+          today={today}
+          act={act}
+          onOpen={() => onOpenDay(slice.day)}
+        />
       ))}
-      <InboxColumn tasks={plans[0].inbox} act={act} />
+      <InboxColumn tasks={data.inbox} act={act} />
     </div>
   );
 }
 
-/** Moves a dragged task (or plans a dragged board card) to a day or the inbox. */
-function dropOn(day: Day | null, act: Act) {
-  return (e: DragEvent) => {
-    const id = e.dataTransfer.getData(TASK_DRAG);
-    if (!id) return;
-    e.preventDefault();
-    const card = cardFromDrag(id);
-    void act(() => (card ? api.planCard(card, day) : api.moveTask(id, day)));
-  };
+/** How full a day is: a bar and "4h / 8h 30m", coloured when it's tight or over. */
+export function DayLoad({ slice, settings, pace, label = true }: { slice: DaySlice; settings: Settings; pace: number | null; label?: boolean }) {
+  const likely = likelyMinutes(slice, pace);
+  const available = settings.dayEndMinute - settings.dayStartMinute;
+  const state = capacityState(likely, available, available * (1 - settings.bufferPercent / 100));
+  return (
+    <div className={`dp-week-load is-${state}`} title={`${duration(likely)} planned of ${duration(available)}`}>
+      <div className="dp-capacity-bar">
+        <span style={{ width: `${Math.min(likely / available, 1) * 100}%` }} />
+      </div>
+      {label && (
+        <span>
+          {duration(likely)} / {duration(available)}
+        </span>
+      )}
+    </div>
+  );
 }
 
-function useDropTarget(day: Day | null, act: Act) {
-  const [over, setOver] = useState(false);
-  const drop = dropOn(day, act);
-  return {
-    over,
-    handlers: {
-      onDragOver: (e: DragEvent) => {
-        if (!e.dataTransfer.types.includes(TASK_DRAG)) return;
-        e.preventDefault();
-        setOver(true);
-      },
-      onDragLeave: (e: DragEvent) => !e.currentTarget.contains(e.relatedTarget as Node) && setOver(false),
-      onDrop: (e: DragEvent) => {
-        setOver(false);
-        drop(e);
-      },
-    },
-  };
+interface DayColumnProps {
+  slice: DaySlice;
+  settings: Settings;
+  pace: number | null;
+  today: Day;
+  act: Act;
+  onOpen: () => void;
 }
 
-function DayColumn({ plan, today, act, onOpen }: { plan: DayPlan; today: Day; act: Act; onOpen: () => void }) {
-  const { over, handlers } = useDropTarget(plan.day, act);
-  const planned = plannedMinutes(plan);
-  const likely = expectedMinutes(plan, planned) ?? planned;
-  const available = plan.settings.dayEndMinute - plan.settings.dayStartMinute;
-  const comfortable = available * (1 - plan.settings.bufferPercent / 100);
-  const state = capacityState(likely, available, comfortable);
-  const date = new Date(`${plan.day}T12:00`);
-  const past = plan.day < today;
-  const allDay = plan.events.filter((e) => e.allDay);
-  const meetings = plan.events.filter((e) => !e.allDay && e.busy);
-  const fixed = [...plan.blocks.filter((b) => !b.taskId), ...meetings];
-  const fixedMinutes = fixed.reduce((n, b) => n + b.durationMinutes, 0);
+function DayColumn({ slice, settings, pace, today, act, onOpen }: DayColumnProps) {
+  const { over, handlers } = useDropTarget(slice.day, act);
+  const date = new Date(`${slice.day}T12:00`);
+  const past = slice.day < today;
+  const { allDay, timed, anytime } = agenda(slice);
+  const empty = !allDay.length && !timed.length && !anytime.length;
 
   return (
     <section
-      className={`dp-week-day${plan.day === today ? " is-today" : ""}${past ? " is-past" : ""}${over ? " is-drop-target" : ""}`}
+      className={`dp-week-day${slice.day === today ? " is-today" : ""}${past ? " is-past" : ""}${over ? " is-drop-target" : ""}`}
       aria-label={date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
       {...handlers}
     >
       <button className="dp-week-head" onClick={onOpen} title="Open this day">
         <span className="dp-week-weekday">{date.toLocaleDateString("en-GB", { weekday: "short" })}</span>
         <span className="dp-week-date">{date.getDate()}</span>
-        {plan.info.plannedAt && <Check size={12} strokeWidth={2.5} className="dp-week-planned" aria-label="Planned" />}
+        {slice.planned && <Check size={12} strokeWidth={2.5} className="dp-week-planned" aria-label="Planned" />}
       </button>
-      <div className={`dp-week-load is-${state}`} title={`${duration(planned)} planned of ${duration(available)}`}>
-        <div className="dp-capacity-bar">
-          <span style={{ width: `${Math.min(likely / available, 1) * 100}%` }} />
-        </div>
-        <span>
-          {duration(likely)} / {duration(available)}
-        </span>
-      </div>
+      <DayLoad slice={slice} settings={settings} pace={pace} />
 
-      {(allDay.length > 0 || fixed.length > 0) && (
+      {allDay.length > 0 && (
         <div className="dp-week-fixed">
           {allDay.map((e) => (
-            <span key={e.id} className="dp-week-chip" style={{ "--block": colorOf(e.color) } as React.CSSProperties}>
+            <span key={e.id} className="dp-week-chip" style={{ "--block": colorOf(e.color) } as CSSProperties} title={`${e.title} · all day`}>
               {e.title}
             </span>
           ))}
-          {fixed.length > 0 && (
-            <span className="dim" title={fixed.map((f) => f.title || "Block").join(", ")}>
-              {fixed.length} fixed · {duration(fixedMinutes)}
-            </span>
-          )}
         </div>
       )}
-
-      <ul className="dp-week-list">
-        {plan.tasks.map((t) => (
-          <WeekTask key={t.id} task={t} act={act} />
-        ))}
-      </ul>
-      {!past && <AddLine day={plan.day} act={act} />}
+      {timed.length > 0 && (
+        <ul className="dp-ag">
+          {timed.map((item) => (
+            <AgendaRow key={`${item.kind}-${item.id}`} item={item} act={act} />
+          ))}
+        </ul>
+      )}
+      {anytime.length > 0 && (
+        <>
+          <p className="dp-ag-label">Anytime</p>
+          <ul className="dp-ag">
+            {anytime.map((item) => (
+              <AgendaRow key={`${item.kind}-${item.id}`} item={item} act={act} />
+            ))}
+          </ul>
+        </>
+      )}
+      {empty && <p className="dp-ag-empty">{past ? "Nothing planned." : "Free"}</p>}
+      {!past && <AddLine day={slice.day} act={act} />}
     </section>
   );
 }
@@ -162,58 +130,11 @@ function InboxColumn({ tasks, act }: { tasks: PlanTask[]; act: Act }) {
         <span className="dp-week-weekday">Inbox</span>
       </div>
       <p className="dp-hint">Drag tasks onto a day to plan them.</p>
-      <ul className="dp-week-list">
-        {tasks.map((t) => (
-          <WeekTask key={t.id} task={t} act={act} />
+      <ul className="dp-ag">
+        {tasks.map((task) => (
+          <AgendaRow key={task.id} item={{ kind: "task", id: task.id, start: null, minutes: task.estimateMinutes, task, color: null }} act={act} />
         ))}
       </ul>
     </section>
-  );
-}
-
-function WeekTask({ task, act }: { task: PlanTask; act: Act }) {
-  const done = task.doneAt !== null;
-  return (
-    <li
-      className={`dp-week-task${done ? " is-done" : ""}`}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData(TASK_DRAG, task.id);
-        e.dataTransfer.effectAllowed = "move";
-        draggedTask.id = task.id;
-        draggedTask.minutes = task.estimateMinutes;
-      }}
-      onDragEnd={() => Object.assign(draggedTask, { id: null, minutes: null })}
-    >
-      <button
-        className={`dp-check${done ? " is-checked" : ""}`}
-        role="checkbox"
-        aria-checked={done}
-        aria-label={done ? "Mark as not done" : "Mark as done"}
-        onClick={() => act(() => api.setDone(task.id, !done))}
-      >
-        {done && <Check size={11} strokeWidth={2.5} />}
-      </button>
-      {task.focusRank !== null && <span className="dp-rank">{task.focusRank}</span>}
-      <span className="dp-week-title">{task.title}</span>
-      {task.estimateMinutes !== null && <span className="dp-week-est">{duration(task.estimateMinutes)}</span>}
-    </li>
-  );
-}
-
-function AddLine({ day, act }: { day: Day; act: Act }) {
-  const [text, setText] = useState("");
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!text.trim()) return;
-    const value = text;
-    setText("");
-    void act(() => api.quickAdd(value, day, todayNow()));
-  };
-  return (
-    <form className="dp-week-add" onSubmit={submit}>
-      <Plus size={13} strokeWidth={1.75} />
-      <input value={text} placeholder="Add a task" aria-label="Add a task to this day" onChange={(e) => setText(e.currentTarget.value)} />
-    </form>
   );
 }

@@ -1365,12 +1365,6 @@
   }
 }
 
-.dp-week-task .dp-check,
-.dp-week-task .dp-rank,
-.dp-week-est {
-  margin-top: 1px;
-}
-
 .dp-setup-form .menu-heading {
   margin: 4px 0 0;
   padding: 0;
@@ -1717,59 +1711,6 @@ button.dp-week-head:hover .dp-week-date {
   flex-direction: column;
   gap: 4px;
   font-size: 11.5px;
-}
-
-.dp-week-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.dp-week-task {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 5px 6px;
-  font-size: 12.5px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  cursor: grab;
-}
-
-.dp-week-task:hover {
-  border-color: var(--line-strong);
-}
-
-.dp-week-task .dp-check {
-  width: 15px;
-  height: 15px;
-  flex: none;
-}
-
-.dp-week-task.is-done .dp-week-title {
-  color: var(--text-faint);
-  text-decoration: line-through;
-}
-
-.dp-week-title {
-  flex: 1;
-  min-width: 0;
-  display: -webkit-box;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.dp-week-est {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--text-dim);
 }
 
 .dp-week-add {
@@ -2166,4 +2107,389 @@ button.dp-week-head:hover .dp-week-date {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ---------- Agenda rows (week and month) ---------- */
+
+.dp-ag {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dp-ag-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  background: color-mix(in srgb, var(--block, var(--line-strong)) 14%, var(--panel));
+  border-left: 3px solid var(--block, var(--line-strong));
+  border-radius: var(--radius-sm);
+}
+
+.dp-ag-item.is-task {
+  cursor: grab;
+}
+
+.dp-ag-item.is-task:not([style*="--block: var"]) {
+  background: var(--surface);
+}
+
+/* Meetings: fixed, so drawn lighter with a dashed edge, like on the timeline. */
+.dp-ag-item.is-event {
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--block) 60%, transparent);
+  border-left: 3px solid var(--block);
+}
+
+.dp-ag-item.is-free {
+  opacity: 0.6;
+}
+
+.dp-ag-item.is-allday {
+  background: color-mix(in srgb, var(--block) 22%, var(--panel));
+}
+
+.dp-ag-item.is-done .dp-ag-title {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.dp-ag-item .dp-check {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 1px;
+}
+
+.dp-ag-time {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 16px;
+  color: var(--text-dim);
+}
+
+.dp-ag-title {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dp-ag-title .dp-rank {
+  display: inline-grid;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+
+.dp-ag-icon {
+  margin-right: 4px;
+  vertical-align: -1px;
+  color: var(--text-dim);
+}
+
+.dp-ag-meta {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 16px;
+  color: var(--text-dim);
+}
+
+.dp-ag-label {
+  margin: 4px 0 -2px;
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  text-transform: var(--label-case);
+  color: var(--text-faint);
+}
+
+.dp-ag-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* One line per item in the month's small cells. */
+.dp-ag.is-compact .dp-ag-item {
+  padding: 1px 5px;
+  font-size: 11.5px;
+}
+
+.dp-ag.is-compact .dp-ag-title {
+  -webkit-line-clamp: 1;
+}
+
+/* ---------- Month ---------- */
+
+.dp-month {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 20px 16px;
+  overflow: auto;
+}
+
+.dp-month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  padding-bottom: 6px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.dp-month-weekdays span {
+  padding-left: 8px;
+}
+
+.dp-month-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.dp-month-cell {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.dp-month-cell.is-other {
+  background: transparent;
+}
+
+.dp-month-cell.is-other .dp-month-date {
+  color: var(--text-faint);
+}
+
+.dp-month-cell.is-past:not(.is-today) {
+  opacity: 0.75;
+}
+
+.dp-month-cell.is-today {
+  border-color: var(--accent);
+}
+
+.dp-month-cell.is-drop-target {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+
+.dp-month-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dp-month-top .dp-week-load {
+  flex: 1;
+}
+
+.dp-month-top .dp-capacity-bar {
+  height: 3px;
+}
+
+.dp-month-date {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.dp-month-date:hover {
+  background: var(--hover);
+}
+
+.dp-month-cell.is-today .dp-month-date {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+.dp-month-more {
+  align-self: flex-start;
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+}
+
+.dp-month-more:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+/* ---------- Year ---------- */
+
+.dp-year {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px 24px;
+  overflow: auto;
+}
+
+.dp-year-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.dp-year-stats b {
+  color: var(--text);
+}
+
+.dp-year-legend {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.dp-year-legend-scale {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.dp-year-legend .dp-year-day {
+  width: 14px;
+  height: 14px;
+}
+
+.dp-year-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 18px 24px;
+}
+
+.dp-year-month {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.dp-year-month-name {
+  align-self: flex-start;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: 0;
+}
+
+.dp-year-month-name:hover {
+  color: var(--accent);
+}
+
+.dp-year-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.dp-year-weekday {
+  font-family: var(--font-label);
+  font-size: 10px;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+/* Planned time, one hue from light to dark. */
+.dp-year-day {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--text) 5%, var(--panel));
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+
+button.dp-year-day:hover {
+  border-color: var(--text-dim);
+}
+
+.dp-year-day.lv-1 {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 22%, var(--panel));
+}
+
+.dp-year-day.lv-2 {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 42%, var(--panel));
+}
+
+.dp-year-day.lv-3 {
+  color: var(--on-accent);
+  background: color-mix(in srgb, var(--accent) 68%, var(--panel));
+}
+
+.dp-year-day.lv-4 {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+.dp-year-day.is-today {
+  border-color: var(--text);
+  font-weight: 700;
+}
+
+/* A narrower toolbar keeps the view switch to icons. */
+@container (max-width: 980px) {
+  .dp-seg-label {
+    display: none;
+  }
+}
+
+/* In the week: the time on its own line, the name across the column below it. */
+.dp-ag-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dp-ag-body .dp-ag-time {
+  line-height: 14px;
 }

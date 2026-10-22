@@ -10,7 +10,7 @@ use super::calendars::accounts::{self, CalendarHub};
 use super::entities::{block, calendar as cal, calendar_account as account, routine, task};
 use super::{calendars as calendar, service};
 use super::types::{
-    BlockFields, CarryTo, DayFields, DayInfo, DayPlan, PlanInsights, QuickAdded, RoutineFields, ScheduleResult, Settings,
+    BlockFields, CarryTo, DayFields, DayInfo, DayPlan, PlanInsights, RangePlan, QuickAdded, RoutineFields, ScheduleResult, Settings,
     TaskFields, TodaySummary,
 };
 use crate::db::Db;
@@ -232,4 +232,10 @@ pub async fn plan_publish_to(db: State<'_, Db>, hub: State<'_, CalendarHub>, cal
 pub async fn plan_create_plan_calendar(db: State<'_, Db>, hub: State<'_, CalendarHub>, account_id: String, today: Date) -> Result<cal::Model> {
     let _one_at_a_time = accounts::exclusive(&hub).await;
     accounts::create_plan_calendar(&db.conn().await?, &hub, &account_id, today).await
+}
+
+/// Many days at once (up to about a year), for the week, month and year views.
+#[tauri::command]
+pub async fn plan_range(db: State<'_, Db>, from: Date, to: Date, today: Date) -> Result<RangePlan> {
+    service::range(&db.conn().await?, from, to, today).await
 }

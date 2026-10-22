@@ -189,3 +189,30 @@ pub struct DayDone {
     pub planned: usize,
     pub done: usize,
 }
+
+/// Many days at once, for the week, month and year views. Lighter than
+/// `DayPlan`: no board cards or leftovers, and routines appear on days
+/// ahead without being written down.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RangePlan {
+    pub days: Vec<DaySlice>,
+    pub inbox: Vec<task::Model>,
+    pub settings: Settings,
+    /// See `DayPlan::pace`.
+    pub pace: Option<f64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DaySlice {
+    pub day: Date,
+    /// Top priorities first, then in order.
+    pub tasks: Vec<task::Model>,
+    pub blocks: Vec<block::Model>,
+    pub events: Vec<event::Model>,
+    /// As `planned_minutes` counts it.
+    pub planned_minutes: i32,
+    /// Whether the morning planning was done.
+    pub planned: bool,
+}

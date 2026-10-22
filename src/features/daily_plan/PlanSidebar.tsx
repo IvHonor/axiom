@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, BarChart3, CalendarDays, CalendarRange, Check, Repeat, Sun } from "lucide-react";
+import { AlertCircle, CalendarDays, Check, Repeat } from "lucide-react";
 import type { AreaSidebarProps } from "../../extensions/types";
 import { useDataChanged } from "../../lib/sync";
 import { Section } from "../../shell/ui/Section";
 import { api, type CalendarAccount, type CalendarSetup, type Routine, type TodaySummary } from "./api";
+import { VIEWS } from "./DailyPlanView";
 import { colorOf } from "./palette";
 import { setPlanUi, showToday, usePlanUi, type PlanView } from "./planUi";
 import { ProviderButton, weekdayText } from "./Setup";
@@ -41,10 +42,10 @@ export function PlanSidebar({ active, onOpen }: AreaSidebarProps) {
     setPlanUi({ dialog: kind === "calendars" ? { kind, start } : { kind } });
     onOpen();
   };
-  const viewItem = (id: PlanView, label: string, Icon: typeof Sun) => (
-    <button className={active && view === id ? "nav-item is-active" : "nav-item"} onClick={() => go(id)}>
+  const viewItem = ({ id, label, icon: Icon }: (typeof VIEWS)[number]) => (
+    <button key={id} className={active && view === id ? "nav-item is-active" : "nav-item"} onClick={() => go(id)}>
       <Icon size={16} strokeWidth={1.5} />
-      {label}
+      {id === "day" ? "Today" : label}
     </button>
   );
 
@@ -54,9 +55,7 @@ export function PlanSidebar({ active, onOpen }: AreaSidebarProps) {
   return (
     <>
       <Section title="Views">
-        {viewItem("day", "Today", Sun)}
-        {viewItem("week", "Week", CalendarRange)}
-        {viewItem("insights", "Insights", BarChart3)}
+        {VIEWS.map(viewItem)}
       </Section>
 
       <Section title="Today">

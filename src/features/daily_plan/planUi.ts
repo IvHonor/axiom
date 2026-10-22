@@ -2,7 +2,9 @@
 // planner and its items in the sidebar (PlanNav).
 import { useSyncExternalStore } from "react";
 
-export type PlanView = "day" | "week" | "insights";
+export type PlanView = "day" | "week" | "month" | "year" | "insights";
+
+export const PLAN_VIEWS: PlanView[] = ["day", "week", "month", "year", "insights"];
 
 export type PlanDialog =
   | { kind: "routines" }
@@ -24,7 +26,7 @@ const VIEW_KEY = "axiom.dailyPlan.view";
 function savedView(): PlanView {
   try {
     const v = localStorage.getItem(VIEW_KEY);
-    return v === "week" || v === "insights" ? v : "day";
+    return PLAN_VIEWS.find((view) => view === v) ?? "day";
   } catch {
     return "day";
   }

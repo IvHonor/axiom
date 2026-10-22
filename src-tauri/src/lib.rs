@@ -57,6 +57,7 @@ pub fn run() {
             sync::sync_now,
             sync::sync_link,
             plan::plan_get_day,
+            plan::plan_range,
             plan::plan_summary,
             plan::plan_quick_add,
             plan::plan_create_task,

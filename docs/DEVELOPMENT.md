@@ -50,6 +50,8 @@ The same build, tests and audits run on GitHub for every push and pull request (
 | `server/` | The account and sync server: Axum, SeaORM on Postgres, Argon2id passwords, JWT plus rotating refresh tokens |
 | `crates/protocol/` | Request and response types shared by the app and the server |
 
+**Drag and drop.** The window sets `dragDropEnabled: false` in `tauri.conf.json`. Left on (Tauri's default), it replaces WebView2's drag and drop on Windows so it can report files dropped on the window, and HTML drag and drop in the page (the Daily Plan's tasks) silently stops working. Tests that fire drag events from script don't notice, so check a change here with a real mouse.
+
 ## Adding an area
 
 An area that's listed in `src/extensions/index.ts` without a `View` shows as **Coming soon** and can't be installed. To build one, give it a folder in `src/features/<id>/` exporting its manifest with a `View` and a `Summary`, and a Rust module in `src-tauri/src/features/<id>/`. To make its data sync, list its tables (see `SYNCED_TABLES` in `src-tauri/src/features/project_board/mod.rs`). Synced tables need text UUID ids, an `updated_at` column, soft deletes (`deleted_at`) and no foreign keys.

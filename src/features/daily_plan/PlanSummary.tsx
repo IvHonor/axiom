@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { useDataChanged } from "../../lib/sync";
 import { useLabels } from "../../shell/theme/ThemeProvider";
-import { api, errorMessage, type TodaySummary } from "./api";
+import { api, errorMessage, trackedMinutes, type TodaySummary } from "./api";
 import { clock, duration, nowMinute, today } from "./time";
 
 /** The overview tile: today's progress, what's next, and the top priorities. */
@@ -50,6 +50,11 @@ export function PlanSummary() {
           </div>
         </dl>
       </div>
+      {summary.running && (
+        <p className="dp-sum-next">
+          <span className="dp-pulse" aria-hidden="true" /> Working on {summary.running.title} · {duration(Math.floor(trackedMinutes(summary.running)))}
+        </p>
+      )}
       {next && (
         <p className="dp-sum-next">
           <span className="stat-label">{label(next.inProgress ? "Now" : "Next")}</span>{" "}

@@ -17,7 +17,7 @@ use sea_orm::{
 use super::entities::{checklist_item, column, label, new_id, project, task, task_event, task_label, template};
 use super::types::{
     ActivityItem, Board, BurnupPoint, ColumnCount, ColumnFields, DueTask, Insights, LabelCount, NamedCount,
-    ProjectSummary, Summary, TaskCard, TaskDetail, TaskFields, TaskRef, WeekCount,
+    PlannableCard, ProjectSummary, Summary, TaskCard, TaskDetail, TaskFields, TaskRef, WeekCount,
 };
 use crate::error::{Error, Result};
 
@@ -1081,4 +1081,80 @@ fn label_color(color: &str) -> Result<String> {
     } else {
         Err(Error::Invalid(format!("Unknown label color \"{color}\"")))
     }
+}
+
+// ---------- For the Daily Plan ----------
+
+/// Cards worth planning for `today`: overdue, due today, or in progress (in
+/// the column just before Done). Most urgent first.
+pub async fn plannable_cards(db: &DatabaseConnection, today: NaiveDate) -> Result<Vec<PlannableCard>> {
+    let open = tasks()
+        .filter(task::Column::CompletedAt.is_null())
+        .filter(task::Column::Archived.eq(false))
+        .all(db)
+        .await?;
+    let mut cards = describe_cards(db, open).await?;
+    cards.retain(|c| c.in_progress || c.due_date.is_some_and(|d| d <= today));
+    cards.sort_by_key(|c| (c.due_date.is_none(), c.due_date, !c.in_progress));
+    cards.truncate(30);
+    Ok(cards)
+}
+
+/// The given cards, for showing next to planner tasks linked to them.
+/// Deleted cards are left out.
+pub async fn cards_by_id(db: &DatabaseConnection, ids: &[String]) -> Result<Vec<PlannableCard>> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let found = tasks().filter(task::Column::Id.is_in(ids.iter().map(String::as_str))).all(db).await?;
+    describe_cards(db, found).await
+}
+
+/// Ticks a card off from the planner: moves it to its project's Done column,
+/// or back to the column before Done when un-ticked. Both are recorded in
+/// the card's history, as if dragged on the board.
+pub async fn set_card_done(db: &DatabaseConnection, id: &str, done: bool) -> Result<()> {
+    let card = find_task(db, id).await?;
+    let columns = columns_of(db, &card.project_id).await?;
+    let current_is_done = columns.iter().any(|c| c.id == card.column_id && c.is_done);
+    if done == current_is_done {
+        return Ok(());
+    }
+    let target = if done {
+        columns.iter().find(|c| c.is_done)
+    } else {
+        columns.iter().rev().find(|c| !c.is_done)
+    };
+    match target {
+        Some(column) => move_task(db, id, &column.id, None).await.map(drop),
+        None if done => Err(Error::Invalid("That card's project has no Done column, so it can't be ticked off from here.".into())),
+        None => Ok(()),
+    }
+}
+
+async fn describe_cards(db: &DatabaseConnection, cards: Vec<task::Model>) -> Result<Vec<PlannableCard>> {
+    let all_projects = projects().all(db).await?;
+    let all_columns = columns().all(db).await?;
+    Ok(cards
+        .into_iter()
+        .filter_map(|card| {
+            let project = all_projects.iter().find(|p| p.id == card.project_id)?;
+            let mut own: Vec<&column::Model> = all_columns.iter().filter(|c| c.project_id == card.project_id).collect();
+            own.sort_by(|a, b| a.position.total_cmp(&b.position));
+            let column = own.iter().find(|c| c.id == card.column_id)?;
+            // "In progress" is the last column that isn't Done.
+            let in_progress = !column.is_done && own.iter().rev().find(|c| !c.is_done).is_some_and(|c| c.id == column.id) && own.len() > 1;
+            Some(PlannableCard {
+                id: card.id,
+                title: card.title,
+                project_name: project.name.clone(),
+                project_color: project.color.clone(),
+                column_name: column.name.clone(),
+                due_date: card.due_date,
+                estimate_minutes: card.estimate.map(|h| (h * 60.0).round() as i32).filter(|m| *m > 0),
+                in_progress,
+                done: column.is_done,
+            })
+        })
+        .collect())
 }

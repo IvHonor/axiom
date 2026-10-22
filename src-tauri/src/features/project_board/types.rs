@@ -175,3 +175,22 @@ pub struct LabelCount {
     pub color: String,
     pub count: usize,
 }
+
+/// A card as the Daily Plan shows it: suggested for the day, or linked to a
+/// planner task.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlannableCard {
+    pub id: String,
+    pub title: String,
+    pub project_name: String,
+    /// A palette name, as for projects.
+    pub project_color: String,
+    pub column_name: String,
+    pub due_date: Option<NaiveDate>,
+    /// The card's estimate, converted from hours.
+    pub estimate_minutes: Option<i32>,
+    /// In the column just before Done (usually "Doing").
+    pub in_progress: bool,
+    pub done: bool,
+}

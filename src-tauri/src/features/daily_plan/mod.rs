@@ -15,7 +15,9 @@ pub(crate) mod types;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_rituals;
 
 /// Every table this feature keeps, so sync copies them to the user's other
 /// devices. A new table must be added here to sync.
-pub const SYNCED_TABLES: &[&str] = &["daily_plan_tasks", "daily_plan_blocks", "daily_plan_settings"];
+pub const SYNCED_TABLES: &[&str] = &["daily_plan_tasks", "daily_plan_blocks", "daily_plan_settings", "daily_plan_days"];

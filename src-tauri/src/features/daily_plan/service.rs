@@ -11,9 +11,13 @@ use sea_orm::{
     TransactionTrait,
 };
 
-use super::entities::{block, settings, task};
+use super::entities::{block, day, settings, task};
 use super::parse::{self, DayHint};
-use super::types::{BlockFields, CarryTo, DayPlan, NextBlock, QuickAdded, Settings, TaskFields, TodaySummary};
+use super::types::{
+    BlockFields, CarryTo, DayFields, DayInfo, DayPlan, NextBlock, QuickAdded, ScheduleResult, Settings, TaskFields,
+    TodaySummary,
+};
+use crate::features::project_board::service as board;
 use crate::db::new_id;
 use crate::error::{Error, Result};
 
@@ -33,6 +37,10 @@ fn tasks() -> Select<task::Entity> {
 
 fn blocks() -> Select<block::Entity> {
     block::Entity::find().filter(block::Column::DeletedAt.is_null())
+}
+
+fn days() -> Select<day::Entity> {
+    day::Entity::find().filter(day::Column::DeletedAt.is_null())
 }
 
 /// Soft-deletes the matching rows, so the deletion syncs.
@@ -75,7 +83,34 @@ pub async fn get_day(db: &DatabaseConnection, day: Date, today: Date) -> Result<
         .order_by_asc(task::Column::Position)
         .all(db)
         .await?;
-    Ok(DayPlan { day, tasks: day_tasks, blocks, earlier, inbox, settings: get_settings(db).await? })
+    // Cards from the Project Board: those linked to these tasks, and
+    // suggestions that aren't planned anywhere yet.
+    let linked: Vec<String> = day_tasks.iter().chain(&earlier).chain(&inbox).filter_map(|t| t.board_task_id.clone()).collect();
+    let cards = board::cards_by_id(db, &linked).await?;
+    let planned_cards: Vec<String> = tasks()
+        .filter(task::Column::BoardTaskId.is_not_null())
+        .filter(task::Column::DoneAt.is_null())
+        .all(db)
+        .await?
+        .into_iter()
+        .filter_map(|t| t.board_task_id)
+        .collect();
+    let mut suggestions = if day >= today { board::plannable_cards(db, day).await? } else { Vec::new() };
+    suggestions.retain(|c| !planned_cards.contains(&c.id));
+
+    let running = tasks().filter(task::Column::TimerStartedAt.is_not_null()).one(db).await?;
+    Ok(DayPlan {
+        day,
+        tasks: day_tasks,
+        blocks,
+        earlier,
+        inbox,
+        settings: get_settings(db).await?,
+        info: get_day_info(db, day).await?,
+        cards,
+        suggestions,
+        running,
+    })
 }
 
 pub async fn summary(db: &DatabaseConnection, today: Date, now_minute: i32) -> Result<TodaySummary> {
@@ -99,6 +134,7 @@ pub async fn summary(db: &DatabaseConnection, today: Date, now_minute: i32) -> R
         next_block,
         planned_minutes: planned_minutes(&plan.tasks, &plan.blocks),
         available_minutes: plan.settings.day_end_minute - plan.settings.day_start_minute,
+        running: plan.running,
     })
 }
 
@@ -144,6 +180,8 @@ pub async fn create_task(db: &DatabaseConnection, title: &str, day: Option<Date>
         done_at: Set(None),
         board_task_id: Set(None),
         created_at: Set(now),
+        actual_minutes: Set(0),
+        timer_started_at: Set(None),
         updated_at: Set(now),
         deleted_at: Set(None),
     }
@@ -186,10 +224,241 @@ pub async fn update_task(db: &DatabaseConnection, id: &str, fields: TaskFields) 
     Ok(task.update(db).await?)
 }
 
+/// Ticks a task off (or back on). A running timer stops, and a linked
+/// Project Board card moves to Done (or back) too.
 pub async fn set_done(db: &DatabaseConnection, id: &str, done: bool) -> Result<task::Model> {
+    let task = find_task(db, id).await?;
+    if let Some(card) = &task.board_task_id {
+        match board::set_card_done(db, card, done).await {
+            // The card was deleted from its board: the task still ticks off.
+            Err(Error::NotFound(_)) | Ok(()) => {}
+            Err(other) => return Err(other),
+        }
+    }
+    if done && task.timer_started_at.is_some() {
+        stop_timer(db, id).await?;
+    }
     let mut task: task::ActiveModel = find_task(db, id).await?.into();
     task.done_at = Set(done.then(Utc::now));
     Ok(task.update(db).await?)
+}
+
+// ---------- Time tracking ----------
+
+/// Starts timing a task. Any other running timer stops first: one thing at a time.
+pub async fn start_timer(db: &DatabaseConnection, id: &str) -> Result<task::Model> {
+    find_task(db, id).await?;
+    let running = tasks().filter(task::Column::TimerStartedAt.is_not_null()).all(db).await?;
+    for other in running.iter().filter(|t| t.id != id) {
+        stop_timer(db, &other.id).await?;
+    }
+    let task = find_task(db, id).await?;
+    if task.timer_started_at.is_some() {
+        return Ok(task);
+    }
+    let mut task: task::ActiveModel = task.into();
+    task.timer_started_at = Set(Some(Utc::now()));
+    Ok(task.update(db).await?)
+}
+
+/// Stops a task's timer and adds the time to what it has tracked.
+pub async fn stop_timer(db: &DatabaseConnection, id: &str) -> Result<task::Model> {
+    let task = find_task(db, id).await?;
+    let Some(started) = task.timer_started_at else {
+        return Ok(task);
+    };
+    let minutes = ((Utc::now() - started).num_seconds() as f64 / 60.0).round() as i32;
+    let total = task.actual_minutes + minutes.max(0);
+    let mut task: task::ActiveModel = task.into();
+    task.actual_minutes = Set(total);
+    task.timer_started_at = Set(None);
+    Ok(task.update(db).await?)
+}
+
+// ---------- The Project Board ----------
+
+/// Plans a board card: as a new task on `day` (or in the inbox), or by
+/// moving the task already planned for it.
+pub async fn plan_card(db: &DatabaseConnection, card_id: &str, day: Option<Date>) -> Result<task::Model> {
+    let existing = tasks()
+        .filter(task::Column::BoardTaskId.eq(card_id))
+        .filter(task::Column::DoneAt.is_null())
+        .one(db)
+        .await?;
+    if let Some(task) = existing {
+        return if task.day == day { Ok(task) } else { move_task(db, &task.id, day, None).await };
+    }
+    let card = board::cards_by_id(db, &[card_id.to_owned()]).await?.pop().ok_or(Error::NotFound("Card"))?;
+    let task = create_task(db, &card.title, day, card.estimate_minutes).await?;
+    let mut task: task::ActiveModel = task.into();
+    task.board_task_id = Set(Some(card.id));
+    Ok(task.update(db).await?)
+}
+
+// ---------- The day's rituals ----------
+
+pub async fn get_day_info(db: &impl ConnectionTrait, day: Date) -> Result<DayInfo> {
+    let row = days().filter(day::Column::Id.eq(day.to_string())).one(db).await?;
+    Ok(row.map_or_else(DayInfo::default, |d| DayInfo {
+        intention: d.intention,
+        went_well: d.went_well,
+        do_better: d.do_better,
+        planned_at: d.planned_at,
+        shutdown_at: d.shutdown_at,
+    }))
+}
+
+/// Saves the day's words, and marks it planned or shut down when asked.
+pub async fn update_day(db: &DatabaseConnection, day: Date, fields: DayFields) -> Result<DayInfo> {
+    let id = day.to_string();
+    let existing = days().filter(day::Column::Id.eq(id.as_str())).one(db).await?;
+    let now = Utc::now();
+    let is_new = existing.is_none();
+    let mut row: day::ActiveModel = match existing {
+        Some(found) => found.into(),
+        None => day::ActiveModel {
+            id: Set(id),
+            intention: Set(String::new()),
+            went_well: Set(String::new()),
+            do_better: Set(String::new()),
+            planned_at: Set(None),
+            shutdown_at: Set(None),
+            updated_at: Set(now),
+            deleted_at: Set(None),
+        },
+    };
+    if let Some(text) = fields.intention {
+        row.intention = Set(text.trim().to_owned());
+    }
+    if let Some(text) = fields.went_well {
+        row.went_well = Set(text.trim().to_owned());
+    }
+    if let Some(text) = fields.do_better {
+        row.do_better = Set(text.trim().to_owned());
+    }
+    if fields.planned == Some(true) {
+        row.planned_at = Set(Some(now));
+    }
+    if fields.shut_down == Some(true) {
+        row.shutdown_at = Set(Some(now));
+    }
+    if is_new {
+        row.insert(db).await?;
+    } else {
+        row.update(db).await?;
+    }
+    get_day_info(db, day).await
+}
+
+// ---------- Scheduling ----------
+
+/// After the day slipped: blocks for unfinished tasks that should already
+/// have started move to the next free time from now, in their original
+/// order. Fixed blocks (meetings, lunch) and finished work stay put. Tasks
+/// that no longer fit before the end of the working day lose their block and
+/// wait in the list.
+pub async fn replan(db: &DatabaseConnection, day: Date, now_minute: i32) -> Result<ScheduleResult> {
+    let plan_tasks = tasks().filter(task::Column::Day.eq(day)).all(db).await?;
+    let open = |b: &block::Model| {
+        b.task_id.as_ref().is_some_and(|id| plan_tasks.iter().any(|t| &t.id == id && t.done_at.is_none()))
+    };
+    let day_blocks = blocks().filter(block::Column::Day.eq(day)).order_by_asc(block::Column::StartMinute).all(db).await?;
+    let until = get_settings(db).await?.day_end_minute;
+    let cursor = ceil_quarter(now_minute);
+
+    let mut busy: Vec<(i32, i32)> =
+        day_blocks.iter().filter(|b| !open(b)).map(|b| (b.start_minute, b.start_minute + b.duration_minutes)).collect();
+    // First keep every block that's still in the future and clear, so the
+    // missed ones can't be placed on top of them.
+    let mut to_move = Vec::new();
+    for block in day_blocks.iter().filter(|b| open(b)) {
+        let (start, end) = (block.start_minute, block.start_minute + block.duration_minutes);
+        if start >= cursor && !overlaps(&busy, start, end) {
+            busy.push((start, end));
+        } else {
+            to_move.push(block);
+        }
+    }
+
+    let mut result = ScheduleResult::default();
+    let txn = db.begin().await?;
+    for block in to_move {
+        let length = block.duration_minutes;
+        let title = plan_tasks
+            .iter()
+            .find(|t| Some(&t.id) == block.task_id.as_ref())
+            .map(|t| t.title.clone())
+            .unwrap_or_default();
+        match free_slot(&busy, cursor, length, until) {
+            Some(at) => {
+                let mut moving: block::ActiveModel = block.clone().into();
+                moving.start_minute = Set(at);
+                moving.update(&txn).await?;
+                busy.push((at, at + length));
+                result.scheduled.push(title);
+            }
+            None => {
+                bury!(block, &txn, block::Column::Id.eq(block.id.as_str()));
+                result.left_over.push(title);
+            }
+        }
+    }
+    txn.commit().await?;
+    Ok(result)
+}
+
+/// Places the day's unscheduled tasks into free time from `from_minute`,
+/// top priorities first, each for its estimate (or 30 minutes). A one-off
+/// suggestion: nothing moves again by itself afterwards.
+pub async fn fit_into_day(db: &DatabaseConnection, day: Date, from_minute: i32) -> Result<ScheduleResult> {
+    let settings = get_settings(db).await?;
+    let mut open = tasks()
+        .filter(task::Column::Day.eq(day))
+        .filter(task::Column::DoneAt.is_null())
+        .order_by_asc(task::Column::Position)
+        .all(db)
+        .await?;
+    open.sort_by_key(|t| t.focus_rank.unwrap_or(i16::MAX));
+    let day_blocks = blocks().filter(block::Column::Day.eq(day)).all(db).await?;
+    let mut busy: Vec<(i32, i32)> = day_blocks.iter().map(|b| (b.start_minute, b.start_minute + b.duration_minutes)).collect();
+    let from = ceil_quarter(from_minute.max(settings.day_start_minute));
+
+    let mut result = ScheduleResult::default();
+    for task in open.iter().filter(|t| !day_blocks.iter().any(|b| b.task_id.as_ref() == Some(&t.id))) {
+        let length = task.estimate_minutes.unwrap_or(DEFAULT_BLOCK_MINUTES);
+        match free_slot(&busy, from, length, settings.day_end_minute) {
+            Some(at) => {
+                create_block(db, day, at, length, "", Some(&task.id)).await?;
+                busy.push((at, at + length));
+                result.scheduled.push(task.title.clone());
+            }
+            None => result.left_over.push(task.title.clone()),
+        }
+    }
+    Ok(result)
+}
+
+/// The earliest quarter-hour start at or after `from` where `length`
+/// minutes fit between the busy spans and end by `until`.
+fn free_slot(busy: &[(i32, i32)], from: i32, length: i32, until: i32) -> Option<i32> {
+    let mut at = ceil_quarter(from);
+    loop {
+        if at + length > until {
+            return None;
+        }
+        match busy.iter().filter(|(s, e)| *s < at + length && *e > at).map(|(_, e)| *e).max() {
+            Some(end) => at = ceil_quarter(end),
+            None => return Some(at),
+        }
+    }
+}
+
+fn overlaps(busy: &[(i32, i32)], start: i32, end: i32) -> bool {
+    busy.iter().any(|(s, e)| *s < end && *e > start)
+}
+
+fn ceil_quarter(minute: i32) -> i32 {
+    (minute + 14).div_euclid(15) * 15
 }
 
 /// Makes a task one of its day's top priorities (taking the next rank), or

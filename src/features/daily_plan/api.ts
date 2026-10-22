@@ -18,6 +18,45 @@ export interface PlanTask {
   boardTaskId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Tracked so far, not counting a running timer. */
+  actualMinutes: number;
+  /** Set while its timer runs. */
+  timerStartedAt: string | null;
+}
+
+/** A Project Board card, as the planner shows it. Mirrors `PlannableCard`. */
+export interface Card {
+  id: string;
+  title: string;
+  projectName: string;
+  projectColor: string;
+  columnName: string;
+  dueDate: Day | null;
+  estimateMinutes: number | null;
+  inProgress: boolean;
+  done: boolean;
+}
+
+export interface DayInfo {
+  intention: string;
+  wentWell: string;
+  doBetter: string;
+  plannedAt: string | null;
+  shutdownAt: string | null;
+}
+
+/** Changes to a day: anything left out stays as it is. */
+export interface DayFields {
+  intention?: string;
+  wentWell?: string;
+  doBetter?: string;
+  planned?: boolean;
+  shutDown?: boolean;
+}
+
+export interface ScheduleResult {
+  scheduled: string[];
+  leftOver: string[];
 }
 
 export interface Block {
@@ -45,6 +84,13 @@ export interface DayPlan {
   earlier: PlanTask[];
   inbox: PlanTask[];
   settings: Settings;
+  info: DayInfo;
+  /** Board cards linked to the tasks above. */
+  cards: Card[];
+  /** Board cards due, overdue or in progress, not planned yet. */
+  suggestions: Card[];
+  /** The task being timed, on any day. */
+  running: PlanTask | null;
 }
 
 export interface TodaySummary {
@@ -54,6 +100,7 @@ export interface TodaySummary {
   nextBlock: { startMinute: number; durationMinutes: number; title: string; inProgress: boolean } | null;
   plannedMinutes: number;
   availableMinutes: number;
+  running: PlanTask | null;
 }
 
 export interface TaskFields {
@@ -92,7 +139,24 @@ export const api = {
   updateBlock: (id: string, fields: BlockFields) => invoke<Block>("plan_update_block", { id, fields }),
   deleteBlock: (id: string) => invoke<void>("plan_delete_block", { id }),
   updateSettings: (settings: Settings) => invoke<Settings>("plan_update_settings", { settings }),
+  startTimer: (id: string) => invoke<PlanTask>("plan_start_timer", { id }),
+  stopTimer: (id: string) => invoke<PlanTask>("plan_stop_timer", { id }),
+  /** Plans a board card for a day (or the inbox); returns its planner task. */
+  planCard: (cardId: string, day: Day | null) => invoke<PlanTask>("plan_card", { cardId, day }),
+  updateDay: (day: Day, fields: DayFields) => invoke<DayInfo>("plan_update_day", { day, fields }),
+  replan: (day: Day, nowMinute: number) => invoke<ScheduleResult>("plan_replan", { day, nowMinute }),
+  fitIntoDay: (day: Day, fromMinute: number) => invoke<ScheduleResult>("plan_fit_into_day", { day, fromMinute }),
 };
+
+/** Minutes tracked on a task, including a running timer. */
+export function trackedMinutes(task: PlanTask, now = Date.now()): number {
+  const running = task.timerStartedAt ? (now - Date.parse(task.timerStartedAt)) / 60_000 : 0;
+  return task.actualMinutes + Math.max(0, running);
+}
+
+/** Drag data for a board card, sharing the task drag type: "card:<id>". */
+export const cardDragId = (cardId: string) => `card:${cardId}`;
+export const cardFromDrag = (id: string) => (id.startsWith("card:") ? id.slice(5) : null);
 
 export function errorMessage(err: unknown): string {
   return typeof err === "string" ? err : err instanceof Error ? err.message : String(err);

@@ -1,45 +1,53 @@
-import { useState, type DragEvent, type ReactNode } from "react";
-import { ArrowRight, Check, Ellipsis, Inbox, Star, Trash2 } from "lucide-react";
+import { useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
+import { ArrowRight, Check, Ellipsis, Inbox, Kanban, Pause, Play, Plus, Star, Trash2 } from "lucide-react";
 import { Dropdown } from "../../shell/ui/Dropdown";
-import { api, MAX_FOCUS, type Block, type Day, type DayPlan, type PlanTask } from "./api";
+import { api, cardDragId, cardFromDrag, MAX_FOCUS, trackedMinutes, type Block, type Card, type Day, type DayPlan, type PlanTask } from "./api";
+import { colorOf } from "./palette";
 import { addDays, clock, duration, parseDuration, relativeDay } from "./time";
 
-/** Drag-and-drop data type for a task, used by the list and the timeline. */
+/** Drag-and-drop data type for a task (or a board card), used by the list and the timeline. */
 export const TASK_DRAG = "application/x-axiom-plan-task";
 
 /** The task being dragged. Browsers hide drag data until the drop, but the
  * timeline needs the task's length while it's still being dragged. */
-export const draggedTask: { id: string | null } = { id: null };
+export const draggedTask: { id: string | null; minutes: number | null } = { id: null, minutes: null };
 
 type Act = (change: () => Promise<unknown>) => Promise<void>;
 
 interface TaskPanelProps {
   plan: DayPlan;
   today: Day;
+  /** Re-renders running timers. */
+  now: number;
   act: Act;
+  /** Opens focus mode on a task, starting its timer. */
+  onFocus: (task: PlanTask) => void;
 }
 
-/** The left column: top priorities, the day's tasks, leftovers and the inbox. */
-export function TaskPanel({ plan, today, act }: TaskPanelProps) {
+/** The left column: top priorities, the day's tasks, board suggestions, leftovers and the inbox. */
+export function TaskPanel({ plan, today, now, act, onFocus }: TaskPanelProps) {
   const isToday = plan.day === today;
   const focus = plan.tasks.filter((t) => t.focusRank !== null);
   const rest = plan.tasks.filter((t) => t.focusRank === null);
   const focusFull = focus.length >= MAX_FOCUS;
   const scheduled = (task: PlanTask) => plan.blocks.find((b) => b.taskId === task.id);
+  const cardOf = (task: PlanTask) => plan.cards.find((c) => c.id === task.boardTaskId);
 
-  /** Drops onto a list (not a row) move the task to the end of it. */
+  /** A task or board card dropped on a list (not a row) goes to the end of it. */
   const listDrop = (day: Day | null) => (e: DragEvent) => {
     const id = e.dataTransfer.getData(TASK_DRAG);
     if (!id) return;
     e.preventDefault();
-    void act(() => api.moveTask(id, day));
+    const card = cardFromDrag(id);
+    void act(() => (card ? api.planCard(card, day) : api.moveTask(id, day)));
   };
   const rowDrop = (day: Day | null, beforeId: string) => (e: DragEvent) => {
     const id = e.dataTransfer.getData(TASK_DRAG);
     if (!id || id === beforeId) return;
     e.preventDefault();
     e.stopPropagation();
-    void act(() => api.moveTask(id, day, beforeId));
+    const card = cardFromDrag(id);
+    void act(() => (card ? api.planCard(card, day) : api.moveTask(id, day, beforeId)));
   };
 
   const row = (task: PlanTask, list: Day | null, extra?: ReactNode) => (
@@ -47,9 +55,12 @@ export function TaskPanel({ plan, today, act }: TaskPanelProps) {
       key={task.id}
       task={task}
       block={scheduled(task)}
+      card={cardOf(task)}
       focusFull={focusFull}
       day={plan.day}
+      now={now}
       act={act}
+      onFocus={onFocus}
       onDropBefore={rowDrop(list, task.id)}
       extra={extra}
     />
@@ -68,7 +79,7 @@ export function TaskPanel({ plan, today, act }: TaskPanelProps) {
         )}
       </section>
 
-      <section className="dp-section dp-grow" onDragOver={allowTaskDrop} onDrop={listDrop(plan.day)}>
+      <section className="dp-section" onDragOver={allowTaskDrop} onDrop={listDrop(plan.day)}>
         <h3 className="dp-heading">
           Tasks <span className="dp-count">{rest.length}</span>
         </h3>
@@ -76,10 +87,23 @@ export function TaskPanel({ plan, today, act }: TaskPanelProps) {
           <ul className="dp-list">{rest.map((t) => row(t, plan.day))}</ul>
         ) : (
           <p className="dp-hint">
-            {plan.tasks.length ? "Everything planned is a top priority." : "Nothing planned yet. Add a task above, or drag one in from the inbox."}
+            {plan.tasks.length ? "Everything planned is a top priority." : "Nothing planned yet. Add a task above, or drag one in from below."}
           </p>
         )}
       </section>
+
+      {plan.suggestions.length > 0 && (
+        <section className="dp-section dp-suggestions">
+          <h3 className="dp-heading">
+            <Kanban size={13} strokeWidth={1.75} /> From your boards <span className="dp-count">{plan.suggestions.length}</span>
+          </h3>
+          <ul className="dp-list">
+            {plan.suggestions.map((card) => (
+              <CardRow key={card.id} card={card} day={plan.day} today={today} act={act} />
+            ))}
+          </ul>
+        </section>
+      )}
 
       {isToday && plan.earlier.length > 0 && (
         <section className="dp-section dp-earlier">
@@ -146,35 +170,85 @@ const allowTaskDrop = (e: DragEvent) => {
   if (e.dataTransfer.types.includes(TASK_DRAG)) e.preventDefault();
 };
 
+/** "Due today", "Overdue", "Due Fri 24 Oct" or the column it's in. */
+export function cardStatus(card: Card, today: Day): { text: string; urgent: boolean } {
+  if (card.dueDate && card.dueDate < today) return { text: "Overdue", urgent: true };
+  if (card.dueDate === today) return { text: "Due today", urgent: true };
+  if (card.dueDate) return { text: `Due ${relativeDay(card.dueDate, today)}`, urgent: false };
+  return { text: card.inProgress ? `In ${card.columnName}` : card.columnName, urgent: false };
+}
+
+/** A small project tag in the project's colour. */
+export function ProjectChip({ card }: { card: Card }) {
+  return (
+    <span className="dp-project" style={{ "--project": colorOf(card.projectColor) } as CSSProperties} title={`${card.projectName} · ${card.columnName}`}>
+      {card.projectName}
+    </span>
+  );
+}
+
+/** A board card suggested for the day: add it, or drag it onto the timeline. */
+export function CardRow({ card, day, today, act }: { card: Card; day: Day; today: Day; act: Act }) {
+  const status = cardStatus(card, today);
+  return (
+    <li
+      className="dp-row dp-card-row"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(TASK_DRAG, cardDragId(card.id));
+        e.dataTransfer.effectAllowed = "copy";
+        draggedTask.id = cardDragId(card.id);
+        draggedTask.minutes = card.estimateMinutes;
+      }}
+      onDragEnd={() => Object.assign(draggedTask, { id: null, minutes: null })}
+    >
+      <button className="icon-btn dp-add" title="Add to this day" aria-label={`Add ${card.title} to this day`} onClick={() => act(() => api.planCard(card.id, day))}>
+        <Plus size={14} strokeWidth={2} />
+      </button>
+      <span className="dp-title">{card.title}</span>
+      <ProjectChip card={card} />
+      <span className={status.urgent ? "dp-due is-urgent" : "dp-due"}>{status.text}</span>
+      {card.estimateMinutes && <span className="dp-chip">{duration(card.estimateMinutes)}</span>}
+    </li>
+  );
+}
+
 interface TaskRowProps {
   task: PlanTask;
   block: Block | undefined;
+  /** The board card it came from, if any. */
+  card: Card | undefined;
   focusFull: boolean;
-  /** The day being shown, for "move to tomorrow". */
+  /** The day being shown, for "move to the next day". */
   day: Day;
+  now: number;
   act: Act;
+  onFocus: (task: PlanTask) => void;
   onDropBefore: (e: DragEvent) => void;
   extra?: ReactNode;
 }
 
-function TaskRow({ task, block, focusFull, day, act, onDropBefore, extra }: TaskRowProps) {
+function TaskRow({ task, block, card, focusFull, day, now, act, onFocus, onDropBefore, extra }: TaskRowProps) {
   const [editing, setEditing] = useState<"title" | "estimate" | null>(null);
   const [over, setOver] = useState(false);
   const done = task.doneAt !== null;
   const starred = task.focusRank !== null;
+  const running = task.timerStartedAt !== null;
+  const tracked = Math.floor(trackedMinutes(task, now));
   const save = (fields: Partial<{ title: string; estimateMinutes: number | null }>) =>
     act(() => api.updateTask(task.id, { title: task.title, notes: task.notes, estimateMinutes: task.estimateMinutes, ...fields }));
 
   return (
     <li
-      className={`dp-row${done ? " is-done" : ""}${over ? " is-drop-target" : ""}`}
+      className={`dp-row${done ? " is-done" : ""}${running ? " is-running" : ""}${over ? " is-drop-target" : ""}`}
       draggable={editing === null}
       onDragStart={(e) => {
         e.dataTransfer.setData(TASK_DRAG, task.id);
         e.dataTransfer.effectAllowed = "move";
         draggedTask.id = task.id;
+        draggedTask.minutes = task.estimateMinutes;
       }}
-      onDragEnd={() => (draggedTask.id = null)}
+      onDragEnd={() => Object.assign(draggedTask, { id: null, minutes: null })}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes(TASK_DRAG)) return;
         e.preventDefault();
@@ -210,9 +284,17 @@ function TaskRow({ task, block, focusFull, day, act, onDropBefore, extra }: Task
         </span>
       )}
 
+      {card && <ProjectChip card={card} />}
+
       {block && (
         <span className="dp-chip dp-time" title="Scheduled">
           {clock(block.startMinute)}
+        </span>
+      )}
+
+      {(tracked > 0 || running) && (
+        <span className={`dp-chip dp-tracked${running ? " is-running" : ""}`} title="Time tracked">
+          {duration(tracked)}
         </span>
       )}
 
@@ -230,16 +312,23 @@ function TaskRow({ task, block, focusFull, day, act, onDropBefore, extra }: Task
           onCancel={() => setEditing(null)}
         />
       ) : (
-        <button
-          className={`dp-chip dp-estimate${task.estimateMinutes ? "" : " is-empty"}`}
-          title="How long it'll take"
-          onClick={() => setEditing("estimate")}
-        >
+        <button className={`dp-chip dp-estimate${task.estimateMinutes ? "" : " is-empty"}`} title="How long it'll take" onClick={() => setEditing("estimate")}>
           {task.estimateMinutes ? duration(task.estimateMinutes) : "+ time"}
         </button>
       )}
 
       {extra}
+
+      {!done && task.day && (
+        <button
+          className={`icon-btn dp-timer${running ? " is-on" : ""}`}
+          title={running ? "Pause the timer" : "Start a timer"}
+          aria-label={running ? "Pause the timer" : "Start a timer"}
+          onClick={() => act(() => (running ? api.stopTimer(task.id) : api.startTimer(task.id)))}
+        >
+          {running ? <Pause size={14} strokeWidth={2} /> : <Play size={14} strokeWidth={2} />}
+        </button>
+      )}
 
       {task.day && (
         <button
@@ -257,6 +346,11 @@ function TaskRow({ task, block, focusFull, day, act, onDropBefore, extra }: Task
       <Dropdown label="Task options" icon={<Ellipsis size={14} strokeWidth={1.75} />}>
         {(close) => (
           <>
+            {!done && task.day && (
+              <button className="menu-item" onClick={() => (close(), onFocus(task))}>
+                Focus on this
+              </button>
+            )}
             <button className="menu-item" onClick={() => (close(), setEditing("title"))}>
               Rename
             </button>

@@ -23,6 +23,10 @@ pub mod task {
         /// The Project Board card this task stands for, if any.
         pub board_task_id: Option<String>,
         pub created_at: DateTimeUtc,
+        /// Time tracked on it so far, not counting a timer that's running.
+        pub actual_minutes: i32,
+        /// When its running timer started; empty when no timer is running.
+        pub timer_started_at: Option<DateTimeUtc>,
         pub updated_at: DateTimeUtc,
         #[serde(skip)]
         pub deleted_at: Option<DateTimeUtc>,
@@ -78,6 +82,31 @@ pub mod settings {
         pub day_start_minute: i32,
         pub day_end_minute: i32,
         pub buffer_percent: i16,
+        pub updated_at: DateTimeUtc,
+        pub deleted_at: Option<DateTimeUtc>,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    crate::db::stamp_updated_at!();
+}
+
+/// One day's rituals: the morning intention and the evening reflection.
+/// The id is the date, e.g. "2026-10-22".
+pub mod day {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "daily_plan_days")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub intention: String,
+        pub went_well: String,
+        pub do_better: String,
+        pub planned_at: Option<DateTimeUtc>,
+        pub shutdown_at: Option<DateTimeUtc>,
         pub updated_at: DateTimeUtc,
         pub deleted_at: Option<DateTimeUtc>,
     }

@@ -7,7 +7,7 @@ use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use super::service::*;
 use super::types::{BlockFields, CarryTo, Settings, TaskFields};
 
-async fn setup() -> DatabaseConnection {
+pub(super) async fn setup() -> DatabaseConnection {
     let mut options = ConnectOptions::new("sqlite::memory:");
     options.max_connections(1).sqlx_logging(false);
     let db = Database::connect(options).await.unwrap();
@@ -15,11 +15,11 @@ async fn setup() -> DatabaseConnection {
     db
 }
 
-fn day(d: u32) -> NaiveDate {
+pub(super) fn day(d: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, 10, d).unwrap()
 }
 
-const TODAY: u32 = 22;
+pub(super) const TODAY: u32 = 22;
 
 async fn titles(db: &DatabaseConnection, on: u32) -> Vec<String> {
     get_day(db, day(on), day(TODAY)).await.unwrap().tasks.into_iter().map(|t| t.title).collect()

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type PointerEvent } from "react";
 import { Check } from "lucide-react";
-import { api, type Block, type Day, type DayPlan, type PlanTask } from "./api";
+import { api, cardFromDrag, type Block, type Day, type DayPlan, type PlanTask } from "./api";
 import { BLOCK_COLORS, colorOf } from "./palette";
 import { draggedTask, TASK_DRAG } from "./TaskPanel";
 import { clock, duration, nowMinute, parseClock, parseDuration } from "./time";
@@ -134,12 +134,9 @@ export function Timeline({ plan, today, act }: TimelineProps) {
     void act(() => api.updateBlock(block.id, { startMinute: start, durationMinutes: length, title: block.title, color: block.color }));
   };
 
-  // ---- Dropping a task from the list ----
+  // ---- Dropping a task (or a board card) from the list ----
 
-  const dropLength = () => {
-    const all = [...plan.tasks, ...plan.inbox, ...plan.earlier];
-    return all.find((t) => t.id === draggedTask.id)?.estimateMinutes ?? NEW_BLOCK;
-  };
+  const dropLength = () => draggedTask.minutes ?? NEW_BLOCK;
 
   const onDragOver = (e: DragEvent) => {
     if (!e.dataTransfer.types.includes(TASK_DRAG)) return;
@@ -156,7 +153,12 @@ export function Timeline({ plan, today, act }: TimelineProps) {
     e.preventDefault();
     const length = Math.min(dropLength(), DAY);
     const start = clampStart(floorSnap(minuteAt(e.clientY)), length);
-    void act(() => api.createBlock(plan.day, start, length, "", id));
+    const card = cardFromDrag(id);
+    // A board card becomes a planner task first, then gets its block.
+    void act(async () => {
+      const taskId = card ? (await api.planCard(card, plan.day)).id : id;
+      await api.createBlock(plan.day, start, length, "", taskId);
+    });
   };
 
   // ---- Layout ----
@@ -201,7 +203,7 @@ export function Timeline({ plan, today, act }: TimelineProps) {
           return (
             <div
               key={block.id}
-              className={`dp-block${done ? " is-done" : ""}${short ? " is-short" : ""}${drag && "id" in drag && drag.id === block.id ? " is-dragging" : ""}`}
+              className={`dp-block${done ? " is-done" : ""}${task?.timerStartedAt ? " is-running" : ""}${short ? " is-short" : ""}${drag && "id" in drag && drag.id === block.id ? " is-dragging" : ""}`}
               style={
                 {
                   top: start * PX,

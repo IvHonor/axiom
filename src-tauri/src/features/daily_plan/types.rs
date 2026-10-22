@@ -1,10 +1,12 @@
 //! The shapes the Daily Plan sends to and receives from React. Mirrored in
 //! `src/features/daily_plan/api.ts`.
 
+use chrono::{DateTime, Utc};
 use sea_orm::prelude::Date;
 use serde::{Deserialize, Serialize};
 
 use super::entities::{block, task};
+use crate::features::project_board::types::PlannableCard;
 
 /// Everything the planner shows for one day.
 #[derive(Debug, Serialize)]
@@ -19,6 +21,46 @@ pub struct DayPlan {
     /// Tasks without a day.
     pub inbox: Vec<task::Model>,
     pub settings: Settings,
+    /// The day's intention and reflection, and whether it's been planned or shut down.
+    pub info: DayInfo,
+    /// Project Board cards linked to the tasks above.
+    pub cards: Vec<PlannableCard>,
+    /// Board cards due, overdue or in progress that aren't planned yet.
+    pub suggestions: Vec<PlannableCard>,
+    /// The task whose timer is running, on any day.
+    pub running: Option<task::Model>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DayInfo {
+    pub intention: String,
+    pub went_well: String,
+    pub do_better: String,
+    pub planned_at: Option<DateTime<Utc>>,
+    pub shutdown_at: Option<DateTime<Utc>>,
+}
+
+/// Changes to a day: fields left out stay as they are.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DayFields {
+    pub intention: Option<String>,
+    pub went_well: Option<String>,
+    pub do_better: Option<String>,
+    /// Marks the morning planning as done.
+    pub planned: Option<bool>,
+    /// Marks the evening shutdown as done.
+    pub shut_down: Option<bool>,
+}
+
+/// What scheduling or replanning did, by task title.
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleResult {
+    pub scheduled: Vec<String>,
+    /// Didn't fit before the end of the working day.
+    pub left_over: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -83,6 +125,8 @@ pub struct TodaySummary {
     pub next_block: Option<NextBlock>,
     pub planned_minutes: i32,
     pub available_minutes: i32,
+    /// The task being timed, if any.
+    pub running: Option<task::Model>,
 }
 
 #[derive(Debug, Serialize)]

@@ -7,7 +7,9 @@ use tauri::State;
 
 use super::entities::{block, task};
 use super::service;
-use super::types::{BlockFields, CarryTo, DayPlan, QuickAdded, Settings, TaskFields, TodaySummary};
+use super::types::{
+    BlockFields, CarryTo, DayFields, DayInfo, DayPlan, QuickAdded, ScheduleResult, Settings, TaskFields, TodaySummary,
+};
 use crate::db::Db;
 use crate::error::Result;
 
@@ -86,4 +88,34 @@ pub async fn plan_delete_block(db: State<'_, Db>, id: String) -> Result<()> {
 #[tauri::command]
 pub async fn plan_update_settings(db: State<'_, Db>, settings: Settings) -> Result<Settings> {
     service::update_settings(&db.conn().await?, settings).await
+}
+
+#[tauri::command]
+pub async fn plan_start_timer(db: State<'_, Db>, id: String) -> Result<task::Model> {
+    service::start_timer(&db.conn().await?, &id).await
+}
+
+#[tauri::command]
+pub async fn plan_stop_timer(db: State<'_, Db>, id: String) -> Result<task::Model> {
+    service::stop_timer(&db.conn().await?, &id).await
+}
+
+#[tauri::command]
+pub async fn plan_card(db: State<'_, Db>, card_id: String, day: Option<Date>) -> Result<task::Model> {
+    service::plan_card(&db.conn().await?, &card_id, day).await
+}
+
+#[tauri::command]
+pub async fn plan_update_day(db: State<'_, Db>, day: Date, fields: DayFields) -> Result<DayInfo> {
+    service::update_day(&db.conn().await?, day, fields).await
+}
+
+#[tauri::command]
+pub async fn plan_replan(db: State<'_, Db>, day: Date, now_minute: i32) -> Result<ScheduleResult> {
+    service::replan(&db.conn().await?, day, now_minute).await
+}
+
+#[tauri::command]
+pub async fn plan_fit_into_day(db: State<'_, Db>, day: Date, from_minute: i32) -> Result<ScheduleResult> {
+    service::fit_into_day(&db.conn().await?, day, from_minute).await
 }

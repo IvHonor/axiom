@@ -1988,3 +1988,42 @@ button.dp-week-head:hover .dp-week-date {
   margin: 0;
   font-size: 11.5px;
 }
+
+/* ---------- Connect a calendar ---------- */
+
+.dp-connect-card {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 20px 0;
+  padding: 10px 10px 10px 14px;
+  font-size: 12.5px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+.dp-connect-card-icon {
+  flex: none;
+  color: var(--accent);
+}
+
+.dp-connect-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dp-connect-card-text span {
+  color: var(--text-dim);
+}
+
+.dp-connect-card-actions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}

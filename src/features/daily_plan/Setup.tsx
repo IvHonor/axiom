@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { CalendarDays, Pencil, RefreshCw, Repeat, X } from "lucide-react";
 import { ConfirmButton } from "../../shell/ui/ConfirmButton";
 import { api, errorMessage, type Calendar, type CalendarAccount, type CalendarSetup, type Routine, type RoutineFields } from "./api";
@@ -216,7 +216,7 @@ type Busy = "google" | "microsoft" | "caldav" | "link" | "refresh" | "publish" |
 
 /** Calendar accounts and links: their events show as busy time, and the
  * plan can be published into one calendar. */
-export function CalendarsDialog({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
+export function CalendarsDialog({ start, onClose, onChanged }: { start?: "google" | "microsoft" | "caldav"; onClose: () => void; onChanged: () => void }) {
   const [setup, setSetup] = useState<CalendarSetup | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
@@ -257,6 +257,17 @@ export function CalendarsDialog({ onClose, onChanged }: { onClose: () => void; o
   const signingIn = busy === "google" || busy === "microsoft";
 
   const connect = (provider: "google" | "microsoft") => run(provider, () => api.connectCalendar(provider, today));
+
+  // Opened from a "Connect" button: go straight into that sign-in.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!setup || !start || started.current) return;
+    started.current = true;
+    if (start === "caldav") setForm("caldav");
+    else if (setup.available[start]) void connect(start);
+    // connect only reads values captured with setup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setup, start]);
 
   return (
     <Dialog icon={<CalendarDays size={16} strokeWidth={1.75} />} title="Calendars" onClose={onClose}>
@@ -399,12 +410,13 @@ export function CalendarsDialog({ onClose, onChanged }: { onClose: () => void; o
   );
 }
 
-function ProviderButton({ name, available, disabled, onClick }: { name: string; available: boolean | undefined; disabled: boolean; onClick: () => void }) {
+/** Connect button for one provider; greyed out when this version can't connect to it. */
+export function ProviderButton({ name, available, disabled, onClick }: { name: string; available: boolean | undefined; disabled: boolean; onClick: () => void }) {
   return (
     <button
       className="btn btn-sm dp-provider"
       disabled={disabled || !available}
-      title={available ? `Connect a ${name} account` : `This copy of Axiom isn't set up to connect to ${name}.`}
+      title={available ? `Connect a ${name} account` : `${name} isn't available in this version of Axiom yet.`}
       onClick={onClick}
     >
       {name}

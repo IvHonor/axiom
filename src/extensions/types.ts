@@ -29,6 +29,15 @@ export interface AreaContribution {
   View?: ComponentType;
   /** Compact tile for the overview. */
   Summary?: ComponentType;
+  /** Items listed under the area in the sidebar, like its views. */
+  Nav?: ComponentType<AreaNavProps>;
+}
+
+export interface AreaNavProps {
+  /** Whether the area's tab is the one showing. */
+  active: boolean;
+  /** Opens (or focuses) the area's tab. */
+  onOpen: () => void;
 }
 
 /**

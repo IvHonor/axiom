@@ -2,6 +2,7 @@ import "./plan.css";
 import { CalendarClock } from "lucide-react";
 import type { ExtensionManifest } from "../../extensions/types";
 import { DailyPlanView } from "./DailyPlanView";
+import { PlanNav } from "./PlanNav";
 import { PlanSummary } from "./PlanSummary";
 
 export const dailyPlan: ExtensionManifest = {
@@ -20,12 +21,12 @@ export const dailyPlan: ExtensionManifest = {
     "Unfinished tasks carry over, and an inbox for things without a day",
     "Routines for the blocks that repeat every week",
     "A week view to spread tasks across the days",
-    "Your meetings from Google Calendar or Outlook, shown as busy time",
+    "Connect Google Calendar, Outlook or iCloud: meetings show as busy time, and your plan shows in your calendar",
     "Insights on focus time, follow-through and how long tasks really take",
     "Syncs between your computers like everything else",
   ],
   version: "0.1.0",
   publisher: "Axiom",
   icon: CalendarClock,
-  area: { View: DailyPlanView, Summary: PlanSummary },
+  area: { View: DailyPlanView, Summary: PlanSummary, Nav: PlanNav },
 };

@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { LayoutDashboard } from "lucide-react";
 import type { ExtensionManifest } from "../extensions/types";
 import { Section } from "./ui/Section";
@@ -35,16 +36,20 @@ export function AreasPanel({ areas, view, onOpen, onBrowse }: AreasPanelProps) {
               </button>
             </div>
           ) : (
-            areas.map((ext) => (
-              <button
-                key={ext.id}
-                className={isActive(ext.id) ? "nav-item is-active" : "nav-item"}
-                onClick={() => onOpen({ kind: "extension", id: ext.id })}
-              >
-                <ext.icon size={16} strokeWidth={1.5} />
-                {ext.name}
-              </button>
-            ))
+            areas.map((ext) => {
+              const Nav = ext.area?.Nav;
+              const openArea = () => onOpen({ kind: "extension", id: ext.id });
+              return (
+                <Fragment key={ext.id}>
+                  <button className={isActive(ext.id) ? "nav-item is-active" : "nav-item"} onClick={openArea}>
+                    <ext.icon size={16} strokeWidth={1.5} />
+                    {ext.name}
+                  </button>
+                  {/* The area's own items, such as its views. */}
+                  {Nav && <Nav active={isActive(ext.id)} onOpen={openArea} />}
+                </Fragment>
+              );
+            })
           )}
         </Section>
       </div>

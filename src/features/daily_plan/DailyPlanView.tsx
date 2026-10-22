@@ -2,35 +2,26 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { BarChart3, CalendarDays, CalendarRange, Check, ChevronLeft, ChevronRight, Moon, Plus, Repeat, RotateCcw, Settings2, Sunrise, X } from "lucide-react";
 import { useDataChanged } from "../../lib/sync";
 import { Dropdown } from "../../shell/ui/Dropdown";
-import { api, errorMessage, nudgeCalendars, type DayPlan, type PlanTask, type Settings } from "./api";
+import { api, errorMessage, nudgeCalendars, type CalendarSetup, type DayPlan, type PlanTask, type Settings } from "./api";
 import { Capacity } from "./Capacity";
 import { FocusBar, FocusMode } from "./Focus";
 import { Insights } from "./Insights";
 import { PlanRitual, ShutdownRitual } from "./Rituals";
-import { CalendarsDialog, RoutinesDialog } from "./Setup";
+import { setPlanUi, usePlanUi, type PlanView } from "./planUi";
+import { CalendarsDialog, ProviderButton, RoutinesDialog } from "./Setup";
 import { TaskPanel } from "./TaskPanel";
 import { Timeline } from "./Timeline";
 import { addDays, clock, longDay, mediumDay, mondayOf, nowMinute, parseClock, relativeDay, today as todayNow } from "./time";
 import { WeekView } from "./WeekView";
 
-type View = "day" | "week" | "insights";
-
-const VIEWS: { id: View; label: string; icon: typeof CalendarDays }[] = [
+const VIEWS: { id: PlanView; label: string; icon: typeof CalendarDays }[] = [
   { id: "day", label: "Day", icon: CalendarDays },
   { id: "week", label: "Week", icon: CalendarRange },
   { id: "insights", label: "Insights", icon: BarChart3 },
 ];
 
-const VIEW_KEY = "axiom.dailyPlan.view";
-
-function savedView(): View {
-  try {
-    const v = localStorage.getItem(VIEW_KEY);
-    return v === "week" || v === "insights" ? v : "day";
-  } catch {
-    return "day";
-  }
-}
+/** "Not now" on the connect-a-calendar card, remembered on this computer. */
+const CONNECT_HINT_KEY = "axiom.dailyPlan.connectHintDismissed";
 
 /** How often to ask for a calendar update while the planner is open (the
  * backend only re-reads calendars older than 15 minutes). */
@@ -38,10 +29,10 @@ const CALENDAR_CHECK_MS = 5 * 60_000;
 
 /** The Daily Plan: the day's tasks beside its timeline, the week, and insights. */
 export function DailyPlanView() {
-  const [view, setViewState] = useState<View>(savedView);
+  const { view, dialog, todayAsked } = usePlanUi();
   /** Bumped when calendars or routines change, so every view reloads. */
   const [version, setVersion] = useState(0);
-  const [dialog, setDialog] = useState<"routines" | "calendars" | null>(null);
+  const [calendars, setCalendars] = useState<CalendarSetup | null>(null);
   const [today, setToday] = useState(todayNow);
   const [day, setDay] = useState(todayNow);
   const [plan, setPlan] = useState<DayPlan | null>(null);
@@ -73,15 +64,19 @@ export function DailyPlanView() {
   useEffect(() => void reload(), [reload, today, version]);
   useDataChanged(reload);
 
-  const setView = (next: View) => {
-    setViewState(next);
-    try {
-      localStorage.setItem(VIEW_KEY, next);
-    } catch {
-      // Remembering the view is a convenience; without storage it resets.
-    }
-  };
+  const setView = (next: PlanView) => setPlanUi({ view: next });
+  const setDialog = (next: "routines" | "calendars" | null) => setPlanUi({ dialog: next && { kind: next } });
   const bump = useCallback(() => setVersion((v) => v + 1), []);
+
+  // "Today" in the sidebar.
+  useEffect(() => {
+    if (todayAsked) setDay(todayNow());
+  }, [todayAsked]);
+
+  // Whether any calendar is connected, for the connect card.
+  useEffect(() => {
+    api.calendarSetup().then(setCalendars, () => setCalendars(null));
+  }, [version]);
   const showError = useCallback((message: string) => setError(message), []);
 
   // Imported calendars stay fresh while the planner is open.
@@ -261,6 +256,8 @@ export function DailyPlanView() {
         </div>
       )}
 
+      {view === "day" && calendars && <ConnectCard setup={calendars} />}
+
       {view === "day" && <QuickAdd inputRef={quickAdd} onAdd={(text) => act(() => api.quickAdd(text, day, todayNow()))} />}
 
       {error && (
@@ -312,10 +309,49 @@ export function DailyPlanView() {
           onClose={() => setFocusId(null)}
         />
       )}
-      {dialog === "routines" && <RoutinesDialog onClose={() => setDialog(null)} onChanged={bump} />}
-      {dialog === "calendars" && <CalendarsDialog onClose={() => setDialog(null)} onChanged={bump} />}
+      {dialog?.kind === "routines" && <RoutinesDialog onClose={() => setDialog(null)} onChanged={bump} />}
+      {dialog?.kind === "calendars" && <CalendarsDialog start={dialog.start} onClose={() => setDialog(null)} onChanged={bump} />}
       {plan && isToday && ritual === "plan" && <PlanRitual plan={plan} today={today} act={act} onClose={() => setRitual(null)} />}
       {plan && isToday && ritual === "shutdown" && <ShutdownRitual plan={plan} today={today} act={act} onClose={() => setRitual(null)} />}
+    </div>
+  );
+}
+
+/** Until a calendar is connected: one click to connect Google, Outlook or iCloud. */
+function ConnectCard({ setup }: { setup: CalendarSetup }) {
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem(CONNECT_HINT_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  if (hidden || setup.accounts.length > 0 || setup.calendars.length > 0) return null;
+  const start = (provider: "google" | "microsoft" | "caldav") => setPlanUi({ dialog: { kind: "calendars", start: provider } });
+  const dismiss = () => {
+    setHidden(true);
+    try {
+      localStorage.setItem(CONNECT_HINT_KEY, "1");
+    } catch {
+      // Without storage the card comes back next time; that's all.
+    }
+  };
+
+  return (
+    <div className="dp-connect-card">
+      <CalendarDays size={18} strokeWidth={1.75} className="dp-connect-card-icon" />
+      <div className="dp-connect-card-text">
+        <b>See your meetings here</b>
+        <span>Connect your calendar so tasks are planned around meetings, and your plan shows on your phone.</span>
+      </div>
+      <div className="dp-connect-card-actions">
+        <ProviderButton name="Google" available={setup.available.google} disabled={false} onClick={() => start("google")} />
+        <ProviderButton name="Outlook" available={setup.available.microsoft} disabled={false} onClick={() => start("microsoft")} />
+        <ProviderButton name="iCloud" available disabled={false} onClick={() => start("caldav")} />
+      </div>
+      <button className="icon-btn" aria-label="Not now" title="Not now (Calendars stays in the sidebar)" onClick={dismiss}>
+        <X size={14} strokeWidth={1.75} />
+      </button>
     </div>
   );
 }

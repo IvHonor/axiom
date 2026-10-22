@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { Activity, Archive, ChartLine, Columns3, Ellipsis, GanttChart, Plus, SquareKanban, Table2, X, type LucideIcon } from "lucide-react";
+import { Activity, Archive, ChartLine, Columns3, Ellipsis, GanttChart, Plus, SquareKanban, Table2, Users, X, type LucideIcon } from "lucide-react";
 import { ConfirmButton } from "../../shell/ui/ConfirmButton";
 import { Dropdown } from "../../shell/ui/Dropdown";
 import { usePersistentState } from "../../shell/usePersistentState";
@@ -16,6 +16,8 @@ import { InsightsView } from "./InsightsView";
 import { TaskTable } from "./TaskTable";
 import { TimelineView } from "./TimelineView";
 import { consumeBoardTarget, useBoardTarget, type BoardViewKind } from "./boardNavigation";
+import { ShareDialog } from "./ShareDialog";
+import { closeShareDialog, openShareDialog, roleLabel, sharing, useSharingUi, type SharedBoard } from "./sharing";
 import { boardOverviewChanged } from "./overview/data";
 
 
@@ -46,6 +48,10 @@ export function ProjectBoardView() {
   );
   const [filter, setFilter] = useState<Filter>(NO_FILTER);
   const visible = useCallback((task: TaskCard) => matches(task, filter), [filter]);
+  const { dialog: shareDialog, revision: sharingRevision } = useSharingUi();
+  const [shared, setShared] = useState<SharedBoard[]>([]);
+  const loadShared = useCallback(() => void sharing.boards().then(setShared, () => setShared([])), []);
+  useEffect(loadShared, [loadShared, sharingRevision]);
 
   const projectId = projects?.some((p) => p.id === savedId) ? savedId : (projects?.[0]?.id ?? null);
 
@@ -85,6 +91,7 @@ export function ProjectBoardView() {
   // Another computer's changes just arrived.
   useDataChanged(() => {
     loadProjects();
+    loadShared();
     reload();
   });
 
@@ -178,6 +185,22 @@ export function ProjectBoardView() {
             {stats.overdue > 0 && <span className="is-overdue">{stats.overdue} overdue</span>}
           </div>
         )}
+        {current &&
+          (() => {
+            const board = shared.find((b) => b.id === current.project.id);
+            return (
+              <>
+                {board && board.role === "viewer" && <span className="pb-viewonly">View only</span>}
+                <button
+                  className="btn btn-sm btn-ghost pb-share-btn"
+                  onClick={() => openShareDialog(current.project.id)}
+                  title={board ? `Shared by ${board.ownerEmail}. You're ${roleLabel(board.role).toLowerCase()}.` : "Share this board with other people"}
+                >
+                  <Users size={14} strokeWidth={1.75} /> {board ? `Shared · ${board.members}` : "Share"}
+                </button>
+              </>
+            );
+          })()}
         {current && (
           <Dropdown label="Project actions" icon={<Ellipsis size={16} strokeWidth={1.5} />}>
             {(close) => (
@@ -218,6 +241,19 @@ export function ProjectBoardView() {
           )}
         </div>
       )}
+
+      {shareDialog &&
+        projects?.some((p) => p.id === shareDialog) && (
+          <ShareDialog
+            projectId={shareDialog}
+            projectName={projects.find((p) => p.id === shareDialog)!.name}
+            onClose={closeShareDialog}
+            onChanged={() => {
+              loadProjects();
+              loadShared();
+            }}
+          />
+        )}
 
       {error && (
         <div className="pb-error" role="alert">

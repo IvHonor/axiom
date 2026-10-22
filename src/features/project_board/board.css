@@ -1531,3 +1531,287 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Sharing ---------- */
+
+.pb-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pb-viewonly {
+  flex: none;
+  padding: 1px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.pb-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.pb-dialog {
+  width: min(560px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
+}
+
+.pb-dialog-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 12px 18px;
+  color: var(--accent);
+  border-bottom: 1px solid var(--line);
+}
+
+.pb-dialog-head h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pb-dialog-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 18px 20px 20px;
+  font-size: 13px;
+}
+
+.pb-dialog-body > * {
+  align-self: stretch;
+  margin: 0;
+}
+
+.pb-dialog-body > .btn {
+  align-self: flex-start;
+}
+
+.pb-dialog-error {
+  font-size: 12px;
+  color: var(--danger);
+  user-select: text;
+}
+
+.pb-dialog-heading {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.pb-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 0 0 18px;
+}
+
+.pb-people {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.pb-people li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 8px 4px 12px;
+}
+
+.pb-people li + li {
+  border-top: 1px solid var(--line);
+}
+
+.pb-person {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
+.pb-role {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.pb-people select,
+.pb-invite select,
+.pb-invite input {
+  height: 28px;
+  padding: 0 8px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.pb-invite {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pb-invite-row {
+  display: flex;
+  gap: 8px;
+}
+
+.pb-invite-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pb-invite-row input:focus,
+.pb-invite-row select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.pb-invite-hint {
+  font-size: 12px;
+}
+
+.pb-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+/* The side panel. */
+
+.bs-project {
+  display: flex;
+  align-items: center;
+}
+
+.bs-project-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.bs-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--project);
+}
+
+.bs-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bs-shared,
+.bs-role {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.bs-share {
+  flex: none;
+  margin-right: 8px;
+  opacity: 0.6;
+}
+
+.bs-project:hover .bs-share,
+.bs-share:focus-visible {
+  opacity: 1;
+}
+
+.bs-invites {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 16px 12px;
+  list-style: none;
+}
+
+.bs-invites li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 8px;
+  padding: 10px;
+  font-size: 12.5px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.bs-invite-icon {
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.bs-invite-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bs-invite-actions {
+  grid-column: 2;
+  display: flex;
+  gap: 6px;
+}
+
+.bs-invite-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bs-message,
+.bs-hint {
+  margin: 0;
+  padding: 6px 16px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.pb-dialog .is-danger {
+  color: var(--danger);
+}

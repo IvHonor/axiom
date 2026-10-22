@@ -1,6 +1,7 @@
 import "./board.css";
 import { SquareKanban } from "lucide-react";
 import type { ExtensionManifest } from "../../extensions/types";
+import { BoardSidebar } from "./BoardSidebar";
 import { BoardSummary } from "./BoardSummary";
 import { BoardSummaryTitle } from "./overview/BoardOverviewMenu";
 import { ProjectBoardView } from "./ProjectBoardView";
@@ -20,9 +21,10 @@ export const projectBoard: ExtensionManifest = {
     "Board, table and timeline views, with filters",
     "Activity history and progress charts for each project",
     "Archive finished cards without losing their history",
+    "Share a board with others as admins, editors or viewers",
   ],
   version: "0.1.0",
   publisher: "Axiom",
   icon: SquareKanban,
-  area: { View: ProjectBoardView, Summary: BoardSummary, SummaryTitle: BoardSummaryTitle, fittedSummary: true },
+  area: { View: ProjectBoardView, Summary: BoardSummary, SummaryTitle: BoardSummaryTitle, fittedSummary: true, Sidebar: BoardSidebar },
 };

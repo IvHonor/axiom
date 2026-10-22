@@ -64,6 +64,7 @@ pub fn run() {
             plan::plan_update_task,
             plan::plan_set_done,
             plan::plan_set_focus,
+            plan::plan_set_due,
             plan::plan_move_task,
             plan::plan_carry_over,
             plan::plan_delete_task,

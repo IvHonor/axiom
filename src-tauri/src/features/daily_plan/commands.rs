@@ -253,3 +253,9 @@ pub async fn plan_delete_event(db: State<'_, Db>, hub: State<'_, CalendarHub>, i
     let _one_at_a_time = accounts::exclusive(&hub).await;
     accounts::delete_event(&db.conn().await?, &hub, &id, today).await
 }
+
+/// Sets or clears a task's deadline.
+#[tauri::command]
+pub async fn plan_set_due(db: State<'_, Db>, id: String, due: Option<Date>) -> Result<task::Model> {
+    service::set_due(&db.conn().await?, &id, due).await
+}

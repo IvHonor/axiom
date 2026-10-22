@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
-import { ArrowRight, Check, Ellipsis, Inbox, Kanban, Pause, Play, Plus, Star, Trash2 } from "lucide-react";
+import { ArrowRight, Check, Ellipsis, Flag, Inbox, Kanban, Pause, Play, Plus, Star, Trash2 } from "lucide-react";
 import { Dropdown } from "../../shell/ui/Dropdown";
+import { DueChip, DueEdit } from "./due";
 import { api, cardDragId, cardFromDrag, MAX_FOCUS, trackedMinutes, type Block, type Card, type Day, type DayPlan, type PlanTask } from "./api";
 import { colorOf } from "./palette";
 import { addDays, clock, duration, parseDuration, relativeDay } from "./time";
@@ -93,6 +94,28 @@ export function TaskPanel({ plan, today, now, act, onFocus, children }: TaskPane
           </p>
         )}
       </section>
+
+      {plan.dueSoon.length > 0 && (
+        <section className="dp-section dp-due-soon">
+          <h3 className="dp-heading">
+            <Flag size={13} strokeWidth={1.75} /> Due soon <span className="dp-count">{plan.dueSoon.length}</span>
+          </h3>
+          <ul className="dp-list">
+            {plan.dueSoon.map((t) =>
+              row(
+                t,
+                t.day,
+                <span className="dp-row-actions">
+                  {t.day && <span className="dp-from">Planned {relativeDay(t.day, today).toLowerCase()}</span>}
+                  <button className="icon-btn" title="Do it today" aria-label="Plan for today" onClick={() => act(() => api.moveTask(t.id, today))}>
+                    <ArrowRight size={14} strokeWidth={1.75} />
+                  </button>
+                </span>,
+              ),
+            )}
+          </ul>
+        </section>
+      )}
 
       {plan.suggestions.length > 0 && (
         <section className="dp-section dp-suggestions">
@@ -232,7 +255,7 @@ interface TaskRowProps {
 }
 
 function TaskRow({ task, block, card, focusFull, day, now, act, onFocus, onDropBefore, extra }: TaskRowProps) {
-  const [editing, setEditing] = useState<"title" | "estimate" | null>(null);
+  const [editing, setEditing] = useState<"title" | "estimate" | "due" | null>(null);
   const [over, setOver] = useState(false);
   const done = task.doneAt !== null;
   const starred = task.focusRank !== null;
@@ -288,6 +311,16 @@ function TaskRow({ task, block, card, focusFull, day, now, act, onFocus, onDropB
       )}
 
       {card && <ProjectChip card={card} />}
+
+      {editing === "due" ? (
+        <DueEdit
+          due={task.dueDate}
+          onSave={(due) => (setEditing(null), due !== task.dueDate ? act(() => api.setDue(task.id, due)) : undefined)}
+          onCancel={() => setEditing(null)}
+        />
+      ) : (
+        task.dueDate && !done && <DueChip due={task.dueDate} onClick={() => setEditing("due")} />
+      )}
 
       {block && (
         <span className="dp-chip dp-time" title="Scheduled">
@@ -360,6 +393,14 @@ function TaskRow({ task, block, card, focusFull, day, now, act, onFocus, onDropB
             <button className="menu-item" onClick={() => (close(), setEditing("estimate"))}>
               Set time estimate
             </button>
+            <button className="menu-item" onClick={() => (close(), setEditing("due"))}>
+              {task.dueDate ? "Change deadline" : "Set deadline…"}
+            </button>
+            {task.dueDate && (
+              <button className="menu-item" onClick={() => (close(), act(() => api.setDue(task.id, null)))}>
+                Remove deadline
+              </button>
+            )}
             {task.day !== addDays(day, 1) && (
               <button className="menu-item" onClick={() => (close(), act(() => api.moveTask(task.id, addDays(day, 1))))}>
                 Move to the next day

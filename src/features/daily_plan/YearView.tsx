@@ -99,12 +99,14 @@ function MiniMonth({ first, byDay, available, today, onOpenDay, onOpenMonth }: M
           const tasks = slice?.tasks ?? [];
           const finished = tasks.filter((t) => t.doneAt).length;
           const meetings = slice?.events.filter((e) => !e.allDay).length ?? 0;
+          const deadlines = slice?.due.length ?? 0;
           const planned = slice?.plannedMinutes ?? 0;
           const label = [
             new Date(`${d}T12:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }),
             tasks.length ? `${tasks.length} task${tasks.length === 1 ? "" : "s"} (${finished} done)` : "no tasks",
             planned ? `${duration(planned)} planned` : "",
             meetings ? `${meetings} meeting${meetings === 1 ? "" : "s"}` : "",
+            deadlines ? `${deadlines} due` : "",
           ]
             .filter(Boolean)
             .join(" · ");

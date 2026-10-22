@@ -7,10 +7,14 @@ export type AgendaItem =
   /** A block that isn't for a task: a routine, lunch, a meeting typed in by hand. */
   | { kind: "block"; id: string; start: number; minutes: number; title: string; color: string; routine: boolean }
   /** A task, at its block's time if it has one. */
-  | { kind: "task"; id: string; start: number | null; minutes: number | null; task: PlanTask; color: string | null };
+  | { kind: "task"; id: string; start: number | null; minutes: number | null; task: PlanTask; color: string | null }
+  /** A task due that day but planned for another (or none). */
+  | { kind: "due"; id: string; start: null; minutes: null; task: PlanTask; color: null };
 
 export interface Agenda {
   allDay: CalendarEvent[];
+  /** Deadlines of tasks planned for another day. */
+  due: AgendaItem[];
   /** Things with a time, earliest first. */
   timed: AgendaItem[];
   /** Tasks without a time, top priorities first. */
@@ -37,7 +41,8 @@ export function agenda(slice: DaySlice): Agenda {
     }
   }
   timed.sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
-  return { allDay: slice.events.filter((e) => e.allDay), timed, anytime };
+  const due: AgendaItem[] = slice.due.map((task) => ({ kind: "due", id: task.id, start: null, minutes: null, task, color: null }));
+  return { allDay: slice.events.filter((e) => e.allDay), due, timed, anytime };
 }
 
 /** How long a day's plan will likely take at the user's usual pace (see Capacity). */

@@ -265,3 +265,44 @@ async fn a_range_shows_routines_ahead_without_writing_them() {
 
     assert!(range(&db, day(19), day(1) + chrono::Days::new(500), day(TODAY)).await.is_err());
 }
+
+#[tokio::test]
+async fn deadlines_from_quick_add_and_in_the_inbox() {
+    use super::parse::DueHint;
+    let db = setup().await;
+    // Thursday the 22nd: "fri" is tomorrow, "thu" is today, 1 Oct has passed so it's next year's.
+    assert_eq!(due_date(DueHint::Weekday(4), day(TODAY)), Some(day(23)));
+    assert_eq!(due_date(DueHint::Weekday(3), day(TODAY)), Some(day(TODAY)));
+    assert_eq!(due_date(DueHint::MonthDay { month: 10, day: 1 }, day(TODAY)), chrono::NaiveDate::from_ymd_opt(2027, 10, 1));
+    assert_eq!(due_date(DueHint::MonthDay { month: 2, day: 30 }, day(TODAY)), None);
+
+    let essay = quick_add(&db, "Essay due fri inbox 3h", day(TODAY), day(TODAY)).await.unwrap().task;
+    assert_eq!((essay.title.as_str(), essay.day, essay.due_date), ("Essay", None, Some(day(23))));
+    quick_add(&db, "No deadline inbox", day(TODAY), day(TODAY)).await.unwrap();
+    quick_add(&db, "Overdue form due 2026-10-20 inbox", day(TODAY), day(TODAY)).await.unwrap();
+    quick_add(&db, "Far off due 30 oct inbox", day(TODAY), day(TODAY)).await.unwrap();
+    let planned_later = create_task(&db, "Slides", Some(day(24)), None).await.unwrap();
+    set_due(&db, &planned_later.id, Some(day(25))).await.unwrap();
+    let today_task = create_task(&db, "Already today", Some(day(TODAY)), None).await.unwrap();
+    set_due(&db, &today_task.id, Some(day(TODAY))).await.unwrap();
+
+    let plan = get_day(&db, day(TODAY), day(TODAY)).await.unwrap();
+    // The inbox: soonest deadline first, then the rest.
+    let inbox: Vec<&str> = plan.inbox.iter().map(|t| t.title.as_str()).collect();
+    assert_eq!(inbox, ["Overdue form", "Essay", "Far off", "No deadline"]);
+    // Due soon: overdue and within three days, unless planned for today already.
+    let soon: Vec<&str> = plan.due_soon.iter().map(|t| t.title.as_str()).collect();
+    assert_eq!(soon, ["Overdue form", "Essay", "Slides"]);
+    // Only on today's plan.
+    assert!(get_day(&db, day(23), day(TODAY)).await.unwrap().due_soon.is_empty());
+
+    // Deadlines show on their day in the week, month and year.
+    let week = range(&db, day(19), day(25), day(TODAY)).await.unwrap();
+    let due_on = |d: u32| week.days.iter().find(|s| s.day == day(d)).unwrap().due.iter().map(|t| t.title.clone()).collect::<Vec<_>>();
+    assert_eq!(due_on(23), ["Essay"]);
+    assert_eq!(due_on(25), ["Slides"]);
+    // A task due on the day it's planned for is listed there already.
+    assert!(due_on(TODAY).is_empty());
+
+    assert_eq!(set_due(&db, &essay.id, None).await.unwrap().due_date, None);
+}

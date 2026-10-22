@@ -9,6 +9,7 @@ mod m003_routines;
 mod m004_calendars;
 mod m005_calendar_accounts;
 mod m006_event_details;
+mod m007_task_deadlines;
 
 pub fn all() -> Vec<Box<dyn MigrationTrait>> {
     vec![
@@ -18,5 +19,6 @@ pub fn all() -> Vec<Box<dyn MigrationTrait>> {
         Box::new(m004_calendars::Migration),
         Box::new(m005_calendar_accounts::Migration),
         Box::new(m006_event_details::Migration),
+        Box::new(m007_task_deadlines::Migration),
     ]
 }

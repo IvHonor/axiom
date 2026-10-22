@@ -22,6 +22,8 @@ export interface PlanTask {
   actualMinutes: number;
   /** Set while its timer runs. */
   timerStartedAt: string | null;
+  /** When it has to be done by, whatever day it's planned for. */
+  dueDate: Day | null;
 }
 
 /** A Project Board card, as the planner shows it. Mirrors `PlannableCard`. */
@@ -189,6 +191,8 @@ export interface DayPlan {
   /** Unfinished tasks from earlier days (only for today). */
   earlier: PlanTask[];
   inbox: PlanTask[];
+  /** Due within three days (or overdue) but planned for later or not at all. Today only. */
+  dueSoon: PlanTask[];
   settings: Settings;
   info: DayInfo;
   /** Board cards linked to the tasks above. */
@@ -211,6 +215,8 @@ export interface DaySlice {
   plannedMinutes: number;
   /** Whether the morning planning was done. */
   planned: boolean;
+  /** Open tasks due that day but planned for another (or none). */
+  due: PlanTask[];
 }
 
 export interface RangePlan {
@@ -259,6 +265,8 @@ export const api = {
   updateTask: (id: string, fields: TaskFields) => invoke<PlanTask>("plan_update_task", { id, fields }),
   setDone: (id: string, done: boolean) => invoke<PlanTask>("plan_set_done", { id, done }),
   setFocus: (id: string, focus: boolean) => invoke<PlanTask>("plan_set_focus", { id, focus }),
+  /** Sets (or with null, clears) a task's deadline. */
+  setDue: (id: string, due: Day | null) => invoke<PlanTask>("plan_set_due", { id, due }),
   moveTask: (id: string, day: Day | null, beforeId: string | null = null) =>
     invoke<PlanTask>("plan_move_task", { id, day, beforeId }),
   carryOver: (ids: string[], to: CarryTo, today: Day) => invoke<void>("plan_carry_over", { ids, to, today }),

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties, type DragEvent, type FormEvent, type ReactNode } from "react";
-import { CalendarDays, Check, Plus, Repeat } from "lucide-react";
+import { CalendarDays, Check, Flag, Plus, Repeat } from "lucide-react";
 import { useDataChanged } from "../../lib/sync";
 import { api, cardFromDrag, errorMessage, nudgeCalendars, type Day, type PlanTask, type RangePlan } from "./api";
 import type { AgendaItem } from "./agenda";
@@ -115,6 +115,20 @@ export function AgendaRow({ item, act, compact = false }: { item: AgendaItem; ac
         <span className="dp-ag-title">{title}</span>
       </span>
     );
+  if (item.kind === "due") {
+    const { task } = item;
+    return (
+      <li className={`dp-ag-item is-due${task.dueDate && task.dueDate < todayNow() ? " is-overdue" : ""}`} title={`${task.title} is due. Drag it onto a day to plan it.`} {...dragProps(task)}>
+        <CheckBox task={task} act={act} />
+        {body(
+          <>
+            <Flag size={11} strokeWidth={2} className="dp-ag-icon" aria-label="Deadline" />
+            Due: {task.title}
+          </>,
+        )}
+      </li>
+    );
+  }
   if (item.kind === "task") {
     const { task } = item;
     return (

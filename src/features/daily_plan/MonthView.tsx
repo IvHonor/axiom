@@ -67,9 +67,10 @@ interface MonthCellProps {
 
 function MonthCell({ slice, inMonth, today, settings, pace, act, onOpen }: MonthCellProps) {
   const { over, handlers } = useDropTarget(slice.day, act);
-  const { allDay, timed, anytime } = agenda(slice);
+  const { allDay, due, timed, anytime } = agenda(slice);
   const items: ({ kind: "allday"; id: string; title: string; color: string } | AgendaItem)[] = [
     ...allDay.map((e) => ({ kind: "allday" as const, id: e.id, title: e.title, color: e.color })),
+    ...due,
     ...timed,
     ...anytime,
   ];

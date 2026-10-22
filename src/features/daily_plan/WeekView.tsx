@@ -73,8 +73,8 @@ function DayColumn({ slice, settings, pace, today, act, onOpen }: DayColumnProps
   const { over, handlers } = useDropTarget(slice.day, act);
   const date = new Date(`${slice.day}T12:00`);
   const past = slice.day < today;
-  const { allDay, timed, anytime } = agenda(slice);
-  const empty = !allDay.length && !timed.length && !anytime.length;
+  const { allDay, due, timed, anytime } = agenda(slice);
+  const empty = !allDay.length && !due.length && !timed.length && !anytime.length;
 
   return (
     <section
@@ -97,6 +97,13 @@ function DayColumn({ slice, settings, pace, today, act, onOpen }: DayColumnProps
             </span>
           ))}
         </div>
+      )}
+      {due.length > 0 && (
+        <ul className="dp-ag">
+          {due.map((item) => (
+            <AgendaRow key={`due-${item.id}`} item={item} act={act} />
+          ))}
+        </ul>
       )}
       {timed.length > 0 && (
         <ul className="dp-ag">

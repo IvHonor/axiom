@@ -27,6 +27,8 @@ pub mod task {
         pub actual_minutes: i32,
         /// When its running timer started; empty when no timer is running.
         pub timer_started_at: Option<DateTimeUtc>,
+        /// When it has to be done by, whatever day it's planned for.
+        pub due_date: Option<Date>,
         pub updated_at: DateTimeUtc,
         #[serde(skip)]
         pub deleted_at: Option<DateTimeUtc>,

@@ -2603,3 +2603,81 @@ button.dp-allday-chip {
   border-bottom: 0;
   cursor: pointer;
 }
+
+/* ---------- Deadlines ---------- */
+
+.dp-due {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+button.dp-due {
+  cursor: pointer;
+}
+
+button.dp-due:hover {
+  border-color: var(--text-dim);
+}
+
+.dp-due.is-soon {
+  color: var(--text);
+}
+
+.dp-due.is-near {
+  color: #b7791f;
+  border-color: color-mix(in srgb, #e2b203 60%, transparent);
+  background: color-mix(in srgb, #e2b203 12%, transparent);
+}
+
+.dp-due.is-overdue {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.dp-due-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dp-due-edit input {
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+/* A deadline in the week and month: a flag, not a time. */
+.dp-ag-item.is-due {
+  cursor: grab;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid #e2b203;
+}
+
+.dp-ag-item.is-due.is-overdue {
+  border-left-color: var(--danger);
+}
+
+.dp-ag-item.is-due .dp-ag-icon {
+  color: #e2b203;
+}
+
+.dp-ag-item.is-due.is-overdue .dp-ag-icon {
+  color: var(--danger);
+}

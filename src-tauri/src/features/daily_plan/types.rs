@@ -22,6 +22,9 @@ pub struct DayPlan {
     pub earlier: Vec<task::Model>,
     /// Tasks without a day.
     pub inbox: Vec<task::Model>,
+    /// Open tasks due within three days (or overdue) that aren't planned
+    /// for today or earlier. Only on today's plan.
+    pub due_soon: Vec<task::Model>,
     pub settings: Settings,
     /// The day's intention and reflection, and whether it's been planned or shut down.
     pub info: DayInfo,
@@ -215,4 +218,6 @@ pub struct DaySlice {
     pub planned_minutes: i32,
     /// Whether the morning planning was done.
     pub planned: bool,
+    /// Open tasks due that day but planned for another (or none).
+    pub due: Vec<task::Model>,
 }

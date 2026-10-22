@@ -13,7 +13,7 @@ use sea_orm::{
 
 use super::calendars::events_on;
 use super::entities::{block, day, event, routine, settings, task};
-use super::parse::{self, DayHint};
+use super::parse::{self, DayHint, DueHint};
 use super::types::{
     BlockFields, CarryTo, DayDone, DaySlice, RangePlan, DayFields, DayInfo, DayPlan, NextBlock, PlanInsights, QuickAdded, RoutineFields,
     ScheduleResult, Settings, TaskFields, TodaySummary, WeekFocus,
@@ -86,12 +86,28 @@ pub async fn get_day(db: &DatabaseConnection, day: Date, today: Date) -> Result<
     } else {
         Vec::new()
     };
-    let inbox = tasks()
+    let mut inbox = tasks()
         .filter(task::Column::Day.is_null())
         .filter(task::Column::DoneAt.is_null())
         .order_by_asc(task::Column::Position)
         .all(db)
         .await?;
+    by_deadline(&mut inbox);
+    // Due within three days but planned for later or not at all (leftovers
+    // from earlier days are listed already).
+    let due_soon = if day == today {
+        let mut soon = tasks()
+            .filter(task::Column::DoneAt.is_null())
+            .filter(task::Column::DueDate.lte(today + Days::new(DUE_SOON_DAYS)))
+            .filter(Condition::any().add(task::Column::Day.is_null()).add(task::Column::Day.gt(today)))
+            .order_by_asc(task::Column::Position)
+            .all(db)
+            .await?;
+        by_deadline(&mut soon);
+        soon
+    } else {
+        Vec::new()
+    };
     // Cards from the Project Board: those linked to these tasks, and
     // suggestions that aren't planned anywhere yet.
     let linked: Vec<String> = day_tasks.iter().chain(&earlier).chain(&inbox).filter_map(|t| t.board_task_id.clone()).collect();
@@ -115,6 +131,7 @@ pub async fn get_day(db: &DatabaseConnection, day: Date, today: Date) -> Result<
         events,
         earlier,
         inbox,
+        due_soon,
         settings: get_settings(db).await?,
         info: get_day_info(db, day).await?,
         cards,
@@ -192,6 +209,43 @@ fn block_title(block: &block::Model, day_tasks: &[task::Model]) -> String {
 
 // ---------- Tasks ----------
 
+/// Deadlines this close (or past) are pointed out on today's plan.
+const DUE_SOON_DAYS: u64 = 3;
+
+/// Soonest deadline first, then tasks without one, each in their order.
+fn by_deadline(list: &mut [task::Model]) {
+    list.sort_by_key(|t| (t.due_date.is_none(), t.due_date));
+}
+
+/// A typed deadline as a date: the next such day, counting today.
+pub fn due_date(hint: DueHint, today: Date) -> Option<Date> {
+    match hint {
+        DueHint::Today => Some(today),
+        DueHint::Tomorrow => Some(today + Days::new(1)),
+        DueHint::Weekday(wanted) => {
+            let now = today.weekday().num_days_from_monday();
+            Some(today + Days::new(((wanted + 7 - now) % 7) as u64))
+        }
+        DueHint::MonthDay { month, day } => {
+            let this_year = Date::from_ymd_opt(today.year(), month, day)?;
+            if this_year >= today {
+                Some(this_year)
+            } else {
+                Date::from_ymd_opt(today.year() + 1, month, day)
+            }
+        }
+        DueHint::Date { year, month, day } => Date::from_ymd_opt(year, month, day),
+    }
+}
+
+/// Sets or clears when a task has to be done by.
+pub async fn set_due(db: &DatabaseConnection, id: &str, due: Option<Date>) -> Result<task::Model> {
+    let found = find_task(db, id).await?;
+    let mut active: task::ActiveModel = found.into();
+    active.due_date = Set(due);
+    Ok(active.update(db).await?)
+}
+
 pub async fn create_task(db: &DatabaseConnection, title: &str, day: Option<Date>, estimate_minutes: Option<i32>) -> Result<task::Model> {
     let title = non_empty(title)?;
     let estimate_minutes = check_estimate(estimate_minutes)?;
@@ -209,6 +263,7 @@ pub async fn create_task(db: &DatabaseConnection, title: &str, day: Option<Date>
         created_at: Set(now),
         actual_minutes: Set(0),
         timer_started_at: Set(None),
+        due_date: Set(None),
         updated_at: Set(now),
         deleted_at: Set(None),
     }
@@ -229,6 +284,9 @@ pub async fn quick_add(db: &DatabaseConnection, text: &str, shown: Date, today: 
         DayHint::Inbox => None,
     };
     let mut task = create_task(db, &parsed.title, day, parsed.estimate_minutes).await?;
+    if let Some(due) = parsed.due.and_then(|hint| due_date(hint, today)) {
+        task = set_due(db, &task.id, Some(due)).await?;
+    }
     if parsed.focus && day.is_some() {
         task = set_focus(db, &task.id, true).await?;
     }
@@ -1013,6 +1071,12 @@ pub async fn range(db: &DatabaseConnection, from: Date, to: Date, today: Date) -
         .map(|b| b.id)
         .collect();
     let all_routines = routines().all(db).await?;
+    let all_due = tasks()
+        .filter(task::Column::DoneAt.is_null())
+        .filter(task::Column::DueDate.gte(from))
+        .filter(task::Column::DueDate.lte(to))
+        .all(db)
+        .await?;
     let all_events = event::Entity::find()
         .filter(event::Column::Day.gte(from))
         .filter(event::Column::Day.lte(to))
@@ -1059,6 +1123,8 @@ pub async fn range(db: &DatabaseConnection, from: Date, to: Date, today: Date) -
             day_blocks.sort_by_key(|b| b.start_minute);
         }
         let day_events: Vec<event::Model> = all_events.iter().filter(|e| e.day == date).cloned().collect();
+        // Deadlines of tasks planned for another day (or none); those on the day show already.
+        let due: Vec<task::Model> = all_due.iter().filter(|t| t.due_date == Some(date) && t.day != Some(date)).cloned().collect();
         out.push(DaySlice {
             day: date,
             planned_minutes: planned_minutes(&day_tasks, &day_blocks, &day_events, &settings),
@@ -1066,15 +1132,17 @@ pub async fn range(db: &DatabaseConnection, from: Date, to: Date, today: Date) -
             tasks: day_tasks,
             blocks: day_blocks,
             events: day_events,
+            due,
         });
         date = date + Days::new(1);
     }
 
-    let inbox = tasks()
+    let mut inbox = tasks()
         .filter(task::Column::Day.is_null())
         .filter(task::Column::DoneAt.is_null())
         .order_by_asc(task::Column::Position)
         .all(db)
         .await?;
+    by_deadline(&mut inbox);
     Ok(RangePlan { days: out, inbox, settings, pace: pace(db, today).await?.0 })
 }

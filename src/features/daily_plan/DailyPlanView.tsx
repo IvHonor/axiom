@@ -431,7 +431,7 @@ function QuickAdd({ inputRef, onAdd }: { inputRef: React.RefObject<HTMLInputElem
       {focused && (
         <p className="dp-quick-help">
           <b>45m</b> or <b>1h30</b> for how long · <b>2pm</b> or <b>14:30</b> to schedule it · <b>tomorrow</b> or <b>inbox</b> for when ·{" "}
-          <b>!</b> for a top priority
+          <b>due fri</b> or <b>due 25 oct</b> for a deadline · <b>!</b> for a top priority
         </p>
       )}
     </form>

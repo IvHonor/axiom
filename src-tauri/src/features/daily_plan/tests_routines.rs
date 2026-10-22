@@ -161,7 +161,7 @@ async fn streaks_run_back_from_yesterday_until_today_is_done() {
 }
 
 /// A calendar with the given events, as if just read from its link.
-async fn calendar_with(db: &DatabaseConnection, events: Vec<super::ics::DayEvent>) -> String {
+async fn calendar_with(db: &DatabaseConnection, events: Vec<super::calendars::ics::DayEvent>) -> String {
     use super::entities::calendar;
     use sea_orm::{ActiveModelTrait, Set};
     let cal = calendar::ActiveModel {
@@ -172,16 +172,22 @@ async fn calendar_with(db: &DatabaseConnection, events: Vec<super::ics::DayEvent
         refreshed_at: Set(Some(chrono::Utc::now())),
         problem: Set(None),
         created_at: Set(chrono::Utc::now()),
+        account_id: Set(None),
+        remote_id: Set(None),
+        writable: Set(false),
+        shown: Set(true),
+        publish: Set(false),
+        published_hash: Set(None),
     }
     .insert(db)
     .await
     .unwrap();
-    super::calendar::replace_events(db, &cal, events).await.unwrap();
+    super::calendars::replace_events(db, &cal, events).await.unwrap();
     cal.id
 }
 
-fn meeting(title: &str, start_minute: i32, duration_minutes: i32, all_day: bool, busy: bool) -> super::ics::DayEvent {
-    super::ics::DayEvent { uid: title.into(), title: title.into(), day: day(TODAY), start_minute, duration_minutes, all_day, busy }
+fn meeting(title: &str, start_minute: i32, duration_minutes: i32, all_day: bool, busy: bool) -> super::calendars::ics::DayEvent {
+    super::calendars::ics::DayEvent { uid: title.into(), title: title.into(), day: day(TODAY), start_minute, duration_minutes, all_day, busy }
 }
 
 #[tokio::test]
@@ -219,15 +225,15 @@ async fn calendar_events_show_count_and_are_worked_around() {
 async fn removing_a_calendar_removes_its_events() {
     let db = setup().await;
     let id = calendar_with(&db, vec![meeting("Stand-up", 540, 30, false, true)]).await;
-    super::calendar::remove_calendar(&db, &id).await.unwrap();
+    super::calendars::remove_calendar(&db, &id).await.unwrap();
     assert!(get_day(&db, day(TODAY), day(TODAY)).await.unwrap().events.is_empty());
-    assert!(super::calendar::list_calendars(&db).await.unwrap().is_empty());
+    assert!(super::calendars::list_calendars(&db).await.unwrap().is_empty());
 }
 
 #[tokio::test]
 async fn calendar_links_must_be_secure() {
     let db = setup().await;
     for url in ["", "calendar.google.com/x.ics", "http://example.com/a.ics", "ftp://x/y"] {
-        assert!(super::calendar::add_calendar(&db, "Work", url, "gray", day(TODAY)).await.is_err(), "{url}");
+        assert!(super::calendars::add_calendar(&db, "Work", url, "gray", day(TODAY)).await.is_err(), "{url}");
     }
 }

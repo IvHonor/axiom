@@ -3,15 +3,14 @@
 //! - `migrations/` creates and updates the tables
 //! - `entities.rs` describes each table to SeaORM
 //! - `parse.rs` reads quick-add text ("Write report 45m 2pm")
-//! - `calendar.rs` and `ics.rs` import events from calendar links
+//! - `calendars/` imports events from calendar links and accounts, and publishes the plan
 //! - `service.rs` holds the logic, `types.rs` the shapes sent to React
 //! - `commands.rs` exposes the logic to React
 
-pub mod calendar;
+pub mod calendars;
 pub mod commands;
 mod entities;
 pub mod migrations;
-mod ics;
 mod parse;
 pub(crate) mod service;
 pub(crate) mod types;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { BarChart3, CalendarDays, CalendarRange, Check, ChevronLeft, ChevronRight, Moon, Plus, Repeat, RotateCcw, Settings2, Sunrise, X } from "lucide-react";
 import { useDataChanged } from "../../lib/sync";
 import { Dropdown } from "../../shell/ui/Dropdown";
-import { api, errorMessage, type DayPlan, type PlanTask, type Settings } from "./api";
+import { api, errorMessage, nudgeCalendars, type DayPlan, type PlanTask, type Settings } from "./api";
 import { Capacity } from "./Capacity";
 import { FocusBar, FocusMode } from "./Focus";
 import { Insights } from "./Insights";
@@ -103,6 +103,7 @@ export function DailyPlanView() {
     async (change: () => Promise<unknown>) => {
       try {
         await change();
+        nudgeCalendars(todayNow());
       } catch (e) {
         setError(errorMessage(e));
       }

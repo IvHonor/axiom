@@ -1819,3 +1819,172 @@ button.dp-week-head:hover .dp-week-date {
     animation: none;
   }
 }
+
+/* ---------- Calendar accounts ---------- */
+
+.dp-account {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.dp-account-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.dp-account-provider {
+  padding: 1px 7px;
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.dp-account-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dp-account-calendars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dp-account-calendars li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  font-size: 13px;
+}
+
+.dp-account-calendars label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.dp-account-calendars label span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dp-account-calendars .dim,
+.dp-account-calendars .dp-setup-problem {
+  flex: none;
+  font-size: 11.5px;
+}
+
+.dp-account-calendars input {
+  accent-color: var(--accent);
+}
+
+.dp-connect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dp-connect .menu-heading {
+  margin-right: 4px;
+  padding: 0;
+}
+
+.dp-provider {
+  min-width: 76px;
+}
+
+.dp-connecting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: var(--radius);
+}
+
+.dp-connecting span {
+  flex: 1;
+}
+
+.dp-caldav {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.dp-caldav .dp-hint {
+  margin: 0;
+}
+
+.dp-publish,
+.dp-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.dp-publish > *,
+.dp-links > .dp-setup-list,
+.dp-links > .dp-setup-form {
+  align-self: stretch;
+}
+
+.dp-publish .menu-heading,
+.dp-links .menu-heading {
+  padding: 0;
+}
+
+.dp-publish .dp-hint {
+  margin: 0;
+}
+
+.dp-publish-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dp-publish-row select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.dp-publish > .dp-setup-refresh {
+  align-self: flex-start;
+}
+
+.dp-setup-note {
+  margin: 0;
+  font-size: 11.5px;
+}

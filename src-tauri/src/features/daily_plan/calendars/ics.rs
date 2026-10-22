@@ -31,7 +31,8 @@ pub fn day_events(text: &str, from: NaiveDate, to: NaiveDate, zone: Tz) -> Resul
     if !lines.iter().any(|l| l.name == "BEGIN" && l.value.eq_ignore_ascii_case("VCALENDAR")) {
         return Err("That link didn't return a calendar. Check it's the iCal (.ics) address.".into());
     }
-    let events = collect_events(&lines, zone);
+    // Blocks Axiom published from the plan are the plan, not meetings.
+    let events: Vec<Event> = collect_events(&lines, zone).into_iter().filter(|e| e.axiom_block.is_none()).collect();
 
     // Occurrences moved or edited on their own (RECURRENCE-ID) replace the
     // originals they name.
@@ -55,17 +56,32 @@ pub fn day_events(text: &str, from: NaiveDate, to: NaiveDate, zone: Tz) -> Resul
         } else {
             vec![start]
         };
+        let what = Occurrence {
+            uid: &event.uid,
+            title: &event.title,
+            all_day: event.all_day,
+            busy: !event.transparent && !event.all_day,
+        };
         for s in starts {
-            split_into_days(event, s, length, zone, from, to, &mut out);
+            split_into_days(&what, s, length, zone, from, to, &mut out);
         }
     }
     out.sort_by(|a, b| (a.day, !a.all_day, a.start_minute).cmp(&(b.day, !b.all_day, b.start_minute)));
     Ok(out)
 }
 
+/// What an occurrence is, apart from when.
+pub struct Occurrence<'a> {
+    pub uid: &'a str,
+    pub title: &'a str,
+    pub all_day: bool,
+    pub busy: bool,
+}
+
 /// Cuts one occurrence into a piece per day it touches, within the window.
-fn split_into_days(
-    event: &Event,
+/// Shared by every calendar source.
+pub fn split_into_days(
+    event: &Occurrence,
     start: DateTime<Tz>,
     length: Duration,
     zone: Tz,
@@ -74,13 +90,13 @@ fn split_into_days(
     out: &mut Vec<DayEvent>,
 ) {
     let piece = |day: NaiveDate, start_minute: i32, duration_minutes: i32| DayEvent {
-        uid: event.uid.clone(),
-        title: event.title.clone(),
+        uid: event.uid.to_owned(),
+        title: event.title.to_owned(),
         day,
         start_minute,
         duration_minutes,
         all_day: event.all_day,
-        busy: !event.transparent && !event.all_day,
+        busy: event.busy,
     };
     let local = start.with_timezone(&zone).naive_local();
     if event.all_day {
@@ -125,6 +141,8 @@ struct Event {
     recurrence_id: Option<DateTime<Tz>>,
     cancelled: bool,
     transparent: bool,
+    /// X-AXIOM-BLOCK: the plan block Axiom published this event for.
+    axiom_block: Option<String>,
 }
 
 impl Event {
@@ -225,6 +243,7 @@ fn collect_events(lines: &[Line], zone: Tz) -> Vec<Event> {
             "RECURRENCE-ID" => e.recurrence_id = when(line, &line.value, zone),
             "STATUS" => e.cancelled = line.value.eq_ignore_ascii_case("CANCELLED"),
             "TRANSP" => e.transparent = line.value.eq_ignore_ascii_case("TRANSPARENT"),
+            "X-AXIOM-BLOCK" => e.axiom_block = Some(line.value.clone()),
             _ => {}
         }
     }
@@ -234,6 +253,32 @@ fn collect_events(lines: &[Line], zone: Tz) -> Vec<Event> {
         }
     }
     events
+}
+
+/// An event Axiom published from the plan, as found in a calendar.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Marked {
+    pub block_id: String,
+    pub title: String,
+    pub start: DateTime<chrono::Utc>,
+    pub end: DateTime<chrono::Utc>,
+}
+
+/// Axiom's own events in a calendar object (one CalDAV resource).
+pub fn marked(text: &str) -> Vec<Marked> {
+    let lines: Vec<Line> = unfold(text).iter().filter_map(|l| parse_line(l)).collect();
+    collect_events(&lines, Tz::UTC)
+        .into_iter()
+        .filter_map(|e| {
+            let start = e.start?;
+            Some(Marked {
+                block_id: e.axiom_block.clone()?,
+                title: e.title.clone(),
+                start: start.with_timezone(&chrono::Utc),
+                end: (start + e.length()).with_timezone(&chrono::Utc),
+            })
+        })
+        .collect()
 }
 
 // ---------- Lines and values ----------
@@ -339,11 +384,11 @@ fn when(line: &Line, value: &str, zone: Tz) -> Option<DateTime<Tz>> {
 }
 
 /// A local time in a zone. A time skipped by a clock change moves forward an hour.
-fn in_zone(tz: Tz, naive: NaiveDateTime) -> Option<DateTime<Tz>> {
+pub fn in_zone(tz: Tz, naive: NaiveDateTime) -> Option<DateTime<Tz>> {
     tz.from_local_datetime(&naive).earliest().or_else(|| tz.from_local_datetime(&(naive + Duration::hours(1))).earliest())
 }
 
-fn midnight(day: NaiveDate, zone: Tz) -> DateTime<Tz> {
+pub fn midnight(day: NaiveDate, zone: Tz) -> DateTime<Tz> {
     in_zone(zone, day.and_hms_opt(0, 0, 0).unwrap()).expect("midnight or 1am exists")
 }
 

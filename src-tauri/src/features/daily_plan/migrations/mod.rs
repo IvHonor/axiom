@@ -7,6 +7,7 @@ mod m001_daily_plan_schema;
 mod m002_rituals_and_time;
 mod m003_routines;
 mod m004_calendars;
+mod m005_calendar_accounts;
 
 pub fn all() -> Vec<Box<dyn MigrationTrait>> {
     vec![
@@ -14,5 +15,6 @@ pub fn all() -> Vec<Box<dyn MigrationTrait>> {
         Box::new(m002_rituals_and_time::Migration),
         Box::new(m003_routines::Migration),
         Box::new(m004_calendars::Migration),
+        Box::new(m005_calendar_accounts::Migration),
     ]
 }

@@ -89,6 +89,35 @@ The server is a plain Docker image (`server/Dockerfile`), so it runs on any cont
 
 The free plan sleeps after 15 minutes without requests and takes about a minute to wake, so the first sign-in after a quiet spell is slow. The app waits for it and says so.
 
+## Calendar accounts
+
+The Daily Plan connects to Google Calendar, Outlook and iCloud: it shows their events as busy time and publishes the plan into one calendar. iCloud (and any CalDAV server) needs no setup: users sign in with an [app-specific password](https://support.apple.com/en-us/102654). Google and Microsoft only talk to apps registered with them, so each copy of Axiom is built with client ids:
+
+| Variable | What |
+|---|---|
+| `AXIOM_GOOGLE_CLIENT_ID`, `AXIOM_GOOGLE_CLIENT_SECRET` | A Google OAuth client of type *Desktop app* |
+| `AXIOM_MICROSOFT_CLIENT_ID` | A Microsoft Entra app registration |
+
+Put them in `src-tauri/.env` (copy `src-tauri/.env.example`; git ignores `.env`) for development, and in the repository's secrets for releases (`release.yml` passes them in). Without them, that provider's button says it isn't set up. A desktop app's client secret can't really be kept secret, and Google says as much; PKCE protects the sign-in instead. It's still kept out of the repo so nobody else builds on your quota.
+
+**Google.** In the [Google Cloud console](https://console.cloud.google.com):
+
+1. Create a project, then under **APIs & Services → Library** enable the **Google Calendar API**.
+2. Under **Google Auth Platform**: fill in **Branding**; in **Audience** choose *External* and add your Google account as a test user; in **Data access** add the scopes `calendar.calendarlist.readonly`, `calendar.events.readonly` and `calendar.app.created`.
+3. Under **Clients**, create a client of type **Desktop app** and copy its id and secret.
+
+While the app is in *Testing*, only test users (up to 100) can connect, and Google expires their sign-in after 7 days, so they reconnect weekly. Publishing it for everyone needs Google's verification of those (sensitive) scopes: a privacy policy and a verified domain.
+
+Axiom only asks to see calendars and events and to manage calendars it creates, so the plan goes into an "Axiom" calendar and nothing else in the account is ever changed.
+
+**Microsoft.** In the [Microsoft Entra admin center](https://entra.microsoft.com), **App registrations → New registration**:
+
+1. Supported account types: *Accounts in any organizational directory and personal Microsoft accounts*.
+2. Redirect URI: platform **Public client/native (mobile & desktop)**, value `http://localhost` (Microsoft ignores the port, which Axiom picks each time).
+3. Copy the **Application (client) ID**. Under **API permissions** add Microsoft Graph, delegated, `Calendars.ReadWrite`. No client secret is needed.
+
+Some workplaces only let staff use apps an administrator has approved, or from verified publishers; personal Outlook.com accounts work straight away.
+
 ## Releasing
 
 The app's version lives in `package.json` (`tauri.conf.json` reads it from there). To publish one:

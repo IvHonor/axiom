@@ -86,15 +86,45 @@ export interface CalendarEvent {
   color: string;
 }
 
-/** A calendar read from a private iCal link (the link itself stays in Rust). */
+/** A calendar from an account, or read from a private iCal link (the link
+ * itself stays in Rust). */
 export interface Calendar {
   id: string;
   name: string;
   color: string;
   refreshedAt: string | null;
-  /** Why the last read failed, ready to show. */
+  /** Why the last read (or publish) failed, ready to show. */
   problem: string | null;
   createdAt: string;
+  /** Null for a calendar added by link. */
+  accountId: string | null;
+  /** Whether the plan can be published into it. */
+  writable: boolean;
+  /** Whether its events show on the planner. */
+  shown: boolean;
+  /** The calendar the plan is published into. */
+  publish: boolean;
+}
+
+export type CalendarProvider = "google" | "microsoft" | "caldav";
+
+/** A connected Google, Microsoft or CalDAV (iCloud) account. */
+export interface CalendarAccount {
+  id: string;
+  provider: CalendarProvider;
+  /** Usually an email address. */
+  name: string;
+  /** The CalDAV server; empty for Google and Microsoft. */
+  server: string;
+  problem: string | null;
+  createdAt: string;
+}
+
+export interface CalendarSetup {
+  accounts: CalendarAccount[];
+  calendars: Calendar[];
+  /** Which providers this copy of Axiom can connect to. */
+  available: { google: boolean; microsoft: boolean };
 }
 
 /** A block that repeats on chosen weekdays. */
@@ -206,13 +236,39 @@ export const api = {
   updateRoutine: (id: string, fields: RoutineFields, today: Day) => invoke<Routine>("plan_update_routine", { id, fields, today }),
   deleteRoutine: (id: string, today: Day) => invoke<void>("plan_delete_routine", { id, today }),
   insights: (today: Day) => invoke<PlanInsights>("plan_insights", { today }),
-  listCalendars: () => invoke<Calendar[]>("plan_list_calendars"),
+  calendarSetup: () => invoke<CalendarSetup>("plan_calendar_setup"),
   addCalendar: (name: string, url: string, color: string, today: Day) =>
     invoke<Calendar>("plan_add_calendar", { name, url, color, today }),
   removeCalendar: (id: string) => invoke<void>("plan_remove_calendar", { id }),
   /** Re-reads calendars that are due (or all, with `force`); true if any were. */
   refreshCalendars: (today: Day, force: boolean) => invoke<boolean>("plan_refresh_calendars", { today, force }),
+  /** Opens the provider's sign-in page in the browser and waits for it. */
+  connectCalendar: (provider: "google" | "microsoft", today: Day) =>
+    invoke<CalendarAccount>("plan_connect_calendar", { provider, today }),
+  cancelCalendarSignIn: () => invoke<void>("plan_cancel_calendar_sign_in"),
+  /** iCloud when `server` is empty. */
+  connectCaldav: (server: string, username: string, password: string, today: Day) =>
+    invoke<CalendarAccount>("plan_connect_caldav", { server, username, password, today }),
+  removeCalendarAccount: (id: string) => invoke<void>("plan_remove_calendar_account", { id }),
+  showCalendar: (id: string, shown: boolean, today: Day) => invoke<void>("plan_show_calendar", { id, shown, today }),
+  /** Publishes the plan into a calendar, or stops with null. */
+  publishTo: (calendarId: string | null, today: Day) => invoke<void>("plan_publish_to", { calendarId, today }),
+  /** Makes an "Axiom" calendar in an account and publishes the plan there. */
+  createPlanCalendar: (accountId: string, today: Day) => invoke<Calendar>("plan_create_plan_calendar", { accountId, today }),
 };
+
+let nudge: number | undefined;
+
+/** After the plan changes: publish it to the calendar (if one is chosen) a
+ * few seconds later, once a burst of edits has settled. */
+export function nudgeCalendars(today: Day) {
+  window.clearTimeout(nudge);
+  nudge = window.setTimeout(() => {
+    api.refreshCalendars(today, false).catch(() => {
+      // Problems are noted on the calendar; the Calendars dialog shows them.
+    });
+  }, 4000);
+}
 
 /** Minutes tracked on a task, including a running timer. */
 export function trackedMinutes(task: PlanTask, now = Date.now()): number {

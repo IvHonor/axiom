@@ -168,6 +168,18 @@ pub mod calendar {
         /// Why the last read failed, ready to show.
         pub problem: Option<String>,
         pub created_at: DateTimeUtc,
+        /// Set for a calendar from an account; empty for one added by link.
+        pub account_id: Option<String>,
+        /// Its id at the provider, or its CalDAV address.
+        pub remote_id: Option<String>,
+        /// Whether Axiom may publish the plan into it.
+        pub writable: bool,
+        /// Whether its events show on the planner.
+        pub shown: bool,
+        /// The calendar the plan is published into (at most one).
+        pub publish: bool,
+        #[serde(skip)]
+        pub published_hash: Option<String>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -196,6 +208,35 @@ pub mod event {
         pub busy: bool,
         pub title: String,
         pub color: String,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+/// A calendar account: Google, Microsoft (Outlook) or a CalDAV server such
+/// as iCloud. Its sign-in lives in the system keychain, not here.
+pub mod calendar_account {
+    use sea_orm::entity::prelude::*;
+    use serde::Serialize;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize)]
+    #[sea_orm(table_name = "daily_plan_calendar_accounts")]
+    #[serde(rename_all = "camelCase")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        /// "google", "microsoft" or "caldav".
+        pub provider: String,
+        /// Who it is, usually an email address.
+        pub name: String,
+        /// The CalDAV server; empty for Google and Microsoft.
+        pub server: String,
+        /// Why the last sync failed, ready to show.
+        pub problem: Option<String>,
+        pub created_at: DateTimeUtc,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

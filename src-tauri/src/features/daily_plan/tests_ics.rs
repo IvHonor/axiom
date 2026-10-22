@@ -4,7 +4,7 @@
 use chrono::NaiveDate;
 use rrule::Tz;
 
-use super::ics::{day_events, DayEvent};
+use super::calendars::ics::{day_events, DayEvent};
 
 const LONDON: Tz = Tz::Tz(chrono_tz::Europe::London);
 

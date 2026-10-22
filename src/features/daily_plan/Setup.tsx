@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { CalendarDays, Pencil, RefreshCw, Repeat, X } from "lucide-react";
 import { ConfirmButton } from "../../shell/ui/ConfirmButton";
-import { api, errorMessage, type Calendar, type Routine, type RoutineFields } from "./api";
+import { api, errorMessage, type Calendar, type CalendarAccount, type CalendarSetup, type Routine, type RoutineFields } from "./api";
 import { BLOCK_COLORS, colorOf } from "./palette";
 import { clock, duration, parseClock, parseDuration, today as todayNow } from "./time";
 
@@ -206,25 +206,33 @@ function ago(iso: string | null): string {
   return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
 }
 
-/** Calendars imported from private iCal links, shown as busy time. */
+function providerName(account: CalendarAccount): string {
+  if (account.provider === "google") return "Google";
+  if (account.provider === "microsoft") return "Outlook";
+  return account.server.includes("icloud.com") ? "iCloud" : "CalDAV";
+}
+
+type Busy = "google" | "microsoft" | "caldav" | "link" | "refresh" | "publish" | null;
+
+/** Calendar accounts and links: their events show as busy time, and the
+ * plan can be published into one calendar. */
 export function CalendarsDialog({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
-  const [calendars, setCalendars] = useState<Calendar[] | null>(null);
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [color, setColor] = useState("gray");
-  const [busy, setBusy] = useState<"add" | "refresh" | null>(null);
+  const [setup, setSetup] = useState<CalendarSetup | null>(null);
+  const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<"caldav" | "link" | null>(null);
 
   const load = useCallback(() => {
-    api.listCalendars().then(setCalendars, (e) => setError(errorMessage(e)));
+    api.calendarSetup().then(setSetup, (e) => setError(errorMessage(e)));
   }, []);
   useEffect(load, [load]);
 
-  const run = async (kind: "add" | "refresh" | null, change: () => Promise<unknown>) => {
+  /** Runs a change; returns whether it worked. */
+  const run = async (kind: Busy, change: () => Promise<unknown>) => {
     setBusy(kind);
+    setError(null);
     try {
       await change();
-      setError(null);
       return true;
     } catch (e) {
       setError(errorMessage(e));
@@ -236,62 +244,242 @@ export function CalendarsDialog({ onClose, onChanged }: { onClose: () => void; o
     }
   };
 
-  const add = async (e: FormEvent) => {
-    e.preventDefault();
-    if (await run("add", () => api.addCalendar(name, url, color, todayNow()))) {
-      setName("");
-      setUrl("");
-    }
-  };
+  // A sign-in still waiting on the browser stops when the dialog closes.
+  useEffect(() => () => void api.cancelCalendarSignIn(), []);
+
+  const today = todayNow();
+  const accounts = setup?.accounts ?? [];
+  const calendars = setup?.calendars ?? [];
+  const links = calendars.filter((c) => !c.accountId);
+  const writable = calendars.filter((c) => c.writable && c.accountId);
+  const publishing = calendars.find((c) => c.publish);
+  const accountOf = (c: Calendar) => accounts.find((a) => a.id === c.accountId);
+  const signingIn = busy === "google" || busy === "microsoft";
+
+  const connect = (provider: "google" | "microsoft") => run(provider, () => api.connectCalendar(provider, today));
 
   return (
     <Dialog icon={<CalendarDays size={16} strokeWidth={1.75} />} title="Calendars" onClose={onClose}>
       <p className="dp-hint">
-        Show your meetings on the planner as busy time, so tasks are planned around them. Axiom only reads the calendar; it never changes it.
-        The link stays on this computer and isn't synced.
+        Your meetings show on the planner as busy time, so tasks are planned around them, and your plan can appear in your calendar. Sign-ins stay on
+        this computer and aren't synced.
       </p>
       {error && <p className="dp-dialog-error">{error}</p>}
-      {calendars && calendars.length > 0 && (
-        <ul className="dp-setup-list">
-          {calendars.map((c) => (
-            <li key={c.id} className="dp-setup-row">
-              <i className="dp-setup-dot" style={{ background: colorOf(c.color) }} />
-              <span className="dp-setup-main">
-                <b>{c.name}</b>
-                {c.problem ? <span className="dp-setup-problem">{c.problem}</span> : <span className="dim">Updated {ago(c.refreshedAt)}</span>}
-              </span>
-              <ConfirmButton className="btn btn-sm btn-ghost is-danger" confirmText="Remove?" onConfirm={() => run(null, () => api.removeCalendar(c.id))}>
-                Remove
-              </ConfirmButton>
-            </li>
-          ))}
-        </ul>
+
+      {accounts.map((account) => (
+        <section key={account.id} className="dp-account">
+          <header className="dp-account-head">
+            <span className="dp-account-provider">{providerName(account)}</span>
+            <b className="dp-account-name">{account.name}</b>
+            <ConfirmButton
+              className="btn btn-sm btn-ghost is-danger"
+              confirmText="Disconnect?"
+              onConfirm={() => run(null, () => api.removeCalendarAccount(account.id))}
+            >
+              Disconnect
+            </ConfirmButton>
+          </header>
+          {account.problem && <p className="dp-setup-problem">{account.problem}</p>}
+          <ul className="dp-account-calendars">
+            {calendars
+              .filter((c) => c.accountId === account.id)
+              .map((c) => (
+                <li key={c.id}>
+                  <label>
+                    <input type="checkbox" checked={c.shown} onChange={(e) => run(null, () => api.showCalendar(c.id, e.currentTarget.checked, today))} />
+                    <i className="dp-setup-dot" style={{ background: colorOf(c.color) }} />
+                    <span>{c.name}</span>
+                  </label>
+                  {c.problem ? (
+                    <span className="dp-setup-problem">{c.problem}</span>
+                  ) : (
+                    c.shown && <span className="dim">Updated {ago(c.refreshedAt)}</span>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </section>
+      ))}
+
+      {signingIn ? (
+        <div className="dp-connecting" role="status">
+          <RefreshCw size={14} strokeWidth={1.75} className="dp-spin" />
+          <span>Finish signing in to {busy === "google" ? "Google" : "Outlook"} in your browser, then come back here.</span>
+          <button className="btn btn-sm btn-ghost" onClick={() => void api.cancelCalendarSignIn()}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="dp-connect">
+          <span className="menu-heading">Connect</span>
+          <ProviderButton name="Google" available={setup?.available.google} disabled={busy !== null} onClick={() => connect("google")} />
+          <ProviderButton name="Outlook" available={setup?.available.microsoft} disabled={busy !== null} onClick={() => connect("microsoft")} />
+          <ProviderButton name="iCloud" available disabled={busy !== null} onClick={() => setForm(form === "caldav" ? null : "caldav")} />
+        </div>
       )}
-      {calendars && calendars.length > 0 && (
-        <button className="btn btn-sm btn-ghost dp-setup-refresh" disabled={busy !== null} onClick={() => run("refresh", () => api.refreshCalendars(todayNow(), true))}>
+      {form === "caldav" && (
+        <CaldavForm
+          busy={busy === "caldav"}
+          onConnect={async (server, username, password) => {
+            if (await run("caldav", () => api.connectCaldav(server, username, password, today))) setForm(null);
+          }}
+        />
+      )}
+
+      {accounts.length > 0 && (
+        <section className="dp-publish">
+          <span className="menu-heading">Your plan in your calendar</span>
+          <p className="dp-hint">
+            Axiom can add your planned blocks for the next two weeks to a calendar, so they're on your phone and others see you're busy. Change
+            them in Axiom: edits made in the calendar are replaced.
+          </p>
+          <div className="dp-publish-row">
+            <select
+              value={publishing?.id ?? ""}
+              disabled={busy !== null}
+              aria-label="Calendar to publish the plan into"
+              onChange={(e) => run("publish", () => api.publishTo(e.currentTarget.value || null, today))}
+            >
+              <option value="">Don't add my plan to a calendar</option>
+              {writable.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({accountOf(c)?.name})
+                </option>
+              ))}
+            </select>
+            {busy === "publish" && <RefreshCw size={14} strokeWidth={1.75} className="dp-spin" />}
+          </div>
+          {publishing?.problem && <p className="dp-setup-problem">{publishing.problem}</p>}
+          {accounts
+            .filter((a) => !calendars.some((c) => c.accountId === a.id && c.writable && c.name === "Axiom"))
+            .map((a) => (
+              <button key={a.id} className="btn btn-sm btn-ghost dp-setup-refresh" disabled={busy !== null} onClick={() => run("publish", () => api.createPlanCalendar(a.id, today))}>
+                Make an "Axiom" calendar in {a.name} and use it
+              </button>
+            ))}
+          {accounts.some((a) => a.provider === "google") && (
+            <p className="dim dp-setup-note">For Google, Axiom can only add events to a calendar it made, so your other calendars are never changed.</p>
+          )}
+        </section>
+      )}
+
+      {(accounts.length > 0 || links.length > 0) && (
+        <button className="btn btn-sm btn-ghost dp-setup-refresh" disabled={busy !== null} onClick={() => run("refresh", () => api.refreshCalendars(today, true))}>
           <RefreshCw size={13} strokeWidth={1.75} className={busy === "refresh" ? "dp-spin" : undefined} /> {busy === "refresh" ? "Updating…" : "Update now"}
         </button>
       )}
 
-      <form className="dp-setup-form" onSubmit={add}>
-        <p className="menu-heading">Add a calendar</p>
-        <input className="dp-editor-title" value={name} placeholder="Name, e.g. Work" onChange={(e) => setName(e.currentTarget.value)} />
-        <input
-          className="dp-editor-title"
-          value={url}
-          placeholder="Secret iCal address (https://… .ics)"
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(e) => setUrl(e.currentTarget.value)}
-        />
-        <Swatches value={color} onChange={setColor} />
-        <div className="row">
-          <button className="btn btn-sm" type="submit" disabled={busy !== null || !url.trim()}>
-            {busy === "add" ? "Checking the link…" : "Add calendar"}
+      <section className="dp-links">
+        <span className="menu-heading">Calendar links</span>
+        {links.length > 0 && (
+          <ul className="dp-setup-list">
+            {links.map((c) => (
+              <li key={c.id} className="dp-setup-row">
+                <i className="dp-setup-dot" style={{ background: colorOf(c.color) }} />
+                <span className="dp-setup-main">
+                  <b>{c.name}</b>
+                  {c.problem ? <span className="dp-setup-problem">{c.problem}</span> : <span className="dim">Updated {ago(c.refreshedAt)}</span>}
+                </span>
+                <ConfirmButton className="btn btn-sm btn-ghost is-danger" confirmText="Remove?" onConfirm={() => run(null, () => api.removeCalendar(c.id))}>
+                  Remove
+                </ConfirmButton>
+              </li>
+            ))}
+          </ul>
+        )}
+        {form === "link" ? (
+          <LinkForm busy={busy === "link"} onAdd={(name, url, color) => run("link", () => api.addCalendar(name, url, color, today)).then((ok) => ok && setForm(null))} />
+        ) : (
+          <button className="btn btn-sm btn-ghost dp-setup-refresh" onClick={() => setForm("link")}>
+            Add a read-only iCal link
           </button>
-        </div>
-      </form>
+        )}
+      </section>
+    </Dialog>
+  );
+}
 
+function ProviderButton({ name, available, disabled, onClick }: { name: string; available: boolean | undefined; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      className="btn btn-sm dp-provider"
+      disabled={disabled || !available}
+      title={available ? `Connect a ${name} account` : `This copy of Axiom isn't set up to connect to ${name}.`}
+      onClick={onClick}
+    >
+      {name}
+    </button>
+  );
+}
+
+function CaldavForm({ busy, onConnect }: { busy: boolean; onConnect: (server: string, username: string, password: string) => void }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [other, setOther] = useState(false);
+  const [server, setServer] = useState("");
+
+  return (
+    <form
+      className="dp-setup-form dp-caldav"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onConnect(other ? server : "", username, password);
+      }}
+    >
+      <p className="dp-hint">
+        Use your Apple Account email and an <b>app-specific password</b> (not your normal password). Make one at account.apple.com → Sign-In and
+        Security → App-Specific Passwords.
+      </p>
+      {other && <input className="dp-editor-title" value={server} placeholder="Server, e.g. https://caldav.fastmail.com/" onChange={(e) => setServer(e.currentTarget.value)} />}
+      <input className="dp-editor-title" value={username} placeholder="Email" autoComplete="username" onChange={(e) => setUsername(e.currentTarget.value)} />
+      <input
+        className="dp-editor-title"
+        type="password"
+        value={password}
+        placeholder="App-specific password (xxxx-xxxx-xxxx-xxxx)"
+        autoComplete="off"
+        onChange={(e) => setPassword(e.currentTarget.value)}
+      />
+      <div className="row">
+        <button className="btn btn-sm" type="submit" disabled={busy || !username.trim() || !password.trim()}>
+          {busy ? "Connecting…" : other ? "Connect" : "Connect iCloud"}
+        </button>
+        <button className="btn btn-sm btn-ghost" type="button" onClick={() => setOther(!other)}>
+          {other ? "Use iCloud" : "Another CalDAV server"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function LinkForm({ busy, onAdd }: { busy: boolean; onAdd: (name: string, url: string, color: string) => void }) {
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [color, setColor] = useState("gray");
+
+  return (
+    <form
+      className="dp-setup-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onAdd(name, url, color);
+      }}
+    >
+      <input className="dp-editor-title" value={name} placeholder="Name, e.g. Work" onChange={(e) => setName(e.currentTarget.value)} />
+      <input
+        className="dp-editor-title"
+        value={url}
+        placeholder="Secret iCal address (https://… .ics)"
+        spellCheck={false}
+        autoComplete="off"
+        onChange={(e) => setUrl(e.currentTarget.value)}
+      />
+      <Swatches value={color} onChange={setColor} />
+      <div className="row">
+        <button className="btn btn-sm" type="submit" disabled={busy || !url.trim()}>
+          {busy ? "Checking the link…" : "Add calendar"}
+        </button>
+      </div>
       <details className="dp-setup-help">
         <summary>Where do I find the link?</summary>
         <p>
@@ -302,11 +490,8 @@ export function CalendarsDialog({ onClose, onChanged }: { onClose: () => void; o
           <b>Outlook:</b> on the web, open Settings → Calendar → Shared calendars. Under "Publish a calendar", pick the calendar and{" "}
           <i>Can view all details</i>, select Publish, then copy the ICS link.
         </p>
-        <p>
-          <b>Apple iCloud:</b> share the calendar as a Public Calendar and copy its webcal:// link.
-        </p>
-        <p className="dim">Anyone with a secret link can read that calendar, so don't share it. Calendars update every 15 minutes while the planner is open.</p>
+        <p className="dim">Anyone with a secret link can read that calendar, so don't share it. Links are read-only and update every 15 minutes.</p>
       </details>
-    </Dialog>
+    </form>
   );
 }

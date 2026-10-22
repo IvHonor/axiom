@@ -47,6 +47,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
           # The live account server, built into the app.
           AXIOM_SERVER_URL: https://axiom-server-1bil.onrender.com
+          # Calendar sign-in (Google, Outlook). Empty switches that provider off.
+          AXIOM_GOOGLE_CLIENT_ID: ${{ secrets.AXIOM_GOOGLE_CLIENT_ID }}
+          AXIOM_GOOGLE_CLIENT_SECRET: ${{ secrets.AXIOM_GOOGLE_CLIENT_SECRET }}
+          AXIOM_MICROSOFT_CLIENT_ID: ${{ secrets.AXIOM_MICROSOFT_CLIENT_ID }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Axiom ${{ github.ref_name }}

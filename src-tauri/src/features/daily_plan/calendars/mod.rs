@@ -1,6 +1,12 @@
-//! Calendar import: events from Google Calendar, Outlook or any app that
-//! offers a private iCal (.ics) link, shown on the planner as busy time.
-//! Read-only, and kept on this computer only (see m004_calendars).
+//! Calendars on the planner: events from Google, Outlook, iCloud (or any
+//! CalDAV server) and private iCal (.ics) links, shown as busy time; and the
+//! plan published into one calendar. Kept on this computer only (see
+//! m004_calendars and m005_calendar_accounts).
+//!
+//! - `ics.rs` reads iCalendar text; `google.rs`, `microsoft.rs` and
+//!   `caldav.rs` talk to each provider through `remote.rs`'s `Remote`
+//! - `oauth.rs` signs in to Google and Microsoft; `secrets.rs` keeps sign-ins
+//! - `accounts.rs` connects and syncs accounts; `publish.rs` publishes the plan
 
 use std::time::Duration;
 
@@ -8,8 +14,19 @@ use chrono::{Days, Utc};
 use sea_orm::prelude::Date;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait};
 
-use super::entities::{calendar, event};
-use super::ics;
+pub mod accounts;
+mod caldav;
+mod google;
+pub(super) mod ics;
+mod microsoft;
+mod oauth;
+pub mod publish;
+pub mod remote;
+pub mod secrets;
+
+use serde::Serialize;
+
+use super::entities::{calendar, calendar_account, event};
 use super::service::COLORS;
 use crate::db::new_id;
 use crate::error::{Error, Result};
@@ -21,6 +38,26 @@ const DAYS_BACK: u64 = 14;
 const DAYS_AHEAD: u64 = 120;
 /// Bigger than any real calendar; stops a wrong link filling the disk.
 const MAX_BYTES: usize = 20 * 1024 * 1024;
+
+/// The calendar Axiom makes to publish the plan into.
+const AXIOM_CALENDAR: &str = "Axiom";
+const AXIOM_CALENDAR_ABOUT: &str = "Your plan from Axiom's Daily Plan. Axiom keeps it up to date; changes made here are replaced.";
+/// Marks events Axiom published, with the plan block's id as the value.
+const MARKER: &str = "axiomBlock";
+
+/// Everything the Calendars dialog shows.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarSetup {
+    pub accounts: Vec<calendar_account::Model>,
+    pub calendars: Vec<calendar::Model>,
+    /// Which providers this copy of Axiom can connect to.
+    pub available: accounts::Available,
+}
+
+pub async fn setup(db: &DatabaseConnection, hub: &accounts::CalendarHub) -> Result<CalendarSetup> {
+    Ok(CalendarSetup { accounts: accounts::list_accounts(db).await?, calendars: list_calendars(db).await?, available: hub.available() })
+}
 
 pub async fn list_calendars(db: &DatabaseConnection) -> Result<Vec<calendar::Model>> {
     Ok(calendar::Entity::find().order_by_asc(calendar::Column::CreatedAt).all(db).await?)
@@ -46,6 +83,12 @@ pub async fn add_calendar(db: &DatabaseConnection, name: &str, url: &str, color:
         refreshed_at: Set(Some(Utc::now())),
         problem: Set(None),
         created_at: Set(Utc::now()),
+        account_id: Set(None),
+        remote_id: Set(None),
+        writable: Set(false),
+        shown: Set(true),
+        publish: Set(false),
+        published_hash: Set(None),
     }
     .insert(db)
     .await?;
@@ -61,13 +104,24 @@ pub async fn remove_calendar(db: &DatabaseConnection, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Reads every calendar that's due (or all, with `force`). A calendar that
-/// can't be read keeps its last events and notes the problem. Returns
-/// whether anything was read.
-pub async fn refresh_calendars(db: &DatabaseConnection, today: Date, force: bool) -> Result<bool> {
+/// Reads every calendar that's due (or all, with `force`), then publishes
+/// the plan if it changed. A calendar that can't be read keeps its last
+/// events and notes the problem. Returns whether anything was read.
+pub async fn refresh_calendars(db: &DatabaseConnection, hub: &accounts::CalendarHub, today: Date, force: bool) -> Result<bool> {
+    let _one_at_a_time = accounts::exclusive(hub).await;
+    let mut refreshed = refresh_links(db, today, force).await?;
+    for account in accounts::list_accounts(db).await? {
+        refreshed |= accounts::sync_account(db, hub, &account, today, force).await?;
+    }
+    accounts::publish_plan(db, hub, today, force).await?;
+    Ok(refreshed)
+}
+
+/// Calendars added by link.
+async fn refresh_links(db: &DatabaseConnection, today: Date, force: bool) -> Result<bool> {
     let due = chrono::Duration::minutes(STALE_MINUTES);
     let mut refreshed = false;
-    for cal in list_calendars(db).await? {
+    for cal in list_calendars(db).await?.into_iter().filter(|c| c.account_id.is_none()) {
         if !force && cal.refreshed_at.is_some_and(|at| Utc::now() - at < due) {
             continue;
         }
@@ -162,3 +216,6 @@ async fn fetch(url: &str) -> Result<String> {
     }
     Ok(String::from_utf8_lossy(&body).into_owned())
 }
+
+#[cfg(test)]
+mod tests;

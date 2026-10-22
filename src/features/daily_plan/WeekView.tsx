@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type DragEvent, type FormEvent } from "react";
 import { Check, Inbox, Plus } from "lucide-react";
 import { useDataChanged } from "../../lib/sync";
-import { api, cardFromDrag, errorMessage, type Day, type DayPlan, type PlanTask } from "./api";
+import { api, cardFromDrag, errorMessage, nudgeCalendars, type Day, type DayPlan, type PlanTask } from "./api";
 import { capacityState, expectedMinutes, plannedMinutes } from "./Capacity";
 import { colorOf } from "./palette";
 import { draggedTask, TASK_DRAG } from "./TaskPanel";
@@ -40,6 +40,7 @@ export function WeekView({ weekStart, today, version, onOpenDay, onError }: Week
     async (change) => {
       try {
         await change();
+        nudgeCalendars(todayNow());
       } catch (e) {
         onError(errorMessage(e));
       }

@@ -18,6 +18,11 @@ pub fn run() {
         .manage(db::Db::default())
         .manage(account::Account::new(account::SERVER_URL, Box::new(account::Keychain)))
         .manage(sync::SyncEngine::default())
+        .manage(features::daily_plan::calendars::accounts::CalendarHub::new(
+            Box::new(features::daily_plan::calendars::secrets::Keychain),
+            features::daily_plan::calendars::accounts::Providers::from_build(),
+            rrule::Tz::LOCAL,
+        ))
         .setup(|app| {
             // Checks GitHub Releases for signed updates (see plugins.updater
             // in tauri.conf.json). The frontend decides when to ask.
@@ -76,10 +81,17 @@ pub fn run() {
             plan::plan_update_routine,
             plan::plan_delete_routine,
             plan::plan_insights,
-            plan::plan_list_calendars,
+            plan::plan_calendar_setup,
             plan::plan_add_calendar,
             plan::plan_remove_calendar,
             plan::plan_refresh_calendars,
+            plan::plan_connect_calendar,
+            plan::plan_cancel_calendar_sign_in,
+            plan::plan_connect_caldav,
+            plan::plan_remove_calendar_account,
+            plan::plan_show_calendar,
+            plan::plan_publish_to,
+            plan::plan_create_plan_calendar,
             board::board_list_projects,
             board::board_create_project,
             board::board_rename_project,

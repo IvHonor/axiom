@@ -11,7 +11,7 @@ use sea_orm::{
     Select, Set, TransactionTrait,
 };
 
-use super::calendar::events_on;
+use super::calendars::events_on;
 use super::entities::{block, day, event, routine, settings, task};
 use super::parse::{self, DayHint};
 use super::types::{

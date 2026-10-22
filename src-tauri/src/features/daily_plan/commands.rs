@@ -3,16 +3,18 @@
 //! user's own time zone.
 
 use sea_orm::prelude::Date;
-use tauri::State;
+use tauri::{AppHandle, State};
+use tauri_plugin_opener::OpenerExt;
 
-use super::entities::{block, calendar as cal, routine, task};
-use super::{calendar, service};
+use super::calendars::accounts::{self, CalendarHub};
+use super::entities::{block, calendar as cal, calendar_account as account, routine, task};
+use super::{calendars as calendar, service};
 use super::types::{
     BlockFields, CarryTo, DayFields, DayInfo, DayPlan, PlanInsights, QuickAdded, RoutineFields, ScheduleResult, Settings,
     TaskFields, TodaySummary,
 };
 use crate::db::Db;
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 #[tauri::command]
 pub async fn plan_get_day(db: State<'_, Db>, day: Date, today: Date) -> Result<DayPlan> {
@@ -146,9 +148,10 @@ pub async fn plan_insights(db: State<'_, Db>, today: Date) -> Result<PlanInsight
     service::insights(&db.conn().await?, today).await
 }
 
+/// The Calendars dialog: accounts, calendars, and which providers this build can connect to.
 #[tauri::command]
-pub async fn plan_list_calendars(db: State<'_, Db>) -> Result<Vec<cal::Model>> {
-    calendar::list_calendars(&db.conn().await?).await
+pub async fn plan_calendar_setup(db: State<'_, Db>, hub: State<'_, CalendarHub>) -> Result<calendar::CalendarSetup> {
+    calendar::setup(&db.conn().await?, &hub).await
 }
 
 #[tauri::command]
@@ -161,8 +164,72 @@ pub async fn plan_remove_calendar(db: State<'_, Db>, id: String) -> Result<()> {
     calendar::remove_calendar(&db.conn().await?, &id).await
 }
 
-/// Re-reads calendars that are due (or all, with `force`); true if any were.
+/// Re-reads calendars that are due (or all, with `force`) and publishes
+/// the plan if it changed; true if any calendar was read.
 #[tauri::command]
-pub async fn plan_refresh_calendars(db: State<'_, Db>, today: Date, force: bool) -> Result<bool> {
-    calendar::refresh_calendars(&db.conn().await?, today, force).await
+pub async fn plan_refresh_calendars(db: State<'_, Db>, hub: State<'_, CalendarHub>, today: Date, force: bool) -> Result<bool> {
+    calendar::refresh_calendars(&db.conn().await?, &hub, today, force).await
+}
+
+/// Connects Google or Microsoft ("google", "microsoft"): opens the sign-in
+/// page in the browser and waits for it.
+#[tauri::command]
+pub async fn plan_connect_calendar(
+    app: AppHandle,
+    db: State<'_, Db>,
+    hub: State<'_, CalendarHub>,
+    provider: String,
+    today: Date,
+) -> Result<account::Model> {
+    let open = |url: &str| {
+        app.opener()
+            .open_url(url, None::<&str>)
+            .map_err(|_| Error::Invalid("Couldn't open your browser to sign in.".into()))
+    };
+    accounts::connect_oauth(&db.conn().await?, &hub, &provider, today, open).await
+}
+
+#[tauri::command]
+pub async fn plan_cancel_calendar_sign_in(hub: State<'_, CalendarHub>) -> Result<()> {
+    hub.cancel_sign_in().await;
+    Ok(())
+}
+
+/// Connects iCloud (an empty `server`) or another CalDAV server.
+#[tauri::command]
+pub async fn plan_connect_caldav(
+    db: State<'_, Db>,
+    hub: State<'_, CalendarHub>,
+    server: String,
+    username: String,
+    password: String,
+    today: Date,
+) -> Result<account::Model> {
+    accounts::connect_caldav(&db.conn().await?, &hub, &server, &username, &password, today).await
+}
+
+#[tauri::command]
+pub async fn plan_remove_calendar_account(db: State<'_, Db>, hub: State<'_, CalendarHub>, id: String) -> Result<()> {
+    let _one_at_a_time = accounts::exclusive(&hub).await;
+    accounts::remove_account(&db.conn().await?, &hub, &id).await
+}
+
+#[tauri::command]
+pub async fn plan_show_calendar(db: State<'_, Db>, hub: State<'_, CalendarHub>, id: String, shown: bool, today: Date) -> Result<()> {
+    let _one_at_a_time = accounts::exclusive(&hub).await;
+    accounts::set_shown(&db.conn().await?, &hub, &id, shown, today).await
+}
+
+/// Publishes the plan into a calendar, or stops (`calendarId` null).
+#[tauri::command]
+pub async fn plan_publish_to(db: State<'_, Db>, hub: State<'_, CalendarHub>, calendar_id: Option<String>, today: Date) -> Result<()> {
+    let _one_at_a_time = accounts::exclusive(&hub).await;
+    accounts::set_publish(&db.conn().await?, &hub, calendar_id.as_deref(), today).await
+}
+
+/// Makes an "Axiom" calendar in an account and publishes the plan there.
+#[tauri::command]
+pub async fn plan_create_plan_calendar(db: State<'_, Db>, hub: State<'_, CalendarHub>, account_id: String, today: Date) -> Result<cal::Model> {
+    let _one_at_a_time = accounts::exclusive(&hub).await;
+    accounts::create_plan_calendar(&db.conn().await?, &hub, &account_id, today).await
 }

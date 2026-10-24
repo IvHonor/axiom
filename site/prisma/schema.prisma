@@ -1,0 +1,12 @@
+// The database for Axiom on the web (coming soon). The website itself doesn't
+// use it yet, so it deploys without one: models arrive with the web version.
+// Generate the client with `npx prisma generate` once there are models.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

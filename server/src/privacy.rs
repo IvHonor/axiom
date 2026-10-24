@@ -71,6 +71,7 @@ pub async fn page(State(s): State<AppState>) -> Html<String> {
 <li><b>Notification emails:</b> if you switch on emails, the server keeps each planned email's contents until it's sent. Emails aren't end-to-end encrypted. Finance amounts are never emailed.</li>
 <li><b>Codes:</b> codes for confirming your email, resetting your password or turning off the PIN lock are stored only as hashes, and expire after 30 minutes.</li>
 <li><b>Support messages:</b> what you write to support, the email address to reply to, and your Axiom version. Each one is kept so we can follow it up, and emailed to our support inbox. You can send one without an account.</li>
+<li><b>Axiom on the web list:</b> if you ask to hear when Axiom on the web opens, your email address and when you asked. We'll use it for that one email, then delete the list. Write to us to be taken off it sooner; deleting your account does it too.</li>
 </ul>
 <p>Your IP address is used briefly, in memory, to limit repeated sign-in attempts. It isn't saved with your account, though our hosting provider may keep standard request logs.</p>
 <p>Axiom has no ads and no analytics or tracking, and your data is never sold.</p>
@@ -78,7 +79,7 @@ pub async fn page(State(s): State<AppState>) -> Html<String> {
 <h2>Why we use it (our lawful bases)</h2>
 <ul>
 <li><b>To provide the service you asked for</b> (performance of a contract): your account, syncing, shared boards, and the codes for confirming your email or resetting your password.</li>
-<li><b>Because you chose it</b> (consent): notification emails. Switch them off at any time, in the app or with the link in each email.</li>
+<li><b>Because you chose it</b> (consent): notification emails, and the Axiom on the web list. Switch emails off at any time, in the app or with the link in each email.</li>
 <li><b>Legitimate interests</b>: keeping the service secure (rate limits and backups), answering support messages, and keeping a short record of them.</li>
 </ul>
 

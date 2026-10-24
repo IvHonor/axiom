@@ -318,6 +318,21 @@
   color: var(--text-dim);
 }
 
+.sidebar-head-link {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-head-link:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.sidebar-head-link:focus-visible {
+  outline-offset: -4px;
+}
+
 .sidebar-body {
   flex: 1;
   overflow-y: auto;

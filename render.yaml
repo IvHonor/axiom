@@ -37,6 +37,10 @@ services:
       # Who runs this server, named in the privacy notice and terms.
       - key: OPERATOR_NAME
         sync: false
+      # Shared with the website (its AXIOM_WEB_PROXY_SECRET), so website sign-ins are
+      # rate limited per visitor. At least 32 characters: openssl rand -base64 48
+      - key: WEB_PROXY_SECRET
+        sync: false
       # New accounts wait for approval. Set to "off" to let anyone sign up.
       - key: WAITLIST
         value: "on"

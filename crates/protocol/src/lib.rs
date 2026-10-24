@@ -95,6 +95,8 @@ pub mod routes {
     pub const NOTIFY_EMAILS: &str = "/v1/notifications/emails";
     /// `GET` with `?token=` from an email: stops that kind of email.
     pub const NOTIFY_UNSUBSCRIBE: &str = "/v1/notifications/unsubscribe";
+    /// `POST` an email to hear when Axiom on the web opens. No account needed.
+    pub const WEB_UPDATES: &str = "/v1/web-updates";
 }
 
 /// Fills in a route's `{name}` placeholders, e.g. `route(SPACE, &[("id", "p1")])`.
@@ -516,6 +518,12 @@ pub struct ConfirmPassword {
     /// See `PLAIN_PASSWORD`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub login_key: Option<String>,
+}
+
+/// Body of `WEB_UPDATES`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebUpdates {
+    pub email: String,
 }
 
 /// Body of `DELETE ACCOUNT`: the password, to confirm it's really them.

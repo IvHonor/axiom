@@ -183,7 +183,15 @@ export default function App() {
           {panel === "themes" && <ThemesPanel onBrowse={browseThemes} />}
           {shownArea && AreaSidebar && (
             <aside className="sidebar" aria-label={shownArea.name}>
-              <header className="sidebar-head">{shownArea.name}</header>
+              <button
+                type="button"
+                className="sidebar-head sidebar-head-link"
+                title={`Open ${shownArea.name}`}
+                aria-label={`Open ${shownArea.name}`}
+                onClick={() => open({ kind: "extension", id: shownArea.id })}
+              >
+                {shownArea.name}
+              </button>
               <div className="sidebar-body">
                 <AreaSidebar
                   active={active.kind === "extension" && active.id === shownArea.id}

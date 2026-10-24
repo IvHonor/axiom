@@ -12,6 +12,7 @@ use axum::Json;
 use axum::extract::{ConnectInfo, FromRequestParts};
 use axum::http::HeaderMap;
 use axum::http::request::Parts;
+use sha2::{Digest, Sha256};
 use serde_json::{Map, Value, json};
 
 use crate::AppState;
@@ -115,11 +116,24 @@ impl FromRequestParts<AppState> for ClientIp {
         if from_header.is_none() && state.client_ip_header.is_some() && !MISSING_TOLD.swap(true, Ordering::Relaxed) {
             tracing::warn!("CLIENT_IP_HEADER is set, but a request came without it: rate limits fall back to the proxy's address. GET /v1/client-ip shows what arrives.");
         }
-        let ip = from_header
+        let ip = from_website(parts, state)
+            .or(from_header)
             .or_else(|| parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip().to_string()))
             .unwrap_or_else(|| "unknown".into());
         Ok(ClientIp(ip))
     }
+}
+
+/// The visitor's address, when the request comes from the website with the shared secret.
+fn from_website(parts: &Parts, state: &AppState) -> Option<String> {
+    let secret = state.web_proxy_secret.as_deref()?;
+    // Compared as hashes, so the time taken says nothing about the secret.
+    let sent = parts.headers.get("x-axiom-proxy")?.as_bytes();
+    if Sha256::digest(sent) != Sha256::digest(secret.as_bytes()) {
+        return None;
+    }
+    let ip = parts.headers.get("x-axiom-client-ip")?.to_str().ok()?.trim();
+    (!ip.is_empty() && ip.len() <= 64).then(|| ip.to_owned())
 }
 
 /// Warned once that the configured header was missing.

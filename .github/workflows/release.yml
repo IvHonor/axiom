@@ -27,6 +27,34 @@ jobs:
             exit 1
           fi
 
+      # Before the 15-minute build, not after: a bad key only fails at the
+      # very end. Prints nothing about the key but its length.
+      - name: Check the updater signing key
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::The TAURI_SIGNING_PRIVATE_KEY secret is empty or missing. Add it under Settings > Secrets and variables > Actions > Secrets (not Variables)."
+            exit 1
+          fi
+          decoded="$(printf '%s' "$KEY" | tr -d '[:space:]' | base64 -d 2>/dev/null || true)"
+          # A secret key decodes to "untrusted comment: … secret key" and a
+          # second line, about 260 bytes; the public key or a cut-off paste doesn't.
+          case "$decoded" in
+            "untrusted comment:"*"secret key"*)
+              if [ "${#decoded}" -lt 200 ]; then
+                echo "::error::TAURI_SIGNING_PRIVATE_KEY is cut off (${#KEY} characters; the key file is a single line of about 348). Paste the whole line again."
+                exit 1
+              fi
+              echo "Signing key looks right (${#KEY} characters)."
+              ;;
+            *)
+              echo "::error::TAURI_SIGNING_PRIVATE_KEY isn't the signing key (${#KEY} characters; the key file is a single line of about 348). Paste the contents of the .key file, not the .key.pub file."
+              exit 1
+              ;;
+          esac
+
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*

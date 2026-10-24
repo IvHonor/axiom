@@ -15,6 +15,8 @@ pub struct Config {
     /// Behind a proxy (any host), the header holding the client's real IP,
     /// e.g. `x-forwarded-for`. Used for rate limiting.
     pub client_ip_header: Option<HeaderName>,
+    /// `WEB_PROXY_SECRET`: the secret the website sends with its visitors' addresses.
+    pub web_proxy_secret: Option<String>,
     /// Resend's API key. Without one, emails are printed to the log instead.
     pub resend_api_key: Option<String>,
     /// The sender, e.g. `Axiom <noreply@yourdomain.com>`. The domain must be
@@ -54,6 +56,11 @@ impl Config {
             None => None,
         };
 
+        let web_proxy_secret = var("WEB_PROXY_SECRET");
+        if web_proxy_secret.as_ref().is_some_and(|s| s.len() < 32) {
+            return Err("WEB_PROXY_SECRET must be at least 32 characters. Generate one with: openssl rand -base64 48".into());
+        }
+
         let resend_api_key = var("RESEND_API_KEY");
         let email_from = var("EMAIL_FROM").unwrap_or_else(|| "Axiom <onboarding@resend.dev>".into());
 
@@ -86,6 +93,7 @@ impl Config {
             jwt_secret,
             port,
             client_ip_header,
+            web_proxy_secret,
             resend_api_key,
             email_from,
             waitlist,

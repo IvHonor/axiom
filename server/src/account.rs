@@ -10,7 +10,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, ModelTrait, QueryFilte
 use crate::AppState;
 use crate::auth::{AuthUser, confirm_password, password, revoke_sessions};
 use crate::codes::{self, Purpose};
-use crate::entities::{email_code, password_reset, session, sync_record, user};
+use crate::entities::{email_code, password_reset, session, sync_record, user, web_update};
 use crate::error::ApiError;
 
 /// Every device signed in to the account, most recently active first.
@@ -93,6 +93,7 @@ pub async fn delete_account(State(s): State<AppState>, auth: AuthUser, Json(body
     password_reset::Entity::delete_many().filter(password_reset::Column::UserId.eq(&account.id)).exec(&txn).await?;
     email_code::Entity::delete_many().filter(email_code::Column::UserId.eq(&account.id)).exec(&txn).await?;
     session::Entity::delete_many().filter(session::Column::UserId.eq(&account.id)).exec(&txn).await?;
+    web_update::Entity::delete_by_id(account.email.clone()).exec(&txn).await?;
     account.delete(&txn).await?;
     txn.commit().await?;
     tracing::info!("Deleted an account and its data");

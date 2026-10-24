@@ -60,8 +60,11 @@ pub fn run() {
             app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
 
             // The local database lives in the app's data folder, e.g.
-            // %APPDATA%\app.axiom.desktop\axiom.db on Windows.
-            let file = app.path().app_data_dir()?.join("axiom.db");
+            // %APPDATA%\app.axiom.desktop\axiom.db on Windows. Development builds
+            // keep their own file, so unreleased migrations never reach the
+            // database an installed copy of Axiom opens.
+            let name = if cfg!(debug_assertions) { "axiom-dev.db" } else { "axiom.db" };
+            let file = app.path().app_data_dir()?.join(name);
             // Book covers, downloaded once so the library shows them offline.
             let covers = app.path().app_cache_dir().ok().map(|dir| dir.join("covers"));
             app.manage(features::reading::library::OpenLibrary::new(covers));

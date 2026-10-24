@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0b0c0b"/>
+  <rect x="28" y="28" width="1144" height="574" rx="3" fill="none" stroke="#42483c"/>
+  <path d="M72 77 82 70 92 77 82 84ZM67 89 78 82V94L67 101ZM86 82 97 89V101L86 94Z" fill="#e7e8df"/>
+  <g font-family="Arial, sans-serif" fill="#e7e8df">
+    <text x="112" y="94" font-size="26" font-weight="600" letter-spacing="3">AXIOM</text>
+    <text x="68" y="246" font-size="92" font-weight="500" letter-spacing="-5">Your life.</text>
+    <text x="68" y="340" font-size="92" font-weight="500" letter-spacing="-5">Back in</text>
+    <text x="68" y="434" font-size="92" font-weight="500" letter-spacing="-5" fill="#becbaa">command.</text>
+    <text x="70" y="490" font-size="18" fill="#a1a69a">One personal terminal for your plans, projects and possibilities.</text>
+  </g>
+  <g stroke="#747e68" fill="none" opacity=".7">
+    <circle cx="916" cy="310" r="168" stroke-width=".8"/>
+    <circle cx="916" cy="310" r="140" stroke-dasharray="1 6"/>
+    <ellipse cx="916" cy="310" rx="105" ry="168" stroke-dasharray="1 6"/>
+    <ellipse cx="916" cy="310" rx="55" ry="168" stroke-dasharray="1 6"/>
+    <ellipse cx="916" cy="310" rx="168" ry="105" stroke-dasharray="1 6"/>
+    <ellipse cx="916" cy="310" rx="168" ry="55" stroke-dasharray="1 6"/>
+    <ellipse cx="916" cy="310" rx="211" ry="59" transform="rotate(-35 916 310)" stroke-width=".8"/>
+    <path d="M916 108V512M714 310h404" stroke-dasharray="1 8"/>
+    <path d="M910 112h12m-6-6v12m-6 390h12m-6-6v12"/>
+  </g>
+  <path d="M69 544h1062" stroke="#2a2e26"/>
+  <g font-family="monospace" font-size="10" fill="#a1a69a" letter-spacing="1.3">
+    <text x="70" y="574">A LITTLE STRUCTURE. A LOT MORE POSSIBILITY.</text>
+    <text x="895" y="574">AXIOMTERMINAL.APP</text>
+    <text x="865" y="89">YOUR PERSONAL TERMINAL</text>
+  </g>
+</svg>

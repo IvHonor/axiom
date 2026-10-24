@@ -20,6 +20,7 @@ mod privacy;
 mod spaces;
 mod support;
 pub mod sync;
+mod web_updates;
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -45,6 +46,10 @@ pub struct Shared {
     pub limits: limit::Limits,
     /// The header the hosting proxy puts the client's IP in, if any.
     pub client_ip_header: Option<HeaderName>,
+    /// Shared with the website, which calls the API for its visitors: a request
+    /// carrying it in `x-axiom-proxy` is rate limited by `x-axiom-client-ip`
+    /// (the visitor), not by the website's own address.
+    pub web_proxy_secret: Option<String>,
     /// How long an already-used refresh token still works. Covers an app that
     /// refreshed but lost the response; after this, reuse means theft.
     pub reuse_grace: chrono::Duration,
@@ -79,6 +84,7 @@ impl Shared {
             keys: auth::tokens::Keys::new(jwt_secret),
             limits: limit::Limits::default(),
             client_ip_header: None,
+            web_proxy_secret: None,
             reuse_grace: chrono::Duration::seconds(60),
             mailer: mail::Mailer::Log,
             waitlist: false,
@@ -200,6 +206,7 @@ pub fn app(state: AppState) -> Router {
         .route(routes::ADMIN_APPROVE, post(admin::approve))
         .route(routes::ADMIN_REVOKE, post(admin::revoke))
         .route(routes::NOTIFY_EMAILS, put(notify::plan))
+        .route(routes::WEB_UPDATES, post(web_updates::join))
         .route(routes::NOTIFY_UNSUBSCRIBE, get(notify::unsubscribe_page).post(notify::unsubscribe_now))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

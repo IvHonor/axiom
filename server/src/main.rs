@@ -25,6 +25,7 @@ async fn main() {
 
     let mut shared = Shared::new(db, config.jwt_secret.as_bytes());
     shared.client_ip_header = config.client_ip_header;
+    shared.web_proxy_secret = config.web_proxy_secret;
     shared.waitlist = config.waitlist;
     shared.confirm_emails = true;
     shared.require_terms = true;

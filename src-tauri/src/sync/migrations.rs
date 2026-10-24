@@ -3,7 +3,52 @@
 use sea_orm_migration::prelude::*;
 
 pub fn all() -> Vec<Box<dyn MigrationTrait>> {
-    vec![Box::new(Migration), Box::new(SharedBoards)]
+    vec![Box::new(Migration), Box::new(SharedBoards), Box::new(AutoSync), Box::new(Locked)]
+}
+
+/// Rows of encrypted tables pulled while this computer couldn't open them
+/// (see `crate::vault`), kept sealed until it can.
+pub struct Locked;
+
+impl MigrationName for Locked {
+    fn name(&self) -> &str {
+        "m004_sync_locked"
+    }
+}
+
+#[async_trait::async_trait]
+impl MigrationTrait for Locked {
+    async fn up(&self, m: &SchemaManager) -> Result<(), DbErr> {
+        m.get_connection()
+            .execute_unprepared(
+                "CREATE TABLE IF NOT EXISTS sync_locked (
+                    table_name TEXT NOT NULL,
+                    row_id TEXT NOT NULL,
+                    data TEXT NOT NULL,
+                    seq INTEGER NOT NULL,
+                    PRIMARY KEY (table_name, row_id)
+                )",
+            )
+            .await?;
+        Ok(())
+    }
+}
+
+/// Whether this computer syncs by itself (it does unless switched off).
+pub struct AutoSync;
+
+impl MigrationName for AutoSync {
+    fn name(&self) -> &str {
+        "m003_sync_auto"
+    }
+}
+
+#[async_trait::async_trait]
+impl MigrationTrait for AutoSync {
+    async fn up(&self, m: &SchemaManager) -> Result<(), DbErr> {
+        m.get_connection().execute_unprepared("ALTER TABLE sync_state ADD COLUMN auto INTEGER NOT NULL DEFAULT 1").await?;
+        Ok(())
+    }
 }
 
 /// Shared boards this computer syncs, besides the account's own data.

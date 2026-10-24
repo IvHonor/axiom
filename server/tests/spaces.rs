@@ -160,6 +160,9 @@ async fn roles_limit_what_each_member_can_change() {
     assert_eq!(push_to_board(&app, &ada, column).await.0, StatusCode::OK);
     let private = json!([row("daily_plan_tasks", "d9", json!({ "id": "d9" }))]);
     assert_eq!(push_to_board(&app, &ada, private).await.0, StatusCode::BAD_REQUEST);
+    // Nor can a row filed under the board's id name some other row inside.
+    let disguised = json!([row("project_board_projects", BOARD, json!({ "id": "someone-elses", "name": "x" }))]);
+    assert_eq!(push_to_board(&app, &ada, disguised).await.0, StatusCode::BAD_REQUEST);
 
     // Viewers see members but not pending invitations; admins see both.
     as_user(&app, &ada, Method::POST, &route(routes::SPACE_INVITES, &[("id", BOARD)]), Some(json!({ "email": "dee@example.com", "role": "viewer" }))).await;

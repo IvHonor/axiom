@@ -108,7 +108,9 @@ export function PlanSidebar({ active, onOpen }: AreaSidebarProps) {
               </div>
             </>
           )}
-          {setup?.accounts.map((account) => <AccountLine key={account.id} account={account} />)}
+          {setup?.accounts.map((account) => (
+            <AccountLine key={account.id} account={account} onReconnect={() => openDialog("calendars", account.provider)} />
+          ))}
           {links.map((c) => (
             <div key={c.id} className="ps-line" title={c.problem ?? undefined}>
               <i className="dp-setup-dot" style={{ background: colorOf(c.color) }} />
@@ -143,13 +145,19 @@ export function PlanSidebar({ active, onOpen }: AreaSidebarProps) {
   );
 }
 
-function AccountLine({ account }: { account: CalendarAccount }) {
+function AccountLine({ account, onReconnect }: { account: CalendarAccount; onReconnect: () => void }) {
   const provider = account.provider === "google" ? "Google" : account.provider === "microsoft" ? "Outlook" : account.server.includes("icloud.com") ? "iCloud" : "CalDAV";
   return (
     <div className="ps-line" title={account.problem ?? `${provider}: ${account.name}`}>
       <span className="ps-provider">{provider}</span>
       <span className="ps-line-name">{account.name}</span>
-      {account.problem && <AlertCircle size={13} strokeWidth={2} className="ps-warn" aria-label="Needs attention" />}
+      {account.signedOut ? (
+        <button className="ps-reconnect" onClick={onReconnect} title={account.problem ?? undefined}>
+          Reconnect
+        </button>
+      ) : (
+        account.problem && <AlertCircle size={13} strokeWidth={2} className="ps-warn" aria-label="Needs attention" />
+      )}
     </div>
   );
 }

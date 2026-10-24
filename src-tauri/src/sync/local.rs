@@ -12,6 +12,7 @@ use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, DbErr, Statement, 
 use serde_json::{Map, Value};
 
 use super::TABLES;
+use crate::vault::DataKey;
 
 type Row = Map<String, Value>;
 
@@ -103,7 +104,7 @@ pub async fn link(db: &DatabaseConnection, user_id: &str, how: Link) -> Result<(
     if how == Link::Replace {
         clear_tables(&txn).await?;
     }
-    txn.execute_unprepared("DELETE FROM sync_base; DELETE FROM sync_outbox;").await?;
+    txn.execute_unprepared("DELETE FROM sync_base; DELETE FROM sync_outbox; DELETE FROM sync_locked;").await?;
     if how == Link::Merge {
         for table in TABLES.iter() {
             txn.execute_unprepared(&format!(
@@ -127,7 +128,7 @@ pub async fn wipe(db: &DatabaseConnection) -> Result<(), DbErr> {
     let txn = db.begin().await?;
     clear_tables(&txn).await?;
     txn.execute_unprepared(
-        "DELETE FROM sync_base; DELETE FROM sync_outbox; DELETE FROM sync_spaces;
+        "DELETE FROM sync_base; DELETE FROM sync_outbox; DELETE FROM sync_spaces; DELETE FROM sync_locked;
          UPDATE sync_state SET user_id = NULL, cursor = 0, last_synced_at = NULL WHERE id = 1;",
     )
     .await?;
@@ -138,7 +139,7 @@ pub async fn wipe(db: &DatabaseConnection) -> Result<(), DbErr> {
 /// Used after the account is deleted.
 pub async fn unlink(db: &impl ConnectionTrait) -> Result<(), DbErr> {
     db.execute_unprepared(
-        "DELETE FROM sync_base; DELETE FROM sync_outbox; DELETE FROM sync_spaces;
+        "DELETE FROM sync_base; DELETE FROM sync_outbox; DELETE FROM sync_spaces; DELETE FROM sync_locked;
          UPDATE sync_state SET user_id = NULL, cursor = 0, last_synced_at = NULL WHERE id = 1;",
     )
     .await?;
@@ -182,13 +183,15 @@ pub struct Outgoing {
 
 /// Up to `limit` changed rows, each reduced to the fields that differ from
 /// what the server last saw.
-pub async fn outgoing(db: &impl ConnectionTrait, limit: usize) -> Result<Vec<Outgoing>, DbErr> {
-    let pending = db
-        .query_all_raw(sql(
-            "SELECT table_name, row_id, changed_at, version FROM sync_outbox ORDER BY changed_at LIMIT ?",
-            [(limit as i64).into()],
-        ))
-        .await?;
+/// Rows of the `held` tables stay queued (encrypted ones, while locked).
+pub async fn outgoing(db: &impl ConnectionTrait, limit: usize, held: &[&str]) -> Result<Vec<Outgoing>, DbErr> {
+    // Table names are plain identifiers from TABLES, safe to put in the query.
+    let except = match held {
+        [] => String::new(),
+        _ => format!("WHERE table_name NOT IN ({})", held.iter().map(|t| format!("'{t}'")).collect::<Vec<_>>().join(", ")),
+    };
+    let query = format!("SELECT table_name, row_id, changed_at, version FROM sync_outbox {except} ORDER BY changed_at LIMIT ?");
+    let pending = db.query_all_raw(sql(&query, [(limit as i64).into()])).await?;
     let mut columns = Columns::default();
     let mut out = Vec::with_capacity(pending.len());
     for p in pending {
@@ -259,7 +262,9 @@ pub async fn apply_some(db: &DatabaseConnection, records: Vec<&Record>, cursor: 
         // Fields this version of Axiom doesn't know (from a newer one) are
         // left out here, but kept on the server.
         let fields: Vec<(&String, &Value)> = record.data.iter().filter(|(name, _)| known.contains(name)).collect();
-        if !fields.iter().any(|(name, _)| *name == "id") {
+        // Every check above and below is on `record.id`, so the row written
+        // must be that one, not whatever `id` its data names.
+        if record.data.get("id").and_then(Value::as_str) != Some(record.id.as_str()) {
             continue;
         }
         let names: Vec<String> = fields.iter().map(|(name, _)| format!(r#""{name}""#)).collect();
@@ -373,4 +378,81 @@ fn to_sql(value: &Value) -> SqlValue {
 
 fn sql<const N: usize>(query: &str, values: [SqlValue; N]) -> Statement {
     Statement::from_sql_and_values(DbBackend::Sqlite, query, values)
+}
+
+/// Whether this computer syncs by itself (see `migrations::AutoSync`).
+pub async fn auto_sync(db: &impl ConnectionTrait) -> Result<bool, DbErr> {
+    let row = db.query_one_raw(sql("SELECT auto FROM sync_state WHERE id = 1", [])).await?;
+    Ok(row.map_or(Ok(1), |r| r.try_get::<i32>("", "auto"))? != 0)
+}
+
+pub async fn set_auto_sync(db: &impl ConnectionTrait, on: bool) -> Result<(), DbErr> {
+    db.execute_raw(sql("UPDATE sync_state SET auto = ? WHERE id = 1", [i32::from(on).into()])).await?;
+    Ok(())
+}
+
+// ---------- Encrypted tables (see `crate::vault`) ----------
+
+/// Opens pulled records of encrypted tables with the key. Without it they're
+/// set aside in `sync_locked` until this computer is unlocked; with it, one
+/// that won't open (sealed with an older key, or tampered with) is dropped.
+pub async fn open_or_stash(db: &impl ConnectionTrait, key: Option<&DataKey>, records: &[Record]) -> Result<Vec<Record>, DbErr> {
+    let mut out = Vec::with_capacity(records.len());
+    for record in records {
+        if !super::ENCRYPTED.contains(&record.table.as_str()) {
+            out.push(record.clone());
+            continue;
+        }
+        match key {
+            Some(key) => match key.open_fields(&record.table, &record.id, &record.data) {
+                Ok(data) => out.push(Record { data, ..record.clone() }),
+                Err(_) => eprintln!("sync: couldn't decrypt {}/{}; it was sealed with another key", record.table, record.id),
+            },
+            None => {
+                db.execute_raw(sql(
+                    "INSERT INTO sync_locked (table_name, row_id, data, seq) VALUES (?, ?, ?, ?)
+                     ON CONFLICT (table_name, row_id) DO UPDATE SET data = excluded.data, seq = excluded.seq",
+                    [record.table.as_str().into(), record.id.as_str().into(), Value::Object(record.data.clone()).to_string().into(), record.seq.into()],
+                ))
+                .await?;
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Applies what arrived while locked, now the key's here. Returns how many rows changed.
+pub async fn apply_stash(db: &DatabaseConnection, key: &DataKey) -> Result<usize, DbErr> {
+    let rows = db.query_all_raw(sql("SELECT table_name, row_id, data, seq FROM sync_locked ORDER BY seq", [])).await?;
+    let mut records = Vec::new();
+    for row in rows {
+        let data: String = row.try_get("", "data")?;
+        let Ok(Value::Object(data)) = serde_json::from_str::<Value>(&data) else { continue };
+        records.push(Record { table: row.try_get("", "table_name")?, id: row.try_get("", "row_id")?, data, seq: row.try_get("", "seq")? });
+    }
+    let opened = open_or_stash(db, Some(key), &records).await?;
+    let cursor = state(db).await?.cursor;
+    let applied = apply_some(db, opened.iter().collect(), Cursor::Account(cursor)).await?;
+    forget_stash(db).await?;
+    Ok(applied)
+}
+
+pub async fn forget_stash(db: &impl ConnectionTrait) -> Result<(), DbErr> {
+    db.execute_unprepared("DELETE FROM sync_locked").await?;
+    Ok(())
+}
+
+/// Sends every row of these tables again, as if new: after starting over
+/// with a new key, the account's copy is replaced with this computer's.
+pub async fn requeue(db: &impl ConnectionTrait, tables: &[&str]) -> Result<(), DbErr> {
+    for table in tables {
+        db.execute_raw(sql("DELETE FROM sync_base WHERE table_name = ?", [(*table).into()])).await?;
+        db.execute_unprepared(&format!(
+            r#"INSERT INTO sync_outbox (table_name, row_id, changed_at, version)
+               SELECT '{table}', id, {NOW_MS}, 1 FROM "{table}" WHERE true
+               ON CONFLICT (table_name, row_id) DO UPDATE SET version = sync_outbox.version + 1"#
+        ))
+        .await?;
+    }
+    Ok(())
 }

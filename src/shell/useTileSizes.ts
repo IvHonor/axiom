@@ -16,7 +16,7 @@ export function useTileSizes() {
     saved && typeof saved === "object" ? Object.fromEntries(Object.entries(saved).filter(([, size]) => isSize(size))) : {},
   );
 
-  const sizeOf = (id: string): TileSize => sizes[id] ?? DEFAULT_SIZE;
+  const sizeOf = (id: string, fallback: TileSize = DEFAULT_SIZE): TileSize => sizes[id] ?? fallback;
 
   const resize = useCallback(
     (id: string, size: TileSize) => setSizes((all) => ({ ...all, [id]: size })),

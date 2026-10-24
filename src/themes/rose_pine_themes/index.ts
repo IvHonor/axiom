@@ -92,6 +92,7 @@ export const rosePineThemes: ExtensionManifest = {
   ],
   version: "0.1.0",
   publisher: "Axiom",
+  builtIn: true,
   icon: Flower2,
   themes,
 };

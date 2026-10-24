@@ -1,0 +1,18 @@
+# Render's free plan sleeps after 15 minutes without requests. Notification
+# emails are sent by the server itself, so this wakes it once an hour, just
+# after the hour (digests are planned on the hour), and it sends
+# whatever has come due. It's one request an hour, not a keep-alive.
+name: Wake the server
+
+on:
+  schedule:
+    - cron: "2 * * * *"
+  workflow_dispatch:
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake it up (it takes about a minute)
+        run: curl --silent --show-error --fail --retry 3 --retry-delay 20 --max-time 120 https://axiom-server-1bil.onrender.com/health

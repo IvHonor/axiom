@@ -199,7 +199,7 @@ input.rd-num {
 .rd-progress > span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--area-reading);
   border-radius: 2px;
   transition: width 0.3s ease;
 }
@@ -498,8 +498,7 @@ input.rd-num {
 .rd-log,
 .rd-notes,
 .rd-results,
-.rd-finished-list,
-.rt-books {
+.rd-finished-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -935,56 +934,11 @@ input.rd-num {
   font-size: 12px;
 }
 
-.rs-streak svg,
-.rt-streak svg {
+.rs-streak svg {
   color: var(--accent);
 }
 
-/* ---------- Overview tile ---------- */
-
-.rt-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.rt-books {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.rt-books button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-align: left;
-}
-
-.rt-book-body {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.rt-book-title {
-  overflow: hidden;
-  font-weight: 600;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.rt-book-meta {
-  font-size: 11.5px;
-}
-
-.rt-more {
-  font-size: 12px;
-}
-
+/* Shared with the University overview footer. Reading's fitted layouts live in overview/overview.css. */
 .rt-foot {
   display: flex;
   align-items: center;
@@ -993,12 +947,6 @@ input.rd-num {
   padding-top: 8px;
   font-size: 12px;
   border-top: 1px solid var(--line);
-}
-
-.rt-streak {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .rd-view .is-danger {

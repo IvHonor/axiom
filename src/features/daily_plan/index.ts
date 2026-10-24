@@ -28,6 +28,8 @@ export const dailyPlan: ExtensionManifest = {
   ],
   version: "0.1.0",
   publisher: "Axiom",
+  builtIn: true,
   icon: CalendarClock,
+  color: "var(--area-plan)",
   area: { View: DailyPlanView, Summary: PlanSummary, SummaryTitle: PlanSummaryTitle, fittedSummary: true, Sidebar: PlanSidebar },
 };

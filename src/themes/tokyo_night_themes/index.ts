@@ -91,6 +91,7 @@ export const tokyoNightThemes: ExtensionManifest = {
   ],
   version: "0.1.0",
   publisher: "Axiom",
+  builtIn: true,
   icon: MoonStar,
   themes,
 };

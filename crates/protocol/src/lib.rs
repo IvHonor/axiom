@@ -4,6 +4,8 @@
 //! and the compiler catches every place that needs to change.
 
 use chrono::{DateTime, Utc};
+
+pub mod notify;
 use serde::{Deserialize, Serialize};
 
 /// The server's routes. Bump the `/v1` prefix only for breaking changes, so
@@ -20,6 +22,12 @@ pub mod routes {
     /// `DELETE` deletes the account and everything synced to it.
     pub const ACCOUNT: &str = "/v1/account";
     pub const CHANGE_PASSWORD: &str = "/v1/account/password";
+    /// `GET` your profile (name and picture); `PUT` replaces it.
+    pub const PROFILE: &str = "/v1/account/profile";
+    /// `GET` the wrapped end-to-end encryption key; `PUT` replaces it.
+    pub const ENCRYPTION_KEY: &str = "/v1/account/encryption-key";
+    /// `POST` checks the password (`ConfirmPassword`) before something that needs it.
+    pub const VERIFY_PASSWORD: &str = "/v1/account/verify-password";
     pub const DEVICES: &str = "/v1/account/devices";
     /// `DELETE` signs that device out.
     pub const DEVICE: &str = "/v1/account/devices/{id}";
@@ -49,6 +57,24 @@ pub mod routes {
     pub const INVITES: &str = "/v1/invites";
     pub const INVITE_ACCEPT: &str = "/v1/invites/{id}/accept";
     pub const INVITE_DECLINE: &str = "/v1/invites/{id}/decline";
+
+    // The waiting list, for the server's admins only.
+    /// `GET` every account: waiting for approval, and approved.
+    pub const ADMIN_ACCOUNTS: &str = "/v1/admin/accounts";
+    /// `PATCH` changes an account's role or permissions (`AccountChange`).
+    /// `DELETE` turns down an account that's waiting (it's deleted).
+    pub const ADMIN_ACCOUNT: &str = "/v1/admin/accounts/{id}";
+    /// `POST` lets a waiting account in, and emails them.
+    pub const ADMIN_APPROVE: &str = "/v1/admin/accounts/{id}/approve";
+    /// `POST` puts an approved account back on the waiting list and signs it out everywhere.
+    pub const ADMIN_REVOKE: &str = "/v1/admin/accounts/{id}/revoke";
+    /// `GET` and `PUT` the server's settings (`AdminSettings`).
+    pub const ADMIN_SETTINGS: &str = "/v1/admin/settings";
+
+    /// `PUT` replaces the emails planned for this account (see `notify`).
+    pub const NOTIFY_EMAILS: &str = "/v1/notifications/emails";
+    /// `GET` with `?token=` from an email: stops that kind of email.
+    pub const NOTIFY_UNSUBSCRIBE: &str = "/v1/notifications/unsubscribe";
 }
 
 /// Fills in a route's `{name}` placeholders, e.g. `route(SPACE, &[("id", "p1")])`.
@@ -70,6 +96,14 @@ pub struct Change {
     /// When the change was made, in Unix milliseconds. For each field, the
     /// newest change wins.
     pub changed_at: i64,
+}
+
+impl Change {
+    /// Whether the row's own `id` field, if sent, names this row. Otherwise
+    /// a device applying it would write a different row than the one checked.
+    pub fn id_matches(&self) -> bool {
+        self.fields.get("id").is_none_or(|id| id.as_str() == Some(&self.id))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -243,13 +277,31 @@ pub const MIN_PASSWORD_LEN: usize = 8;
 /// Long enough for any passphrase, short enough to stop huge hashing requests.
 pub const MAX_PASSWORD_LEN: usize = 128;
 
+/// Starts every login key: what the app sends in place of the password, so
+/// the server never sees the password the encryption key is wrapped with.
+/// Made on the device from the email and password (see the app's `vault::login_key`).
+pub const LOGIN_KEY_PREFIX: &str = "axiom-login:";
+
+pub fn is_login_key(secret: &str) -> bool {
+    secret.starts_with(LOGIN_KEY_PREFIX) && check_password(secret).is_ok()
+}
+
+/// The status a login key gets from an account that still has a password
+/// from before login keys: send the password itself, once, with the key in
+/// `login_key` to replace it.
+pub const PLAIN_PASSWORD: u16 = 428;
+
 /// Body of `SIGN_UP` and `SIGN_IN`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Credentials {
     pub email: String,
+    /// A login key, or (from older versions of Axiom) the password itself.
     pub password: String,
     /// Shown in the account's device list, e.g. "DESKTOP-4F2 (Windows)".
     pub device_name: String,
+    /// See `PLAIN_PASSWORD`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login_key: Option<String>,
 }
 
 /// Body of `REFRESH` and `SIGN_OUT`.
@@ -275,6 +327,72 @@ pub struct User {
     pub id: String,
     pub email: String,
     pub created_at: DateTime<Utc>,
+    /// Runs the waiting list. Missing from older servers (and sign-ins saved
+    /// by older versions of the app), so it defaults to false.
+    #[serde(default)]
+    pub admin: bool,
+}
+
+/// What `SIGN_UP` returns, with status 202, while sign-ups go through the
+/// waiting list: the account exists but can't sign in until an admin approves it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Waitlisted {
+    pub email: String,
+}
+
+/// What an account is to the server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AccountRole {
+    Member,
+    /// Runs the server from the admin panel: people, permissions, the waiting list.
+    Admin,
+    /// Named in the server's `ADMIN_EMAILS`: an admin who can't be demoted from the app.
+    Owner,
+}
+
+/// What an account may use. New accounts get the server's defaults.
+pub mod permissions {
+    /// Copy data to the account, so other computers get it.
+    pub const SYNC: &str = "sync";
+    /// Share boards with other accounts.
+    pub const SHARE: &str = "share";
+    /// Get notification emails.
+    pub const EMAIL: &str = "email";
+    pub const ALL: &[&str] = &[SYNC, SHARE, EMAIL];
+}
+
+/// An account, as an admin sees it on `ADMIN_ACCOUNTS`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AdminAccount {
+    pub id: String,
+    pub email: String,
+    pub display_name: Option<String>,
+    /// When they signed up (asked to join).
+    pub created_at: DateTime<Utc>,
+    /// None while they're on the waiting list.
+    pub approved_at: Option<DateTime<Utc>>,
+    pub role: AccountRole,
+    /// From `permissions::ALL`.
+    pub permissions: Vec<String>,
+    /// When one of their devices last talked to the server.
+    pub last_active_at: Option<DateTime<Utc>>,
+}
+
+/// Body of `PATCH ADMIN_ACCOUNT`: what to change (owners can't be changed).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AccountChange {
+    pub role: Option<AccountRole>,
+    pub permissions: Option<Vec<String>>,
+}
+
+/// The server's settings, from `GET ADMIN_SETTINGS`; `PUT` replaces them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AdminSettings {
+    /// New accounts wait for approval.
+    pub waitlist: bool,
+    /// What new accounts may use.
+    pub default_permissions: Vec<String>,
 }
 
 /// Body of `FORGOT_PASSWORD`. The server emails a code if the account exists.
@@ -298,6 +416,61 @@ pub struct ResetPassword {
 pub struct ChangePassword {
     pub current_password: String,
     pub new_password: String,
+    /// The encryption key wrapped with the new password (see `EncryptionKey`),
+    /// saved along with it so the two never disagree.
+    #[serde(default)]
+    pub encryption_key: Option<String>,
+}
+
+/// The account's end-to-end encryption key, wrapped (encrypted) on a device
+/// with the user's password and recovery key. The server can't open it: it
+/// only keeps it so the user's other devices can. From `GET ENCRYPTION_KEY`;
+/// `PUT` replaces it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct EncryptionKey {
+    /// Opaque to the server. None until a device makes one.
+    pub wrapped: Option<String>,
+}
+
+/// Longest wrapped key the server keeps.
+pub const MAX_WRAPPED_KEY_LEN: usize = 4096;
+
+/// How an account presents itself, from `GET PROFILE` and the body of `PUT
+/// PROFILE`. Kept out of `User` so the picture isn't sent with every sign-in.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Profile {
+    /// None shows the email instead.
+    pub display_name: Option<String>,
+    /// A `data:image/png|jpeg|webp;base64,` URL of at most `MAX_AVATAR_LEN` characters.
+    pub avatar: Option<String>,
+}
+
+pub const MAX_DISPLAY_NAME_LEN: usize = 60;
+/// About 190 KB of image: plenty for the 256×256 picture the app makes.
+pub const MAX_AVATAR_LEN: usize = 256 * 1024;
+
+/// Returns the message to show if the picture isn't one the server keeps.
+pub fn check_avatar(avatar: &str) -> Result<(), &'static str> {
+    let data = ["data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,"]
+        .iter()
+        .find_map(|prefix| avatar.strip_prefix(prefix))
+        .ok_or("Use a PNG, JPEG or WebP picture.")?;
+    if avatar.len() > MAX_AVATAR_LEN {
+        return Err("That picture is too big. Try a smaller one.");
+    }
+    if data.is_empty() || !data.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'=')) {
+        return Err("That picture couldn't be read. Try another one.");
+    }
+    Ok(())
+}
+
+/// Body of `VERIFY_PASSWORD`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfirmPassword {
+    pub password: String,
+    /// See `PLAIN_PASSWORD`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login_key: Option<String>,
 }
 
 /// Body of `DELETE ACCOUNT`: the password, to confirm it's really them.
@@ -374,5 +547,14 @@ mod tests {
         assert!(check_password("1234567").is_err());
         assert!(check_password("12345678").is_ok());
         assert!(check_password(&"x".repeat(129)).is_err());
+    }
+
+    #[test]
+    fn avatars() {
+        assert!(check_avatar("data:image/png;base64,iVBORw0KGgo=").is_ok());
+        assert!(check_avatar("data:image/svg+xml;base64,PHN2Zz4=").is_err(), "SVG can carry scripts");
+        assert!(check_avatar("https://example.com/me.png").is_err());
+        assert!(check_avatar("data:image/png;base64,<script>").is_err());
+        assert!(check_avatar(&format!("data:image/png;base64,{}", "A".repeat(MAX_AVATAR_LEN))).is_err());
     }
 }

@@ -1,0 +1,862 @@
+/* Journal. Colors, fonts and shapes come from the active theme; the toolbar
+   reuses the Project Board's. The writing page gets a calm, readable measure. */
+
+.jr-view {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.jr-banner:has(.vault-lock) {
+  padding: 12px 20px 0;
+}
+
+.jr-pad {
+  padding: 16px 20px;
+}
+
+.jr-grow {
+  flex: 1;
+}
+
+.jr-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--danger);
+  user-select: text;
+}
+
+.jr-empty {
+  margin: 0;
+  padding: 12px 4px;
+  font-size: 12.5px;
+}
+
+.jr-note {
+  max-width: 320px;
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
+.jr-kicker,
+.jr-feel-label {
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: var(--tracking);
+  color: var(--text-faint);
+}
+
+/* ---------- Timeline beside the page ---------- */
+
+.jr-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 290px) 1fr;
+}
+
+.jr-timeline {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 12px 24px;
+  border-right: 1px solid var(--line);
+}
+
+.jr-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.jr-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 10px;
+  height: 32px;
+  color: var(--text-faint);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.jr-search:focus-within {
+  border-color: var(--accent);
+}
+
+.jr-search input {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.jr-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--area-journal) 12%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.jr-filter b {
+  flex: 1;
+  color: var(--text);
+}
+
+.jr-today-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-weight: 500;
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+}
+
+.jr-today-link:hover,
+.jr-today-link.is-active {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.jr-today-link.is-active svg {
+  color: var(--area-journal);
+}
+
+.jr-months {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.jr-month {
+  margin: 6px 4px 6px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--tracking);
+  color: var(--text-faint);
+}
+
+.jr-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.jr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  padding: 9px 10px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.jr-card:hover {
+  background: var(--hover);
+}
+
+.jr-card.is-active {
+  background: var(--hover);
+  border-color: var(--line-strong);
+  box-shadow: inset 3px 0 0 var(--area-journal);
+}
+
+.jr-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.jr-card-mood {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.jr-card-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.jr-card-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.jr-card-tags {
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--area-journal);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Today ---------- */
+
+.jr-today {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 40px 28px 40px;
+}
+
+.jr-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 26px 28px 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--area-journal);
+  border-radius: var(--radius);
+}
+
+.jr-hero h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.jr-streak {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.jr-streak svg,
+.js-streak svg.is-lit,
+.jt-streak.is-lit svg {
+  color: var(--warning);
+}
+
+.jr-hero-prompt {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--area-journal) 9%, transparent);
+  border-left: 3px solid var(--area-journal);
+  border-radius: var(--radius-sm);
+}
+
+.jr-hero-prompt p {
+  flex: 1;
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.jr-hero-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.jr-written {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.jr-memories {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.jr-memories h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.jr-memory {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.jr-memory:hover {
+  border-color: var(--line-strong);
+}
+
+/* ---------- An entry ---------- */
+
+.jr-entry {
+  --rx-accent: var(--area-journal);
+  --tag-accent: var(--area-journal);
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 28px 28px 40px;
+}
+
+.jr-entry-main {
+  flex: 1;
+  min-width: 0;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.jr-entry-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.jr-date {
+  position: relative;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  margin-left: -6px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.jr-date:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+/* The real date input sits invisibly over the label. */
+.jr-date input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.jr-title {
+  width: 100%;
+  padding: 0;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.jr-title::placeholder {
+  color: var(--text-faint);
+}
+
+.jr-feel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 22px;
+}
+
+.jr-moods {
+  display: flex;
+  gap: 2px;
+}
+
+.jr-mood {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  line-height: 1;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  filter: grayscale(1);
+  opacity: 0.55;
+  transition: transform 0.12s, opacity 0.12s, filter 0.12s;
+}
+
+.jr-mood:hover {
+  opacity: 1;
+  filter: none;
+  transform: scale(1.1);
+}
+
+.jr-mood.is-on {
+  opacity: 1;
+  filter: none;
+  background: color-mix(in srgb, var(--area-journal) 14%, transparent);
+  border-color: color-mix(in srgb, var(--area-journal) 50%, transparent);
+}
+
+.jr-energy {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.jr-energy .jr-feel-label {
+  margin-right: 4px;
+}
+
+.jr-energy .dim {
+  margin-left: 6px;
+}
+
+.jr-bolt {
+  width: 14px;
+  height: 22px;
+  padding: 0;
+  background: var(--hover);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+
+.jr-bolt:hover {
+  border-color: var(--line-strong);
+}
+
+.jr-bolt.is-on {
+  background: var(--warning);
+  border-color: var(--warning);
+}
+
+.jr-prompt {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px 10px 14px;
+  font-size: 15px;
+  line-height: 1.45;
+  background: color-mix(in srgb, var(--area-journal) 9%, transparent);
+  border-left: 3px solid var(--area-journal);
+  border-radius: var(--radius-sm);
+}
+
+.jr-prompt span {
+  flex: 1;
+}
+
+.jr-add-prompt {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.jr-add-prompt:hover {
+  color: var(--area-journal);
+}
+
+.jr-plan {
+  width: 240px;
+  flex: none;
+  align-self: flex-start;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 30px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.jr-plan h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--area-plan);
+}
+
+.jr-plan-line p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.jr-entry-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 12px;
+  font-size: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.jr-delete {
+  color: var(--text-dim);
+}
+
+.jr-delete.is-armed {
+  color: var(--danger);
+}
+
+/* ---------- Calendar and insights ---------- */
+
+.jr-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px 28px;
+}
+
+.jr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.jr-panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.jr-panel-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.jr-seg {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--hover);
+  border-radius: var(--radius-sm);
+}
+
+.jr-seg button {
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+.jr-seg button.is-on {
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.jr-heat-scroll {
+  overflow-x: auto;
+}
+
+.jr-heat {
+  min-width: 640px;
+  display: grid;
+  gap: 3px;
+}
+
+.jr-heat-month,
+.jr-heat-day {
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.jr-heat-day {
+  align-self: center;
+}
+
+.jr-heat-cell {
+  aspect-ratio: 1;
+  padding: 0;
+  background: var(--hover);
+  border: 0;
+  border-radius: 3px;
+}
+
+.jr-heat-cell:hover {
+  outline: 1px solid var(--line-strong);
+}
+
+.jr-heat-cell.is-today {
+  box-shadow: inset 0 0 0 1px var(--text-dim);
+}
+
+.jr-heat-cell.is-picked {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.jr-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 10px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.jr-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.jr-legend i {
+  width: 11px;
+  height: 11px;
+  display: inline-block;
+  border-radius: 3px;
+}
+
+.jr-legend > i {
+  margin: 0 -7px 0 0;
+}
+
+.jr-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.jr-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.jr-tile b {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.jr-tile b svg {
+  color: var(--warning);
+}
+
+.jr-mood-strip {
+  display: grid;
+  grid-template-columns: repeat(30, 1fr);
+  gap: 3px;
+}
+
+.jr-mood-cell {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--area-journal) 25%, var(--hover));
+  border-radius: 4px;
+}
+
+.jr-mood-cell.is-blank {
+  background: var(--hover);
+}
+
+.jr-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.jr-bars {
+  height: 140px;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  align-items: end;
+  gap: 6px;
+}
+
+.jr-bar {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.jr-bar-fill {
+  min-height: 2px;
+  background: var(--area-journal);
+  border-radius: 3px 3px 0 0;
+}
+
+.jr-bar-label {
+  font-size: 10px;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.jr-tag-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.jr-tag-bar {
+  display: grid;
+  grid-template-columns: minmax(70px, 120px) 1fr 28px;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 4px;
+  font-size: 12px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+.jr-tag-bar:hover {
+  background: var(--hover);
+}
+
+.jr-tag-bar-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.jr-tag-bar-track {
+  height: 8px;
+  background: var(--hover);
+  border-radius: 4px;
+}
+
+.jr-tag-bar-track span {
+  height: 100%;
+  display: block;
+  background: var(--area-journal);
+  border-radius: 4px;
+}
+
+.jr-tag-bar .dim {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Side panel and overview tile ---------- */
+
+.js-streak {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px 10px;
+  font-size: 12.5px;
+}
+
+.js-streak > svg {
+  color: var(--text-faint);
+}
+
+.js-streak > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.js-streak .dim {
+  font-size: 11.5px;
+}
+
+.js-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px 10px;
+}
+
+.js-tag {
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--hover);
+  border-radius: 999px;
+}
+
+.js-tag:hover,
+.js-tag.is-active {
+  color: var(--area-journal);
+  background: color-mix(in srgb, var(--area-journal) 14%, transparent);
+}
+
+@media (max-width: 900px) {
+  .jr-plan {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .jr-split {
+    grid-template-columns: 1fr;
+  }
+
+  .jr-timeline {
+    display: none;
+  }
+}

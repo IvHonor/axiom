@@ -112,6 +112,7 @@ export const catppuccinThemes: ExtensionManifest = {
   ],
   version: "0.1.0",
   publisher: "Axiom",
+  builtIn: true,
   icon: Cat,
   themes,
 };

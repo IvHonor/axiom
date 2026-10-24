@@ -36,3 +36,17 @@ pub async fn sync_link(
     engine.wake();
     Ok(())
 }
+
+/// Whether this computer syncs by itself.
+#[tauri::command]
+pub fn sync_auto(engine: State<'_, SyncEngine>) -> bool {
+    engine.auto()
+}
+
+/// Switches syncing by itself on or off for this computer.
+#[tauri::command]
+pub async fn sync_set_auto(engine: State<'_, SyncEngine>, db: State<'_, Db>, on: bool) -> Result<()> {
+    local::set_auto_sync(&db.conn().await?, on).await?;
+    engine.set_auto(on);
+    Ok(())
+}

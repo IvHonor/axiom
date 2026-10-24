@@ -88,6 +88,7 @@ pub async fn list(State(s): State<AppState>, auth: AuthUser) -> Result<Json<Vec<
 
 /// Shares one of your projects: you become its owner.
 pub async fn create(State(s): State<AppState>, auth: AuthUser, Json(body): Json<CreateSpace>) -> Result<Json<Space>, ApiError> {
+    crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SHARE).await?;
     if !is_plain_name(&body.id) {
         return Err(ApiError::bad_request("That project can't be shared."));
     }
@@ -206,10 +207,11 @@ async fn upsert_record(txn: &DatabaseTransaction, space_id: &str, table: &str, i
 
 /// Like `sync::push`, for a shared board, within the pusher's role.
 pub async fn push(State(s): State<AppState>, auth: AuthUser, Path(id): Path<String>, Json(body): Json<PushRequest>) -> Result<Json<PushResponse>, ApiError> {
+    crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
     if body.changes.len() > SYNC_BATCH {
         return Err(ApiError::bad_request(format!("Send at most {SYNC_BATCH} changes at a time.")));
     }
-    if let Some(bad) = body.changes.iter().find(|c| !is_plain_name(&c.id) || space_table_role(&c.table).is_none()) {
+    if let Some(bad) = body.changes.iter().find(|c| !is_plain_name(&c.id) || !c.id_matches() || space_table_role(&c.table).is_none()) {
         return Err(ApiError::bad_request(format!("A shared board can't hold {}/{}.", bad.table, bad.id)));
     }
     if body.changes.iter().any(|c| Value::Object(c.fields.clone()).to_string().len() > MAX_RECORD_BYTES) {
@@ -265,6 +267,7 @@ pub async fn push(State(s): State<AppState>, auth: AuthUser, Path(id): Path<Stri
 
 /// Like `sync::pull`, for a shared board. Any member may pull.
 pub async fn pull(State(s): State<AppState>, auth: AuthUser, Path(id): Path<String>, Query(query): Query<PullQuery>) -> Result<Json<PullResponse>, ApiError> {
+    crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
     membership(&s.db, &id, &auth.user_id).await?;
     let mut rows = space_record::Entity::find()
         .filter(space_record::Column::SpaceId.eq(&id))
@@ -320,6 +323,7 @@ pub async fn members(State(s): State<AppState>, auth: AuthUser, Path(id): Path<S
 
 /// Invites someone by email (admins). Asking again refreshes the invitation.
 pub async fn invite(State(s): State<AppState>, auth: AuthUser, Path(id): Path<String>, Json(body): Json<NewInvite>) -> Result<Json<Invite>, ApiError> {
+    crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SHARE).await?;
     let (_, role) = membership(&s.db, &id, &auth.user_id).await?;
     if role < Role::Admin {
         return Err(forbidden("Only the board's admins can invite people."));

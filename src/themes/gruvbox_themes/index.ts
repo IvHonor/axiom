@@ -74,6 +74,7 @@ export const gruvboxThemes: ExtensionManifest = {
   ],
   version: "0.1.0",
   publisher: "Axiom",
+  builtIn: true,
   icon: Coffee,
   themes,
 };

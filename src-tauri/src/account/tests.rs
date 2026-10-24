@@ -52,6 +52,71 @@ async fn a_forgotten_password_is_reset_from_the_app() {
     assert!(account.sign_in("ada@example.com", "new horse!").await.is_ok());
 }
 
+/// Signs up the way older versions of Axiom did, sending the password itself,
+/// and returns that device's saved sign-in.
+async fn old_sign_up(server: &str, email: &str, password: &str) -> Saved {
+    let body = serde_json::json!({ "email": email, "password": password, "device_name": "Old Axiom" });
+    let response = reqwest::Client::new().post(format!("{server}{}", axiom_protocol::routes::SIGN_UP)).json(&body).send().await.unwrap();
+    let session: Session = response.json().await.unwrap();
+    Saved { refresh_token: session.refresh_token, user: session.user }
+}
+
+async fn password_itself_signs_in(server: &str, email: &str, password: &str) -> bool {
+    let body = serde_json::json!({ "email": email, "password": password, "device_name": "Old Axiom" });
+    let response = reqwest::Client::new().post(format!("{server}{}", axiom_protocol::routes::SIGN_IN)).json(&body).send().await.unwrap();
+    response.status().is_success()
+}
+
+#[tokio::test]
+async fn the_server_gets_a_login_key_never_the_password() {
+    let server = start_server().await;
+    let account = Account::new(&server, Box::new(Memory::default()));
+    account.sign_up("ada@example.com", "correct horse").await.unwrap();
+    assert!(!password_itself_signs_in(&server, "ada@example.com", "correct horse").await);
+    account.verify_password("correct horse").await.unwrap();
+    assert!(account.verify_password("wrong horse").await.is_err());
+}
+
+#[tokio::test]
+async fn an_account_from_before_login_keys_switches_over_on_sign_in() {
+    let server = start_server().await;
+    old_sign_up(&server, "ada@example.com", "correct horse").await;
+
+    let account = Account::new(&server, Box::new(Memory::default()));
+    assert_eq!(account.sign_in("ada@example.com", "wrong horse").await.unwrap_err().to_string(), "Email or password is incorrect.");
+    assert_eq!(account.sign_in("ada@example.com", "correct horse").await.unwrap(), signed_in("ada@example.com"));
+    assert!(!password_itself_signs_in(&server, "ada@example.com", "correct horse").await, "the server has the login key now");
+    account.sign_out().await;
+    assert!(account.sign_in("ada@example.com", "correct horse").await.is_ok());
+}
+
+#[tokio::test]
+async fn an_account_from_before_login_keys_switches_over_when_the_password_is_checked() {
+    let server = start_server().await;
+    // Signed in by an older Axiom, then updated.
+    let store = Memory::default();
+    store.save(&old_sign_up(&server, "ada@example.com", "correct horse").await).unwrap();
+    let account = Account::new(&server, Box::new(store));
+
+    assert_eq!(account.verify_password("wrong horse").await.unwrap_err().to_string(), "That password isn't right.");
+    account.verify_password("correct horse").await.unwrap();
+    assert!(!password_itself_signs_in(&server, "ada@example.com", "correct horse").await);
+    account.verify_password("correct horse").await.unwrap();
+}
+
+#[tokio::test]
+async fn an_account_from_before_login_keys_can_change_its_password() {
+    let server = start_server().await;
+    let store = Memory::default();
+    store.save(&old_sign_up(&server, "ada@example.com", "correct horse").await).unwrap();
+    let account = Account::new(&server, Box::new(store));
+
+    account.change_password("correct horse", "new horse!", None).await.unwrap();
+    account.sign_out().await;
+    assert!(account.sign_in("ada@example.com", "new horse!").await.is_ok());
+    assert!(!password_itself_signs_in(&server, "ada@example.com", "new horse!").await);
+}
+
 #[tokio::test]
 async fn devices_can_be_listed_and_signed_out_remotely() {
     let server = start_server().await;
@@ -77,10 +142,10 @@ async fn changing_the_password_needs_the_current_one() {
     let account = Account::new(&server, Box::new(Memory::default()));
     account.sign_up("ada@example.com", "correct horse").await.unwrap();
 
-    let err = account.change_password("wrong", "new horse!").await.unwrap_err();
+    let err = account.change_password("wrong", "new horse!", None).await.unwrap_err();
     assert_eq!(err.to_string(), "That password isn't right.");
-    assert!(account.change_password("correct horse", "short").await.unwrap_err().to_string().contains("at least 8"));
-    account.change_password("correct horse", "new horse!").await.unwrap();
+    assert!(account.change_password("correct horse", "short", None).await.unwrap_err().to_string().contains("at least 8"));
+    account.change_password("correct horse", "new horse!", None).await.unwrap();
     assert_eq!(account.status().await, signed_in("ada@example.com"), "still signed in here");
 }
 
@@ -101,7 +166,7 @@ async fn deleting_the_account_signs_out_and_frees_the_email() {
 }
 
 fn signed_in(email: &str) -> AccountStatus {
-    AccountStatus::SignedIn { email: email.into() }
+    AccountStatus::SignedIn { email: email.into(), admin: false }
 }
 
 #[tokio::test]
@@ -111,7 +176,10 @@ async fn sign_up_is_remembered_across_launches_until_sign_out() {
 
     let account = Account::new(&server, Box::new(store.clone()));
     assert_eq!(account.status().await, AccountStatus::SignedOut);
-    assert_eq!(account.sign_up(" Ada@Example.com", "correct horse").await.unwrap(), signed_in("ada@example.com"));
+    assert_eq!(
+        account.sign_up(" Ada@Example.com", "correct horse").await.unwrap(),
+        SignUpOutcome::SignedIn { email: "ada@example.com".into(), admin: false }
+    );
 
     // Next launch: still signed in, with no network needed to know it.
     let relaunched = Account::new(&server, Box::new(store.clone()));
@@ -179,4 +247,44 @@ async fn a_build_without_a_server_says_accounts_are_unavailable() {
     let err = account.sign_in("ada@example.com", "correct horse").await.unwrap_err();
     assert_eq!(err.to_string(), NO_SERVER);
     assert_eq!(account.request_reset("ada@example.com").await.unwrap_err().to_string(), NO_SERVER);
+}
+
+#[tokio::test]
+async fn the_waiting_list_from_the_app() {
+    let db = axiom_server::db::connect("sqlite::memory:").await.unwrap();
+    let mut shared = Shared::new(db, b"test-secret-that-is-at-least-32-bytes");
+    shared.waitlist = true;
+    shared.admins = ["boss@example.com".to_owned()].into();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let server = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(axiom_server::serve(listener, AppState::from(shared)));
+
+    let admin = Account::new(&server, Box::new(Memory::default()));
+    let outcome = admin.sign_up("boss@example.com", "correct horse").await.unwrap();
+    assert_eq!(outcome, SignUpOutcome::SignedIn { email: "boss@example.com".into(), admin: true });
+    assert_eq!(admin.status().await, AccountStatus::SignedIn { email: "boss@example.com".into(), admin: true });
+
+    let ada = Account::new(&server, Box::new(Memory::default()));
+    assert_eq!(ada.sign_up("ada@example.com", "correct horse").await.unwrap(), SignUpOutcome::Waitlisted { email: "ada@example.com".into() });
+    assert_eq!(ada.status().await, AccountStatus::SignedOut, "nothing to remember while waiting");
+    assert!(ada.sign_in("ada@example.com", "correct horse").await.unwrap_err().to_string().contains("waiting list"));
+    assert!(ada.admin_accounts().await.is_err());
+
+    let waiting = admin.admin_accounts().await.unwrap();
+    assert_eq!((waiting[0].email.as_str(), waiting[0].approved_at), ("ada@example.com", None));
+    admin.approve(&waiting[0].id).await.unwrap();
+    assert_eq!(ada.sign_in("ada@example.com", "correct horse").await.unwrap(), signed_in("ada@example.com"));
+}
+
+#[tokio::test]
+async fn the_profile_round_trips() {
+    let server = start_server().await;
+    let account = Account::new(&server, Box::new(Memory::default()));
+    account.sign_up("ada@example.com", "correct horse").await.unwrap();
+    assert_eq!(account.profile().await.unwrap(), ProfileView { display_name: None, avatar: None });
+
+    let picture = "data:image/png;base64,iVBORw0KGgo=".to_owned();
+    let saved = account.update_profile(Some("Ada".into()), Some(picture.clone())).await.unwrap();
+    assert_eq!(saved, ProfileView { display_name: Some("Ada".into()), avatar: Some(picture) });
+    assert!(account.update_profile(None, Some("not a picture".into())).await.is_err(), "checked before it's sent");
 }

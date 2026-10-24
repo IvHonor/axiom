@@ -25,6 +25,8 @@ export const projectBoard: ExtensionManifest = {
   ],
   version: "0.1.0",
   publisher: "Axiom",
+  builtIn: true,
   icon: SquareKanban,
+  color: "var(--area-board)",
   area: { View: ProjectBoardView, Summary: BoardSummary, SummaryTitle: BoardSummaryTitle, fittedSummary: true, Sidebar: BoardSidebar },
 };

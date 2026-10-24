@@ -77,5 +77,6 @@ export const modernThemes: ExtensionManifest = {
   publisher: "Axiom",
   icon: Palette,
   builtIn: true,
+  required: true,
   themes: [dark, light],
 };

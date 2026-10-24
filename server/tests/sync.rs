@@ -120,6 +120,9 @@ async fn sync_needs_a_signed_in_device_and_plain_names() {
     let (laptop, _) = two_devices(&app).await;
     let bad = json!([{ "table": "tasks; DROP TABLE users", "id": "t1", "fields": {}, "changed_at": 1 }]);
     assert_eq!(push(&app, &laptop, bad).await.0, StatusCode::BAD_REQUEST);
+    // A row's own id field must name the row it's filed under.
+    let mismatched = json!([change("t1", json!({ "id": "t2", "title": "Elsewhere" }), 1)]);
+    assert_eq!(push(&app, &laptop, mismatched).await.0, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

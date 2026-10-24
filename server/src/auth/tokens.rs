@@ -27,17 +27,43 @@ pub struct Claims {
     pub exp: u64,
 }
 
+/// The unsubscribe link in a notification email. It doesn't expire (old
+/// emails keep working) and can't be used for anything else.
+#[derive(Serialize, Deserialize)]
+struct UnsubscribeClaims {
+    sub: String,
+    kind: String,
+    purpose: String,
+}
+
+const UNSUBSCRIBE: &str = "unsubscribe";
+
 pub struct Keys {
     encoding: EncodingKey,
     decoding: DecodingKey,
     validation: Validation,
+    link_validation: Validation,
 }
 
 impl Keys {
     pub fn new(secret: &[u8]) -> Self {
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_required_spec_claims(&["exp", "sub"]);
-        Self { encoding: EncodingKey::from_secret(secret), decoding: DecodingKey::from_secret(secret), validation }
+        let mut link_validation = Validation::new(Algorithm::HS256);
+        link_validation.set_required_spec_claims(&["sub"]);
+        link_validation.validate_exp = false;
+        Self { encoding: EncodingKey::from_secret(secret), decoding: DecodingKey::from_secret(secret), validation, link_validation }
+    }
+
+    pub fn unsubscribe_token(&self, user_id: &str, kind: &str) -> String {
+        let claims = UnsubscribeClaims { sub: user_id.into(), kind: kind.into(), purpose: UNSUBSCRIBE.into() };
+        jsonwebtoken::encode(&Header::new(Algorithm::HS256), &claims, &self.encoding).expect("HS256 signing can't fail")
+    }
+
+    /// The user and kind an unsubscribe link is for, if it's genuine.
+    pub fn verify_unsubscribe(&self, token: &str) -> Option<(String, String)> {
+        let claims = jsonwebtoken::decode::<UnsubscribeClaims>(token, &self.decoding, &self.link_validation).ok()?.claims;
+        (claims.purpose == UNSUBSCRIBE).then_some((claims.sub, claims.kind))
     }
 
     pub fn access_token(&self, user_id: &str, session_id: &str) -> String {
@@ -79,6 +105,16 @@ mod tests {
         let other = Keys::new(b"a-different-secret-also-long-enough");
         assert!(other.verify(&token).is_none());
         assert!(keys.verify("not-a-token").is_none());
+    }
+
+    #[test]
+    fn unsubscribe_links_only_unsubscribe() {
+        let keys = Keys::new(b"a-test-secret-that-is-long-enough!!");
+        let link = keys.unsubscribe_token("user", "uni.today");
+        assert_eq!(keys.verify_unsubscribe(&link), Some(("user".into(), "uni.today".into())));
+        assert!(keys.verify(&link).is_none(), "not a sign-in");
+        assert!(keys.verify_unsubscribe(&keys.access_token("user", "session")).is_none(), "a sign-in isn't a link");
+        assert!(Keys::new(b"a-different-secret-also-long-enough").verify_unsubscribe(&link).is_none());
     }
 
     #[test]

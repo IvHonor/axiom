@@ -253,6 +253,8 @@ pub mod calendar_account {
         pub server: String,
         /// Why the last sync failed, ready to show.
         pub problem: Option<String>,
+        /// The sign-in stopped working (expired, revoked or lost): reconnecting fixes it.
+        pub signed_out: bool,
         pub created_at: DateTimeUtc,
     }
 

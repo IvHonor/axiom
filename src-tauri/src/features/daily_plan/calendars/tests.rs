@@ -261,10 +261,34 @@ async fn an_expired_sign_in_shows_on_the_account() {
         [(account.id.clone(), Secret::OAuth { refresh_token: "rt-1".into(), scope: None })].into_iter().collect(),
     ))));
     refresh_calendars(&db, &fresh_hub, day(TODAY), true).await.unwrap();
-    let problem = account::Entity::find_by_id(account.id.as_str()).one(&db).await.unwrap().unwrap().problem.unwrap();
-    assert!(problem.contains("Reconnect"), "{problem}");
+    let stored = account::Entity::find_by_id(account.id.as_str()).one(&db).await.unwrap().unwrap();
+    assert!(stored.problem.as_deref().unwrap().contains("Reconnect"), "{:?}", stored.problem);
+    assert!(stored.signed_out, "so the dialog offers to reconnect");
     // The events read before stay until it's fixed.
     assert_eq!(titles(&db, TODAY).await, ["Dentist", "Maybe gym"]);
+
+    // Reconnecting fixes the same account rather than adding a second.
+    server.reset().await;
+    google_basics(&server).await;
+    let again = accounts::connect_oauth(&db, &fresh_hub, "google", day(TODAY), browser("code")).await.unwrap();
+    assert_eq!(again.id, account.id);
+    assert!(!again.signed_out && again.problem.is_none());
+}
+
+#[tokio::test]
+async fn being_offline_isnt_a_sign_in_problem() {
+    let (db, server, secrets) = (setup().await, MockServer::start().await, Memory::default());
+    google_basics(&server).await;
+    let hub = hub(&server, secrets.clone());
+    let account = accounts::connect_oauth(&db, &hub, "google", day(TODAY), browser("code")).await.unwrap();
+
+    // Google's servers fail; the sign-in itself is fine.
+    server.reset().await;
+    Mock::given(method("POST")).and(path("/google/token")).respond_with(ResponseTemplate::new(503)).mount(&server).await;
+    refresh_calendars(&db, &self::hub(&server, secrets), day(TODAY), true).await.unwrap();
+    let stored = account::Entity::find_by_id(account.id.as_str()).one(&db).await.unwrap().unwrap();
+    assert!(stored.problem.is_some());
+    assert!(!stored.signed_out, "reconnecting wouldn't help");
 }
 
 #[tokio::test]

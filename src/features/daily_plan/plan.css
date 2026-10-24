@@ -983,7 +983,7 @@
 .dp-focus-bar span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--area-plan);
   transition: width 1s linear;
 }
 
@@ -1931,7 +1931,7 @@ button.dp-week-head:hover .dp-week-date {
 .ps-bar span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--area-plan);
   border-radius: 2px;
 }
 
@@ -2609,4 +2609,14 @@ button.dp-due:hover {
 
 .dp-ag-item.is-due.is-overdue .dp-ag-icon {
   color: var(--danger);
+}
+
+/* A calendar account whose sign-in stopped working. */
+.ps-reconnect {
+  flex: none;
+  padding: 0;
+  font-size: 11px;
+  color: var(--danger);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

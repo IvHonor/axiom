@@ -11,6 +11,9 @@ pub struct Email {
     pub subject: String,
     pub text: String,
     pub html: String,
+    /// A one-click unsubscribe link, sent as the List-Unsubscribe headers mail
+    /// apps turn into an "Unsubscribe" button.
+    pub unsubscribe: Option<String>,
 }
 
 pub enum Mailer {
@@ -29,6 +32,10 @@ impl Mailer {
     pub async fn send(&self, email: Email) -> Result<(), String> {
         match self {
             Mailer::Resend { http, api_key, from } => {
+                let headers = match &email.unsubscribe {
+                    Some(link) => json!({ "List-Unsubscribe": format!("<{link}>"), "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }),
+                    None => json!({}),
+                };
                 let response = http
                     .post("https://api.resend.com/emails")
                     .bearer_auth(api_key)
@@ -38,6 +45,7 @@ impl Mailer {
                         "subject": email.subject,
                         "text": email.text,
                         "html": email.html,
+                        "headers": headers,
                     }))
                     .send()
                     .await
@@ -66,6 +74,7 @@ pub fn reset_code(to: &str, code: &str, minutes: i64) -> Email {
     let shown = format!("{}-{}", &code[..4], &code[4..]);
     Email {
         to: to.into(),
+        unsubscribe: None,
         subject: format!("Your Axiom password reset code: {shown}"),
         text: format!(
             "Your code is {shown}\n\nEnter it in Axiom to choose a new password. It works for {minutes} minutes.\n\n\
@@ -90,6 +99,7 @@ pub fn board_invite(to: &str, inviter: &str, board: &str, role: axiom_protocol::
     let escape = |t: &str| t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
     Email {
         to: to.into(),
+        unsubscribe: None,
         subject: format!("{inviter} invited you to the board \"{board}\" on Axiom"),
         text: format!(
             "{inviter} invited you to {can} their board \"{board}\" on Axiom.
@@ -104,4 +114,41 @@ pub fn board_invite(to: &str, inviter: &str, board: &str, role: axiom_protocol::
             board_html = escape(board),
         ),
     }
+}
+
+/// Tells an admin someone has asked for an account.
+pub fn waitlist_request(to: &str, email: &str) -> Email {
+    Email {
+        to: to.into(),
+        unsubscribe: None,
+        subject: format!("{email} wants an Axiom account"),
+        text: format!(
+            "{email} has signed up and is on the waiting list.\n\n\
+             To let them in, open Axiom, go to Account, and approve them under Waiting list."
+        ),
+        html: format!(
+            "<p><b>{}</b> has signed up and is on the waiting list.</p>\
+             <p>To let them in, open Axiom, go to Account, and approve them under Waiting list.</p>",
+            escape(email)
+        ),
+    }
+}
+
+/// Tells someone on the waiting list they can sign in now.
+pub fn account_approved(to: &str) -> Email {
+    Email {
+        to: to.into(),
+        unsubscribe: None,
+        subject: "Your Axiom account is ready".into(),
+        text: "Good news: your Axiom account has been approved.\n\n\
+               Open Axiom, go to Account, and sign in with this email address and the password you chose to start syncing."
+            .into(),
+        html: "<p>Good news: your Axiom account has been approved.</p>\
+               <p>Open Axiom, go to Account, and sign in with this email address and the password you chose to start syncing.</p>"
+            .into(),
+    }
+}
+
+fn escape(text: &str) -> String {
+    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }

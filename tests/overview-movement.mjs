@@ -16,6 +16,10 @@ async function layout() {
   })));
 }
 async function place(name, col, row, finish = true, pointerType = "mouse") {
+  // Coordinates must be sampled after the previous reflow settles.
+  await page.locator(".tile-cell").evaluateAll(async nodes => {
+    await Promise.all(nodes.flatMap(node => node.getAnimations()).map(animation => animation.finished.catch(() => {})));
+  });
   const rect = await page.getByRole("button", { name: "Move " + name, exact: true }).boundingBox();
   const current = (await layout()).find(tile => tile.name === name);
   const step = await page.locator(".tile-grid").evaluate(grid => (grid.clientWidth + 16) / 12);

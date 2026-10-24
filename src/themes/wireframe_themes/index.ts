@@ -73,6 +73,7 @@ export const wireframeThemes: ExtensionManifest = {
   ],
   version: "0.1.0",
   publisher: "Axiom",
+  builtIn: true,
   icon: Scan,
   themes: [dark, light],
 };

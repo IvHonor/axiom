@@ -23,6 +23,7 @@ async fn start_server() -> String {
 struct Computer {
     db: DatabaseConnection,
     account: Account,
+    vault: crate::vault::Vault,
     server: String,
 }
 
@@ -33,17 +34,19 @@ impl Computer {
         options.max_connections(1).sqlx_logging(false);
         let db = Database::connect(options).await.unwrap();
         crate::db::prepare(&db).await.unwrap();
-        Self { db, account: Account::new(server, Box::new(Memory::default())), server: server.into() }
+        let vault = crate::vault::Vault::new(Box::new(crate::vault::store::Memory::default()));
+        Self { db, account: Account::new(server, Box::new(Memory::default())), vault, server: server.into() }
     }
 
     async fn sign_in(&self) {
         if self.account.sign_in(EMAIL, PASSWORD).await.is_err() {
             self.account.sign_up(EMAIL, PASSWORD).await.unwrap();
         }
+        self.vault.after_sign_in(&self.account, PASSWORD).await;
     }
 
     async fn sync(&self) -> Outcome {
-        sync_once(&self.db, &self.account, || {}).await.unwrap()
+        sync_once(&self.db, &self.account, self.vault.key().as_ref(), || {}).await.unwrap()
     }
 
     async fn project_names(&self) -> Vec<String> {
@@ -152,13 +155,28 @@ async fn an_unpushed_edit_is_never_overwritten_by_a_pull() {
 }
 
 #[tokio::test]
+async fn a_pulled_record_only_ever_writes_the_row_it_names() {
+    let (laptop, _desktop, project_id) = two_computers_sharing_a_task().await;
+    // A record filed under another id whose data names this project.
+    let disguised = axiom_protocol::Record {
+        table: "project_board_projects".into(),
+        id: "someone-elses".into(),
+        data: serde_json::json!({ "id": project_id, "name": "Renamed" }).as_object().unwrap().clone(),
+        seq: 1,
+    };
+    let before = laptop.project_names().await;
+    assert_eq!(local::apply(&laptop.db, &[disguised], local::Cursor::Account(1)).await.unwrap(), 0);
+    assert_eq!(laptop.project_names().await, before);
+}
+
+#[tokio::test]
 async fn data_made_before_signing_in_waits_for_a_choice_then_merges() {
     let (laptop, _, _) = two_computers_sharing_a_task().await;
     let newcomer = Computer::new(&laptop.server).await;
     board::create_project(&newcomer.db, "Groceries").await.unwrap();
     newcomer.sign_in().await;
 
-    assert_eq!(newcomer.sync().await, Outcome::NeedsChoice { projects: 1, plan_tasks: 0 });
+    assert_eq!(newcomer.sync().await, Outcome::NeedsChoice { projects: 1, plan_tasks: 0, books: 0, modules: 0 });
     local::link(&newcomer.db, &newcomer.account.user_id().await.unwrap(), Link::Merge).await.unwrap();
     newcomer.sync().await;
 
@@ -399,4 +417,236 @@ async fn signing_in_as_someone_else_removes_shared_boards() {
     bob.sync().await;
     assert!(bob.project_names().await.is_empty());
     assert!(spaces::list(&bob.db).await.unwrap().is_empty());
+}
+
+// ---------- End-to-end encrypted data (Finance) ----------
+
+mod encrypted {
+    use super::*;
+    use crate::features::finance::service as finance;
+    use crate::features::finance::types::{AccountFields, TransactionFields, TransactionFilter};
+    use chrono::NaiveDate;
+
+    fn today() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 10, 27).unwrap()
+    }
+
+    fn current_account() -> AccountFields {
+        AccountFields { name: "Current".into(), kind: "current".into(), currency: "GBP".into(), opening_balance: 100_000, color: "blue".into() }
+    }
+
+    async fn spend(c: &Computer, payee: &str, amount: i64) {
+        let account = finance::cards(&c.db, today()).await.unwrap()[0].account.id.clone();
+        let fields = TransactionFields { account_id: account, day: today(), amount, payee: payee.into(), category_id: Some("cat-groceries".into()), notes: String::new(), transfer_account_id: None, transfer_amount: None };
+        finance::add_transaction(&c.db, fields).await.unwrap();
+    }
+
+    async fn payees(c: &Computer) -> Vec<String> {
+        finance::list_transactions(&c.db, TransactionFilter::default()).await.unwrap().into_iter().map(|r| r.transaction.payee).collect()
+    }
+
+    #[tokio::test]
+    async fn the_server_only_ever_sees_ciphertext() {
+        let server = start_server().await;
+        let (laptop, desktop) = (Computer::new(&server).await, Computer::new(&server).await);
+        laptop.sign_in().await;
+        assert_eq!(laptop.vault.status(), crate::vault::VaultStatus::Unlocked, "a key is made on first sign-up");
+        laptop.sync().await;
+        finance::setup(&laptop.db, "GBP", current_account(), today()).await.unwrap();
+        spend(&laptop, "Tesco Stores", -1250).await;
+        laptop.sync().await;
+
+        // What the server hands out: ids and sealed values, nothing readable.
+        let everything = laptop.account.pull(0).await.unwrap();
+        let finance_rows: Vec<_> = everything.records.iter().filter(|r| r.table.starts_with("finance_")).collect();
+        assert!(!finance_rows.is_empty());
+        let raw = serde_json::to_string(&finance_rows).unwrap();
+        assert!(!raw.contains("Tesco") && !raw.contains("-1250") && !raw.contains("Groceries") && !raw.contains("GBP"), "{raw}");
+        assert!(finance_rows.iter().all(|r| r.data.iter().all(|(k, v)| k == "id" || v.as_str().is_some_and(|s| s.starts_with("e1:")))));
+
+        // Another computer signing in with the password reads it all.
+        desktop.sign_in().await;
+        desktop.sync().await;
+        assert_eq!(payees(&desktop).await, ["Tesco Stores"]);
+        assert_eq!(finance::cards(&desktop.db, today()).await.unwrap()[0].balance, 100_000 - 1250);
+    }
+
+    #[tokio::test]
+    async fn a_locked_computer_holds_back_and_catches_up_when_unlocked() {
+        let server = start_server().await;
+        let (laptop, desktop) = (Computer::new(&server).await, Computer::new(&server).await);
+        laptop.sign_in().await;
+        laptop.sync().await;
+        finance::setup(&laptop.db, "GBP", current_account(), today()).await.unwrap();
+        spend(&laptop, "Tesco Stores", -1250).await;
+        laptop.sync().await;
+
+        // Signed in before encryption existed, say: no key here.
+        desktop.sign_in().await;
+        desktop.vault.forget();
+        desktop.sync().await;
+        assert!(payees(&desktop).await.is_empty(), "sealed rows wait, unread");
+        // Its own finance edits wait too (they'd go out unencrypted).
+        finance::setup(&desktop.db, "GBP", current_account(), today()).await.unwrap();
+        desktop.sync().await;
+        laptop.sync().await;
+        assert_eq!(finance::cards(&laptop.db, today()).await.unwrap().len(), 1, "the desktop's account hasn't arrived");
+
+        // The password unlocks it: what came in is applied, what waited goes out.
+        desktop.vault.unlock_with_password(&desktop.account, PASSWORD).await.unwrap();
+        assert!(desktop.vault.unlock_with_password(&desktop.account, "wrong horse").await.is_err());
+        local::apply_stash(&desktop.db, &desktop.vault.key().unwrap()).await.unwrap();
+        assert_eq!(payees(&desktop).await, ["Tesco Stores"]);
+        desktop.sync().await;
+        laptop.sync().await;
+        assert_eq!(finance::cards(&laptop.db, today()).await.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_password_reset_needs_the_recovery_code_on_a_new_computer() {
+        let server = start_server().await;
+        let laptop = Computer::new(&server).await;
+        laptop.sign_in().await;
+        let code = laptop.vault.recovery_code(&laptop.account, PASSWORD).await.unwrap();
+
+        // A new computer whose vault can't open the key with this password
+        // (as after a reset elsewhere): the recovery code does, and the key is
+        // wrapped with the password again.
+        let desktop = Computer::new(&server).await;
+        desktop.sign_in().await;
+        let key = desktop.vault.key().unwrap();
+        desktop.vault.forget();
+        // Wrapped for a different password, as a reset leaves it.
+        let blob = desktop.account.encryption_key().await.unwrap().unwrap();
+        desktop.account.set_encryption_key(Some(crate::vault::tests_support::rewrap(&blob, &key, "forgotten password")))
+        .await
+        .unwrap();
+        desktop.vault.after_sign_in(&desktop.account, PASSWORD).await;
+        assert_eq!(desktop.vault.status(), crate::vault::VaultStatus::NeedsRecovery);
+        assert!(desktop.vault.unlock_with_recovery(&desktop.account, "AAAA-BBBB", PASSWORD).await.is_err());
+        desktop.vault.unlock_with_recovery(&desktop.account, &code, PASSWORD).await.unwrap();
+        assert_eq!(desktop.vault.key(), Some(key));
+        // From now on the password works again everywhere.
+        let third = Computer::new(&server).await;
+        third.sign_in().await;
+        assert_eq!(third.vault.status(), crate::vault::VaultStatus::Unlocked);
+    }
+}
+
+mod journal_encrypted {
+    use super::*;
+    use crate::features::journal::service as journal;
+
+    #[tokio::test]
+    async fn journal_entries_reach_the_server_sealed_and_merge_on_another_computer() {
+        let server = start_server().await;
+        let (laptop, desktop) = (Computer::new(&server).await, Computer::new(&server).await);
+        laptop.sign_in().await;
+        desktop.sign_in().await;
+        laptop.sync().await;
+        desktop.sync().await;
+
+        let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 24).unwrap();
+        let entry = journal::create(&laptop.db, day, "").await.unwrap();
+        journal::save(&laptop.db, &entry.id, Some("bGFwdG9w".into()), "Dear diary, a secret.".into(), 4).await.unwrap();
+        laptop.sync().await;
+        let raw = serde_json::to_string(&laptop.account.pull(0).await.unwrap().records).unwrap();
+        assert!(!raw.contains("secret") && !raw.contains("bGFwdG9w"), "{raw}");
+
+        // Both computers edit the same entry; every edit survives.
+        desktop.sync().await;
+        journal::save(&desktop.db, &entry.id, Some("ZGVza3RvcA==".into()), "Dear diary, a secret. And more.".into(), 7).await.unwrap();
+        journal::save(&laptop.db, &entry.id, Some("bW9yZQ==".into()), "Dear diary, a secret. Also this.".into(), 7).await.unwrap();
+        desktop.sync().await;
+        laptop.sync().await;
+        desktop.sync().await;
+        let edits = |c: &Computer| {
+            let db = c.db.clone();
+            let id = entry.id.clone();
+            async move {
+                let mut all: Vec<String> = journal::get(&db, &id).await.unwrap().edits.into_iter().map(|e| e.data).collect();
+                all.sort();
+                all
+            }
+        };
+        assert_eq!(edits(&laptop).await, ["ZGVza3RvcA==", "bGFwdG9w", "bW9yZQ=="]);
+        assert_eq!(edits(&desktop).await, edits(&laptop).await);
+    }
+}
+
+mod notes_encrypted {
+    use super::*;
+    use crate::features::notes::service as notes;
+    use crate::features::notes::types::{NewNote, NoteChange};
+
+    #[tokio::test]
+    async fn notes_and_folders_reach_the_server_sealed() {
+        let server = start_server().await;
+        let (laptop, desktop) = (Computer::new(&server).await, Computer::new(&server).await);
+        laptop.sign_in().await;
+        desktop.sign_in().await;
+        laptop.sync().await;
+        desktop.sync().await;
+
+        let folder = notes::create_folder(&laptop.db, "Private plans", None).await.unwrap();
+        let sticky = notes::create(&laptop.db, NewNote { folder_id: Some(folder.id.clone()), sticky: true, on_overview: true, ..Default::default() }).await.unwrap();
+        notes::save(&laptop.db, &sticky.id, Some("c3RpY2t5".into()), "Buy a ring, a surprise".into(), 5).await.unwrap();
+        notes::change(&laptop.db, &sticky.id, NoteChange { color: Some("pink".into()), ..Default::default() }).await.unwrap();
+        laptop.sync().await;
+        let raw = serde_json::to_string(&laptop.account.pull(0).await.unwrap().records).unwrap();
+        assert!(!raw.contains("surprise") && !raw.contains("Private plans") && !raw.contains("c3RpY2t5") && !raw.contains("pink"), "{raw}");
+
+        desktop.sync().await;
+        let there = notes::get(&desktop.db, &sticky.id).await.unwrap();
+        assert_eq!((there.note.text.as_str(), there.note.color.as_str(), there.note.on_overview), ("Buy a ring, a surprise", "pink", true));
+        assert_eq!(there.edits[0].data, "c3RpY2t5");
+    }
+}
+
+mod goals_encrypted {
+    use super::*;
+    use crate::features::goals::service as goals;
+    use crate::features::goals::types::GoalFields;
+
+    #[tokio::test]
+    async fn goals_and_their_numbers_reach_the_server_sealed() {
+        let server = start_server().await;
+        let (laptop, desktop) = (Computer::new(&server).await, Computer::new(&server).await);
+        laptop.sign_in().await;
+        desktop.sign_in().await;
+        laptop.sync().await;
+        desktop.sync().await;
+
+        let day = chrono::NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+        let fields = GoalFields {
+            title: "Lose weight before the wedding".into(),
+            icon: String::new(),
+            area: "health".into(),
+            kind: "target".into(),
+            source: "manual".into(),
+            source_id: String::new(),
+            start_value: 84.6,
+            target_value: 76.25,
+            unit: "kg".into(),
+            measure: "latest".into(),
+            start_date: chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            due_date: chrono::NaiveDate::from_ymd_opt(2026, 9, 1),
+            why: "Feel great in the photos".into(),
+            obstacle: String::new(),
+            plan: String::new(),
+        };
+        let g = goals::create(&laptop.db, fields, day).await.unwrap();
+        goals::add_log(&laptop.db, &g.goal.id, day, 80.4, "Weigh-in", day).await.unwrap();
+        laptop.sync().await;
+        let raw = serde_json::to_string(&laptop.account.pull(0).await.unwrap().records).unwrap();
+        // Long enough not to turn up by chance in the sealed text.
+        for secret in ["wedding", "photos", "84.6", "80.4", "Weigh-in"] {
+            assert!(!raw.contains(secret), "{secret} in {raw}");
+        }
+
+        desktop.sync().await;
+        let there = goals::get(&desktop.db, &g.goal.id, day).await.unwrap();
+        assert_eq!((there.goal.goal.start_value, there.goal.goal.target_value, there.goal.current), (84.6, 76.25, 80.4));
+        assert_eq!(there.goal.goal.due_date, chrono::NaiveDate::from_ymd_opt(2026, 9, 1));
+    }
 }

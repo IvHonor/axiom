@@ -282,6 +282,16 @@ export function CalendarsDialog({ start, onClose, onChanged }: { start?: "google
           <header className="dp-account-head">
             <span className="dp-account-provider">{providerName(account)}</span>
             <b className="dp-account-name">{account.name}</b>
+            {account.signedOut && (
+              <button
+                className="btn btn-sm"
+                disabled={busy !== null || (account.provider !== "caldav" && !setup?.available[account.provider])}
+                title={`Sign in to ${providerName(account)} again`}
+                onClick={() => (account.provider === "caldav" ? setForm("caldav") : void connect(account.provider))}
+              >
+                <RefreshCw size={14} strokeWidth={1.75} /> Reconnect
+              </button>
+            )}
             <ConfirmButton
               className="btn btn-sm btn-ghost is-danger"
               confirmText="Disconnect?"
@@ -365,7 +375,7 @@ export function CalendarsDialog({ start, onClose, onChanged }: { start?: "google
             .filter((a) => !calendars.some((c) => c.accountId === a.id && c.writable && c.name === "Axiom"))
             .map((a) => (
               <button key={a.id} className="btn btn-sm btn-ghost dp-setup-refresh" disabled={busy !== null} onClick={() => run("publish", () => api.createPlanCalendar(a.id, today))}>
-                Make an "Axiom" calendar in {a.name} and use it
+                Make an "Axiom" calendar in {providerName(a)} ({a.name}) and use it
               </button>
             ))}
           {accounts.some((a) => a.provider === "google") && (

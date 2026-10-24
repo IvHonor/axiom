@@ -1,0 +1,30 @@
+﻿.jt-summary { height:100%; min-height:0; min-width:0; display:flex; flex-direction:column; gap:12px; }
+.jt-main { flex:1; min-height:0; min-width:0; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:8px; padding:12px; border:1px solid var(--line); border-radius:var(--radius); background:var(--hover); overflow:hidden; text-align:left; }
+.jt-main:hover { border-color:var(--area-journal); }
+.jt-eyebrow { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); flex:none; }
+.jt-prompt { font-size:clamp(14px, 1.6vw, 23px); font-weight:500; line-height:1.4; overflow-wrap:anywhere; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; }
+.jt-hint { font-size:11px; color:var(--text-dim); flex:none; }
+.jt-summary[data-compact=true] { gap:0; }
+.jt-summary[data-compact=true] .jt-main { padding:0; border:0; background:transparent; gap:3px; }
+.jt-summary[data-compact=true] .jt-prompt { font-size:13px; -webkit-line-clamp:1; }
+.jt-done { font-size:14px; flex:none; max-width:100%; }
+.jt-done svg, .jt-footer svg { flex:none; }
+.jt-metrics { display:flex; gap:8px; flex:none; }
+.jt-metrics button { flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:3px; padding:8px; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+.jt-metrics strong { font-size:18px; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+.jt-metrics span { font-size:10px; color:var(--text-dim); }
+.jt-memories { flex:1; min-height:0; display:flex; flex-direction:column; gap:8px; overflow:hidden; }
+.jt-memories button { min-height:0; flex:1; display:flex; flex-direction:column; justify-content:center; gap:4px; padding:8px 0; text-align:left; border-bottom:1px solid var(--line); overflow:hidden; }
+.jt-memories b, .jt-memories button span { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; font-size:12px; }
+.jt-memories small { font-size:10px; color:var(--text-dim); }
+.jt-memories p { font-size:12px; overflow-wrap:anywhere; }
+.jt-footer { flex:none; display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:11px; min-width:0; }
+.jt-footer button { white-space:nowrap; }
+.jt-streak { min-width:0; overflow:hidden; white-space:nowrap; }
+.jt-notice { font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; color:var(--danger); flex:none; }
+.jt-status { text-align:left; font-size:12px; overflow-wrap:anywhere; }
+.jt-summary button:focus-visible { outline:2px solid var(--area-journal); outline-offset:-2px; }
+
+.jt-streak { display:inline-flex; align-items:center; gap:5px; } .jt-done { display:inline-flex; align-items:center; gap:6px; font-weight:600; color:var(--success); }
+.jt-status { display:block; width:100%; height:100%; min-height:0; overflow:hidden; line-height:1.35; }
+.jt-summary[data-narrow=true] .jt-main { padding:4px; } .jt-summary[data-narrow=true] .jt-prompt { font-size:13px; } .jt-summary[data-narrow=true] .jt-eyebrow, .jt-summary[data-narrow=true] .jt-hint { font-size:10px; overflow-wrap:anywhere; }

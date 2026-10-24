@@ -178,3 +178,50 @@ async fn deleting_the_account_removes_it_and_its_synced_data() {
     let (_, pulled) = call(&app, Method::GET, routes::SYNC_PULL, Some(token(&fresh)), None).await;
     assert_eq!(pulled["records"], json!([]));
 }
+
+#[tokio::test]
+async fn a_profile_has_a_name_and_a_picture() {
+    let app = server().await;
+    let session = sign_up(&app).await;
+    let (status, empty) = call(&app, Method::GET, routes::PROFILE, Some(token(&session)), None).await;
+    assert_eq!((status, empty), (StatusCode::OK, json!({ "display_name": null, "avatar": null })));
+
+    let picture = "data:image/webp;base64,UklGRhIAAABXRUJQ";
+    let body = json!({ "display_name": "  Ada Lovelace ", "avatar": picture });
+    let (status, saved) = call(&app, Method::PUT, routes::PROFILE, Some(token(&session)), Some(body)).await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+    assert_eq!(saved, json!({ "display_name": "Ada Lovelace", "avatar": picture }), "names are trimmed");
+    assert_eq!(call(&app, Method::GET, routes::PROFILE, Some(token(&session)), None).await.1, saved);
+
+    // Only real pictures, and names of a sensible length.
+    let svg = json!({ "display_name": null, "avatar": "data:image/svg+xml;base64,PHN2Zz4=" });
+    assert_eq!(call(&app, Method::PUT, routes::PROFILE, Some(token(&session)), Some(svg)).await.0, StatusCode::BAD_REQUEST);
+    let long = json!({ "display_name": "x".repeat(61), "avatar": null });
+    assert_eq!(call(&app, Method::PUT, routes::PROFILE, Some(token(&session)), Some(long)).await.0, StatusCode::BAD_REQUEST);
+
+    // Clearing both goes back to the email.
+    let (_, cleared) = call(&app, Method::PUT, routes::PROFILE, Some(token(&session)), Some(json!({ "display_name": "", "avatar": null }))).await;
+    assert_eq!(cleared, json!({ "display_name": null, "avatar": null }));
+    assert_eq!(call(&app, Method::GET, routes::PROFILE, None, None).await.0, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn the_wrapped_encryption_key_is_kept_and_rewrapped_with_a_new_password() {
+    let app = server().await;
+    let session = sign_up(&app).await;
+    let get = || call(&app, Method::GET, routes::ENCRYPTION_KEY, Some(token(&session)), None);
+    assert_eq!(get().await, (StatusCode::OK, json!({ "wrapped": null })));
+
+    let (status, _) = call(&app, Method::PUT, routes::ENCRYPTION_KEY, Some(token(&session)), Some(json!({ "wrapped": "blob-1" }))).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_eq!(get().await.1, json!({ "wrapped": "blob-1" }));
+
+    // Changing the password saves the key wrapped again, in the same step.
+    let change = json!({ "current_password": "correct horse", "new_password": "battery staple", "encryption_key": "blob-2" });
+    assert_eq!(call(&app, Method::POST, routes::CHANGE_PASSWORD, Some(token(&session)), Some(change)).await.0, StatusCode::NO_CONTENT);
+    assert_eq!(get().await.1, json!({ "wrapped": "blob-2" }));
+    // Without one, the key stays as it was.
+    let change = json!({ "current_password": "battery staple", "new_password": "correct horse" });
+    call(&app, Method::POST, routes::CHANGE_PASSWORD, Some(token(&session)), Some(change)).await;
+    assert_eq!(get().await.1, json!({ "wrapped": "blob-2" }));
+}

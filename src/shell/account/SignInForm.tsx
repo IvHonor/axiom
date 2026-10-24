@@ -3,13 +3,14 @@ import { requestReset, resetPassword, signIn, signUp, type AccountStatus } from 
 import { ErrorNote, PasswordField, SlowHint, useAction } from "./fields";
 
 /** Sign in, create an account, or reset a forgotten password (ask for a code, then use it). */
-type Mode = "sign-in" | "sign-up" | "forgot" | "reset";
+type Mode = "sign-in" | "sign-up" | "forgot" | "reset" | "waitlisted";
 
 const INTRO: Record<Mode, string> = {
   "sign-in": "Sign in to sync your boards between your computers.",
   "sign-up": "An account lets Axiom sync your boards between your computers.",
   forgot: "Enter your account's email and we'll send you a code to choose a new password.",
   reset: "",
+  waitlisted: "",
 };
 
 export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void }) {
@@ -34,14 +35,33 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
       }
       return;
     }
-    const status = await run(() =>
-      mode === "sign-up"
-        ? signUp(email, password)
-        : mode === "reset"
-          ? resetPassword(email, code, password)
-          : signIn(email, password),
-    );
+    if (mode === "sign-up") {
+      const outcome = await run(() => signUp(email, password));
+      if (outcome?.state === "waitlisted") {
+        setPassword("");
+        switchTo("waitlisted");
+      } else if (outcome) onDone(outcome);
+      return;
+    }
+    const status = await run(() => (mode === "reset" ? resetPassword(email, code, password) : signIn(email, password)));
     if (status) onDone(status);
+  }
+
+  if (mode === "waitlisted") {
+    return (
+      <div className="account">
+        <p className="account-intro">
+          You're on the waiting list as <strong>{email}</strong>. Axiom accounts are being let in a few at a time; we'll email you as soon as
+          yours is approved. Then sign in here with the password you just chose.
+        </p>
+        <p className="account-intro">Until then, Axiom works fully on this computer.</p>
+        <div className="account-links">
+          <button className="link" onClick={() => switchTo("sign-in")}>
+            Back to sign in
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const submitLabel = {
@@ -49,6 +69,7 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
     "sign-up": busy ? "Creating account…" : "Create account",
     forgot: busy ? "Sending…" : "Email me a code",
     reset: busy ? "Saving…" : "Set new password and sign in",
+    waitlisted: "",
   }[mode];
   const ready = email && (mode === "forgot" || (password && (mode !== "reset" || code)));
 

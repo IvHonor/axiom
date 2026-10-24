@@ -744,3 +744,39 @@ pub async fn stats(db: &DatabaseConnection, year: i32, today: Date) -> Result<Re
         finished,
     })
 }
+
+// ---------- For notifications ----------
+
+/// Whether anything was read (or listened to) on `day`.
+pub async fn read_on(db: &DatabaseConnection, day: Date) -> Result<bool> {
+    Ok(reading_days(db).await?.contains(&day))
+}
+
+/// The seven days up to and including `last`: pages, minutes, days read,
+/// and the books finished in them (titles).
+pub async fn week_recap(db: &DatabaseConnection, last: Date) -> Result<(i32, i32, i32, Vec<String>)> {
+    let first = last - Days::new(6);
+    let logged = sessions().filter(session::Column::Day.gte(first)).filter(session::Column::Day.lte(last)).all(db).await?;
+    let pages = logged.iter().map(|s| s.pages).sum();
+    let minutes = logged.iter().map(|s| s.minutes).sum();
+    let days = reading_days(db).await?.range(first..=last).count() as i32;
+    let finished = books()
+        .filter(book::Column::Status.eq("finished"))
+        .filter(book::Column::FinishedOn.gte(first))
+        .filter(book::Column::FinishedOn.lte(last))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|b| b.title)
+        .collect();
+    Ok((pages, minutes, days, finished))
+}
+
+/// Books finished (re-reads too) and pages read from `from` on: what a goal
+/// in Goals counts.
+pub async fn totals_since(db: &DatabaseConnection, from: Date) -> Result<(i32, i32)> {
+    let books = books().filter(book::Column::Status.eq("finished")).filter(book::Column::FinishedOn.gte(from)).all(db).await?.len();
+    let again = reads().filter(read::Column::Outcome.eq("finished")).filter(read::Column::FinishedOn.gte(from)).all(db).await?.len();
+    let pages = sessions().filter(session::Column::Day.gte(from)).all(db).await?.iter().map(|s| s.pages).sum();
+    Ok(((books + again) as i32, pages))
+}

@@ -1,4 +1,6 @@
 fn main() {
+    // Windows embeds this icon in the executable; Cargo must rerun the resource build when it changes.
+    println!("cargo:rerun-if-changed=icons/icon.ico");
     // Build settings (AXIOM_SERVER_URL, the calendar client ids) can live in
     // src-tauri/.env, which git ignores. A variable set in the shell wins.
     println!("cargo:rerun-if-changed=.env");

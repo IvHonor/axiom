@@ -5,6 +5,10 @@ import type { ExtensionManifest } from "../extensions/types";
 import { useLabels } from "./theme/ThemeProvider";
 import { ContextMenu, type MenuPosition } from "./ui/ContextMenu";
 import { Section } from "./ui/Section";
+import { ExtensionIcon, ExtensionPalette } from "./ui/ExtensionIcon";
+import { OverviewVisibilityItem } from "./ui/AreaContextMenu";
+import { Publisher } from "./ui/Publisher";
+import { Switch } from "./ui/Switch";
 
 /** Which kind of extension the list shows. */
 export type ExtensionKind = "all" | "area" | "theme";
@@ -23,24 +27,34 @@ interface ExtensionsPanelProps {
   kind: ExtensionKind;
   onKindChange: (kind: ExtensionKind) => void;
   installedIds: string[];
+  /** Installed (or built in) and switched on. */
+  isOn: (ext: ExtensionManifest) => boolean;
+  onEnabledChange: (id: string, enabled: boolean) => void;
   selectedId: string | null;
   /** Opens an extension's page: in the preview tab, or in a tab of its own. */
   onOpen: (id: string, inNewTab: boolean) => void;
   onInstall: (id: string) => void;
   onUninstall: (id: string) => void;
+  hiddenIds?: string[];
+  onVisibilityChange?: (id: string, hidden: boolean) => void;
 }
 
-/** The marketplace sidebar: search, then installed, available, coming-soon and built-in extensions. */
+/** The extensions sidebar: search, then the built-in extensions (each can be
+ * switched off), and any from the library: installed, available, coming soon. */
 export function ExtensionsPanel({
   query,
   onQueryChange,
   kind,
   onKindChange,
   installedIds,
+  isOn,
+  onEnabledChange,
   selectedId,
   onOpen,
   onInstall,
   onUninstall,
+  hiddenIds = [],
+  onVisibilityChange,
 }: ExtensionsPanelProps) {
   const { label, sep } = useLabels();
   const [menu, setMenu] = useState<{ ext: ExtensionManifest; at: MenuPosition } | null>(null);
@@ -57,7 +71,7 @@ export function ExtensionsPanel({
   const comingSoon = matches.filter(isComingSoon);
 
   const meta = (ext: ExtensionManifest) => {
-    const parts = isComingSoon(ext) ? [ext.publisher] : [ext.publisher, `v${ext.version}`];
+    const parts = isComingSoon(ext) ? [] : [`v${ext.version}`];
     if (ext.themes) parts.push(label(`${ext.themes.length} themes`));
     return parts.join(` ${sep} `);
   };
@@ -72,25 +86,36 @@ export function ExtensionsPanel({
           e.preventDefault();
           setMenu({ ext, at: { x: e.clientX, y: e.clientY } });
         }}
-        title="Click to preview, double-click to keep open, right-click for more"
+        title={`${ext.name} · Click to preview, double-click to keep open, right-click for more`}
       >
-        <span className="ext-icon">
-          <ext.icon size={18} strokeWidth={1.5} />
-        </span>
+        <ExtensionIcon ext={ext} size={18} frame="small" />
         <span className="ext-text">
-          <span className="ext-name">
-            {ext.name}
+          <span className="ext-name">{ext.name}</span>
+          <span className="ext-desc">{ext.description}</span>
+          <span className="ext-meta">
             <span className={`ext-kind is-${kindOf(ext)}`}>{kindOf(ext) === "theme" ? "Theme" : "Area"}</span>
             {isComingSoon(ext) && <span className="ext-kind is-soon">Coming soon</span>}
+            {ext.builtIn && !isOn(ext) && <span className="ext-kind is-off">Off</span>}
+            <Publisher name={ext.publisher} short />
+            {meta(ext) && <span>{meta(ext)}</span>}
           </span>
-          <span className="ext-desc">{ext.description}</span>
-          <span className="ext-meta">{meta(ext)}</span>
+          <ExtensionPalette ext={ext} />
         </span>
       </button>
       {canInstall && (
         <button className="btn btn-sm" onClick={() => onInstall(ext.id)}>
           Install
         </button>
+      )}
+      {ext.builtIn && !ext.required && (
+        <span className="ext-switch">
+          <Switch
+            on={isOn(ext)}
+            label={`${ext.name}: ${isOn(ext) ? "on" : "off"}`}
+            title={isOn(ext) ? `Switch ${ext.name} off` : `Switch ${ext.name} on`}
+            onChange={(on) => onEnabledChange(ext.id, on)}
+          />
+        </span>
       )}
     </li>
   );
@@ -141,43 +166,60 @@ export function ExtensionsPanel({
         ))}
       </div>
       <div className="sidebar-body">
-        <Section title="Installed" count={installed.length}>
-          {installed.length ? list(installed, false) : empty("None installed.")}
+        <Section title="Built-in" count={builtIn.length}>
+          {builtIn.length ? list(builtIn, false) : empty("")}
         </Section>
-        <Section title="Available" count={available.length}>
-          {available.length ? (
-            list(available, true)
-          ) : (
-            empty("Everything is installed.")
-          )}
-        </Section>
+        {installed.length > 0 && (
+          <Section title="Installed" count={installed.length}>
+            {list(installed, false)}
+          </Section>
+        )}
+        {available.length > 0 && (
+          <Section title="Available" count={available.length}>
+            {list(available, true)}
+          </Section>
+        )}
         {comingSoon.length > 0 && (
           <Section title="Coming soon" count={comingSoon.length}>
             {list(comingSoon, false)}
           </Section>
         )}
-        <Section title="Built-in" count={builtIn.length}>
-          {builtIn.length ? list(builtIn, false) : empty("")}
-        </Section>
+        {!q && installed.length + available.length === 0 && (
+          <p className="sidebar-empty ext-library-note">More extensions, from Axiom and others, are on the way in an extension library.</p>
+        )}
       </div>
 
       {menu && (
         <ContextMenu at={menu.at} onClose={() => setMenu(null)}>
-          <button className="menu-item" onClick={() => (onOpen(menu.ext.id, false), setMenu(null))}>
+          <button className="menu-item" role="menuitem" onClick={() => (onOpen(menu.ext.id, false), setMenu(null))}>
             Open
           </button>
-          <button className="menu-item" onClick={() => (onOpen(menu.ext.id, true), setMenu(null))}>
+          <button className="menu-item" role="menuitem" onClick={() => (onOpen(menu.ext.id, true), setMenu(null))}>
             Open in New Tab
           </button>
+          {menu.ext.area && isOn(menu.ext) && onVisibilityChange && (
+            <OverviewVisibilityItem hidden={hiddenIds.includes(menu.ext.id)} onToggle={() => {
+              onVisibilityChange(menu.ext.id, !hiddenIds.includes(menu.ext.id));
+              setMenu(null);
+            }} />
+          )}
+          {menu.ext.builtIn && !menu.ext.required && (
+            <>
+              <div className="menu-sep" />
+              <button className="menu-item" role="menuitem" onClick={() => (onEnabledChange(menu.ext.id, !isOn(menu.ext)), setMenu(null))}>
+                {isOn(menu.ext) ? "Switch Off" : "Switch On"}
+              </button>
+            </>
+          )}
           {!menu.ext.builtIn && !isComingSoon(menu.ext) && (
             <>
               <div className="menu-sep" />
               {installedIds.includes(menu.ext.id) ? (
-                <button className="menu-item is-danger" onClick={() => (onUninstall(menu.ext.id), setMenu(null))}>
+                <button className="menu-item is-danger" role="menuitem" onClick={() => (onUninstall(menu.ext.id), setMenu(null))}>
                   Uninstall
                 </button>
               ) : (
-                <button className="menu-item" onClick={() => (onInstall(menu.ext.id), setMenu(null))}>
+                <button className="menu-item" role="menuitem" onClick={() => (onInstall(menu.ext.id), setMenu(null))}>
                   Install
                 </button>
               )}

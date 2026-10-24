@@ -1,0 +1,856 @@
+/* Notes. Colors, fonts and shapes come from the active theme, except sticky
+   notes: they're paper, the same colours in any theme. The toolbar reuses
+   the Project Board's. */
+
+.nt-view {
+  --rx-accent: var(--area-notes);
+  --tag-accent: var(--area-notes);
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nt-banner:has(.vault-lock) {
+  padding: 12px 20px 0;
+}
+
+.nt-heading {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nt-pad {
+  padding: 16px 20px;
+}
+
+.nt-grow {
+  flex: 1;
+}
+
+.nt-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--danger);
+  user-select: text;
+}
+
+.nt-empty {
+  margin: 0;
+  padding: 12px 6px;
+  font-size: 12.5px;
+}
+
+.nt-note {
+  max-width: 300px;
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
+.nt-sort {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+/* ---------- The list beside the note ---------- */
+
+.nt-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(230px, 300px) 1fr;
+}
+
+.nt-list {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 12px 24px;
+  border-right: 1px solid var(--line);
+}
+
+.nt-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.nt-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 4px 0 10px;
+  color: var(--text-faint);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.nt-search:focus-within {
+  border-color: var(--accent);
+}
+
+.nt-search input {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.nt-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--area-notes) 12%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.nt-filter b {
+  flex: 1;
+  overflow: hidden;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nt-trash-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.nt-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nt-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 9px 10px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.nt-card:hover {
+  background: var(--hover);
+}
+
+.nt-card.is-active {
+  background: var(--hover);
+  border-color: var(--line-strong);
+  box-shadow: inset 3px 0 0 var(--area-notes);
+}
+
+.nt-card-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.nt-card-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nt-pin {
+  flex: none;
+  color: var(--area-notes);
+}
+
+.nt-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border: 1px solid;
+  border-radius: 2px;
+}
+
+.nt-card-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.nt-card-meta {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.nt-card-folder,
+.nt-card-tags {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nt-card-tags {
+  color: var(--area-notes);
+}
+
+.nt-blank {
+  height: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.nt-blank h3 {
+  margin: 4px 0 0;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.nt-blank p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.nt-blank-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* ---------- A note ---------- */
+
+.nt-page {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 22px 28px 40px;
+}
+
+.nt-page-main {
+  flex: 1;
+  min-width: 0;
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nt-trashed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+  border-radius: var(--radius);
+}
+
+.nt-trashed > svg {
+  color: var(--danger);
+}
+
+.nt-trashed > span {
+  flex: 1;
+}
+
+.nt-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.nt-page-head .btn.is-on {
+  color: var(--area-notes);
+}
+
+.nt-folder-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 8px;
+  height: 28px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.nt-folder-select:hover {
+  border-color: var(--line-strong);
+}
+
+.nt-folder-select select {
+  max-width: 220px;
+  font-size: 12px;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.nt-swatches {
+  display: flex;
+  gap: 4px;
+}
+
+.nt-swatches button,
+.sticky-palette button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid;
+  border-radius: 4px;
+}
+
+.nt-swatches button.is-on,
+.sticky-palette button.is-on {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.nt-title {
+  width: 100%;
+  padding: 0;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.nt-title::placeholder {
+  color: var(--text-faint);
+}
+
+.nt-page-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding-top: 12px;
+  font-size: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.nt-delete {
+  color: var(--text-dim);
+}
+
+.nt-delete:hover,
+.nt-delete.is-armed {
+  color: var(--danger);
+}
+
+.nt-links {
+  width: 220px;
+  flex: none;
+  align-self: flex-start;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 40px;
+  padding: 14px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.nt-links section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nt-links h3 {
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--tracking);
+  color: var(--text-faint);
+}
+
+.nt-flip {
+  transform: scaleX(-1);
+}
+
+.nt-link {
+  padding: 4px 6px;
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--area-notes);
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: var(--radius-sm);
+}
+
+.nt-link:hover {
+  background: var(--hover);
+}
+
+.nt-link.is-new {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* ---------- The sticky board ---------- */
+
+.nt-board-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 24px 32px;
+  background-image: radial-gradient(color-mix(in srgb, var(--text) 10%, transparent) 1px, transparent 1.2px);
+  background-size: 20px 20px;
+}
+
+.nt-board-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.nt-board-head p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.nt-board-count {
+  font-size: 13.5px !important;
+  margin-bottom: 2px !important;
+}
+
+.nt-hand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.nt-new-stickies {
+  display: flex;
+  gap: 6px;
+}
+
+.nt-new-stickies button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: rgb(0 0 0 / 0.5);
+  border: 1px solid;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.12);
+  transition: transform 0.12s;
+}
+
+.nt-new-stickies button:hover {
+  color: rgb(0 0 0 / 0.75);
+  transform: translateY(-2px) rotate(-3deg);
+}
+
+.nt-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 30px 24px;
+  padding: 12px 4px;
+}
+
+.nt-board-slot {
+  height: 240px;
+}
+
+/* ---------- A sticky note ---------- */
+
+.sticky {
+  --ink: #2d2a22;
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  background:
+    linear-gradient(178deg, rgb(255 255 255 / 0.35), transparent 30%),
+    linear-gradient(to top left, rgb(0 0 0 / 0.05), transparent 22%),
+    var(--paper);
+  border-radius: 2px 2px 4px 14px / 2px 2px 4px 6px;
+  box-shadow:
+    0 1px 1px rgb(0 0 0 / 0.08),
+    0 10px 18px -10px rgb(0 0 0 / 0.45);
+  transform: rotate(var(--tilt));
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.sticky:hover,
+.sticky:focus-within,
+.tile-cell.is-moving .sticky {
+  transform: rotate(0deg) translateY(-1px);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.1),
+    0 16px 26px -12px rgb(0 0 0 / 0.5);
+}
+
+.sticky-tape {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 72px;
+  height: 22px;
+  transform: translateX(-50%) rotate(-2.5deg);
+  background: rgb(255 255 255 / 0.5);
+  border-left: 1px dashed rgb(0 0 0 / 0.06);
+  border-right: 1px dashed rgb(0 0 0 / 0.06);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.1);
+  pointer-events: none;
+}
+
+.sticky-band {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  padding: 0 4px;
+  background: color-mix(in srgb, var(--band) 85%, transparent);
+  border-radius: 2px 2px 0 0;
+}
+
+.sticky-band > *:not(.sticky-grow) {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.sticky:hover .sticky-band > *,
+.sticky:focus-within .sticky-band > *,
+.sticky-band > .is-on,
+.sticky-band > [aria-expanded="true"],
+.sticky-band > :has([aria-expanded="true"]) {
+  opacity: 1;
+}
+
+.sticky-grow {
+  flex: 1;
+}
+
+.sticky .icon-btn,
+.sticky-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  color: rgb(0 0 0 / 0.55);
+  border-radius: 4px;
+}
+
+.sticky .icon-btn:hover,
+.sticky-btn:hover {
+  color: rgb(0 0 0 / 0.85);
+  background: rgb(0 0 0 / 0.08);
+}
+
+.sticky-btn.is-on {
+  color: rgb(0 0 0 / 0.85);
+  background: rgb(0 0 0 / 0.1);
+}
+
+.sticky .tile-move-handle {
+  cursor: grab;
+}
+
+.sticky .dropdown-menu {
+  color: var(--text);
+}
+
+.sticky-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 7px 10px 4px;
+}
+
+.sticky-palette button {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+}
+
+.sticky-palette button.is-on {
+  outline-color: var(--ink);
+}
+
+.sticky-error {
+  margin: 4px 12px 0;
+  font-size: 12px;
+  color: #a1251b;
+}
+
+.sticky-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 14px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 0.2) transparent;
+}
+
+/* The whole page takes typing, not only its first line. */
+.sticky-editor {
+  height: 100%;
+}
+
+.sticky-editor > div {
+  flex: 1;
+  min-height: 0;
+}
+
+.sticky .rx-prose {
+  --rx-accent: #8a4b00;
+  min-height: 100%;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.sticky.is-handwritten .rx-prose {
+  font-family: "Caveat Variable", "Segoe Print", "Bradley Hand", cursive;
+  font-size: 21px;
+  line-height: 1.22;
+}
+
+.sticky .rx-prose p.is-editor-empty:first-child::before {
+  color: rgb(0 0 0 / 0.35);
+}
+
+.sticky .rx-prose blockquote {
+  color: rgb(0 0 0 / 0.6);
+  border-left-color: rgb(0 0 0 / 0.2);
+}
+
+.sticky .rx-prose code,
+.sticky .rx-prose pre {
+  background: rgb(0 0 0 / 0.07);
+}
+
+.sticky .rx-prose input[type="checkbox"] {
+  accent-color: var(--ink);
+}
+
+.sticky .rx-prose ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: rgb(0 0 0 / 0.4);
+}
+
+/* On the overview, the tile's resize grip sits on the paper. */
+.tile-cell:has(> .sticky) .resize-handle {
+  color: rgb(0 0 0 / 0.4);
+  z-index: 1;
+}
+
+/* ---------- Side panel and overview tile ---------- */
+
+.ns-count {
+  margin-left: auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.ns-folders {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 8px;
+}
+
+.ns-folder {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 30px;
+  padding-right: 6px;
+  color: var(--text-dim);
+}
+
+.ns-folder:hover,
+.ns-folder.is-active {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.ns-folder.is-active {
+  font-weight: 600;
+}
+
+.ns-folder .dropdown {
+  opacity: 0;
+}
+
+.ns-folder:hover .dropdown,
+.ns-folder:focus-within .dropdown {
+  opacity: 1;
+}
+
+.ns-chevron {
+  width: 16px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+}
+
+.ns-folder-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: inherit;
+  text-align: left;
+}
+
+.ns-folder-name > span:first-of-type {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ns-folder-name > svg {
+  flex: none;
+  color: var(--area-notes);
+}
+
+.ns-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 6px 32px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  text-align: left;
+}
+
+.ns-add:hover {
+  color: var(--text);
+}
+
+.ns-name {
+  padding: 3px 10px 3px 30px;
+}
+
+.ns-name input {
+  width: 100%;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.ns-error {
+  padding: 4px 16px;
+}
+
+.ns-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px 10px;
+}
+
+.ns-tag {
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--hover);
+  border-radius: 999px;
+}
+
+.ns-tag:hover,
+.ns-tag.is-active {
+  color: var(--area-notes);
+  background: color-mix(in srgb, var(--area-notes) 14%, transparent);
+}
+
+@media (max-width: 960px) {
+  .nt-links {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .nt-split {
+    grid-template-columns: 1fr;
+  }
+
+  .nt-list {
+    display: none;
+  }
+}

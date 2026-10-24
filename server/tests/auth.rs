@@ -56,6 +56,30 @@ async fn wrong_password_and_unknown_email_look_the_same() {
 }
 
 #[tokio::test]
+async fn a_password_from_before_login_keys_is_swapped_for_one() {
+    let app = server().await;
+    let key = |c: &str| format!("{}{}", axiom_protocol::LOGIN_KEY_PREFIX, c.repeat(43));
+    // Made by an older Axiom, which sent the password itself.
+    post(&app, routes::SIGN_UP, credentials("ada@example.com", "correct horse")).await;
+
+    // A login key can't match that, so the device is asked for the password.
+    let (status, _) = post(&app, routes::SIGN_IN, credentials("ada@example.com", &key("a"))).await;
+    assert_eq!(status.as_u16(), axiom_protocol::PLAIN_PASSWORD);
+    // Unknown emails don't say so.
+    assert_eq!(post(&app, routes::SIGN_IN, credentials("bob@example.com", &key("a"))).await.0, StatusCode::UNAUTHORIZED);
+
+    // The password, with the key to replace it.
+    let mut both = credentials("ada@example.com", "correct horse");
+    both["login_key"] = json!(key("a"));
+    assert_eq!(post(&app, routes::SIGN_IN, both).await.0, StatusCode::OK);
+
+    // From then on only the key works, and a wrong key is just wrong.
+    assert_eq!(post(&app, routes::SIGN_IN, credentials("ada@example.com", &key("a"))).await.0, StatusCode::OK);
+    assert_eq!(post(&app, routes::SIGN_IN, credentials("ada@example.com", "correct horse")).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(post(&app, routes::SIGN_IN, credentials("ada@example.com", &key("b"))).await.0, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn refresh_rotates_the_token() {
     let app = server().await;
     let (_, first) = post(&app, routes::SIGN_UP, credentials("ada@example.com", "correct horse")).await;

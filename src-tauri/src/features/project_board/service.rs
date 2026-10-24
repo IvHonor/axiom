@@ -1162,3 +1162,28 @@ async fn describe_cards(db: &DatabaseConnection, cards: Vec<task::Model>) -> Res
         })
         .collect())
 }
+
+// ---------- For notifications ----------
+
+/// Open cards (on your boards and shared ones) due on or before `through`,
+/// soonest first.
+pub async fn deadline_cards(db: &DatabaseConnection, through: NaiveDate) -> Result<Vec<PlannableCard>> {
+    let open = tasks()
+        .filter(task::Column::CompletedAt.is_null())
+        .filter(task::Column::Archived.eq(false))
+        .filter(task::Column::DueDate.lte(through))
+        .all(db)
+        .await?;
+    let mut cards = describe_cards(db, open).await?;
+    cards.retain(|c| !c.done);
+    cards.sort_by_key(|c| c.due_date);
+    Ok(cards)
+}
+
+/// How far along a project is: cards done out of all its cards (not their
+/// subtasks), archived ones counting as history. For goals in Goals.
+pub async fn progress(db: &DatabaseConnection, project_id: &str) -> Result<(u32, u32)> {
+    find_project(db, project_id).await?;
+    let all = tasks().filter(task::Column::ProjectId.eq(project_id)).filter(task::Column::ParentTaskId.is_null()).all(db).await?;
+    Ok((all.iter().filter(|t| t.completed_at.is_some()).count() as u32, all.len() as u32))
+}

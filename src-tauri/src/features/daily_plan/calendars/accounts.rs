@@ -251,6 +251,7 @@ async fn save_account(db: &DatabaseConnection, provider: &str, name: &str, serve
         Some(found) => {
             let mut active: account::ActiveModel = found.into();
             active.problem = Set(None);
+            active.signed_out = Set(false);
             active.update(db).await?
         }
         None => {
@@ -260,6 +261,7 @@ async fn save_account(db: &DatabaseConnection, provider: &str, name: &str, serve
                 name: Set(name.into()),
                 server: Set(server.into()),
                 problem: Set(None),
+                signed_out: Set(false),
                 created_at: Set(Utc::now()),
             }
             .insert(db)
@@ -369,6 +371,9 @@ pub async fn sync_account(db: &DatabaseConnection, hub: &CalendarHub, account: &
     }
     .await;
     let mut active: account::ActiveModel = account.clone().into();
+    // Sign-in trouble is always Error::Account here; anything else (offline,
+    // a server error) reconnecting wouldn't fix.
+    active.signed_out = Set(matches!(outcome, Err(Error::Account(_))));
     active.problem = Set(outcome.err().map(|e| e.to_string()));
     active.update(db).await?;
     Ok(true)

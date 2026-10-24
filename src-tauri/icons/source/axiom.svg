@@ -1,23 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- Axiom's app icon: the 3x3 dot mark from the top bar. Regenerate every
-       size with: npx tauri icon src-tauri/icons/source/axiom.svg -->
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2a2b30"/>
-      <stop offset="1" stop-color="#16171a"/>
-    </linearGradient>
-  </defs>
-  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
-  <rect x="64.5" y="64.5" width="895" height="895" rx="199.5" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
-  <g fill="#f2f2f4">
-    <rect x="252" y="252" width="136" height="136" rx="28"/>
-    <rect x="444" y="252" width="136" height="136" rx="28"/>
-    <rect x="636" y="252" width="136" height="136" rx="28"/>
-    <rect x="252" y="444" width="136" height="136" rx="28"/>
-    <rect x="636" y="444" width="136" height="136" rx="28"/>
-    <rect x="252" y="636" width="136" height="136" rx="28"/>
-    <rect x="444" y="636" width="136" height="136" rx="28"/>
-    <rect x="636" y="636" width="136" height="136" rx="28"/>
-  </g>
-  <rect x="444" y="444" width="136" height="136" rx="28" fill="#2f8cff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="-45 -34 834 834">
+  <g fill="#17191c" stroke="#f3f4f6" stroke-width="16" stroke-linejoin="round" paint-order="stroke fill"><path d="M372 0 623 168 372 339 120 168Z"/>
+  <path d="M0 464 274 292V598L0 766Z"/>
+  <path d="M470 292 744 464V766L470 598Z"/></g>
 </svg>

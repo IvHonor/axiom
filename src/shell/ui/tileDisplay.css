@@ -2,7 +2,7 @@
 .tile-cell > .tile-fitted { min-width: 0; overflow: hidden; }
 .tile-fitted .panel-head { flex: 0 0 38px; padding: 10px 12px 0; align-items: center; min-width: 0; gap: 4px; }
 .tile-fitted .panel-head > div:first-child { min-width: 0; flex: 1; }
-.tile-fitted .panel-title { font-size: 13px; min-width: 0; }
+.tile-fitted .panel-title { font-size: 14px; line-height: 20px; font-weight: 600; min-width: 0; }
 .tile-fitted .panel-actions { flex: none; }
 .tile-cell .tile-fitted .panel-body { overflow: hidden; padding: 8px 12px 12px; gap: 0; }
 .tile-display-title { display: flex; align-items: center; gap: 5px; min-width: 0; }

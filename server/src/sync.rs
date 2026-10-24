@@ -32,10 +32,11 @@ pub const MAX_RECORDS_PER_ACCOUNT: u64 = 100_000;
 pub const MAX_RECORD_BYTES: usize = 64 * 1024;
 
 pub async fn push(State(s): State<AppState>, auth: AuthUser, Json(body): Json<PushRequest>) -> Result<Json<PushResponse>, ApiError> {
+    crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
     if body.changes.len() > SYNC_BATCH {
         return Err(ApiError::bad_request(format!("Send at most {SYNC_BATCH} changes at a time.")));
     }
-    if let Some(bad) = body.changes.iter().find(|c| !is_plain_name(&c.table) || !is_plain_name(&c.id)) {
+    if let Some(bad) = body.changes.iter().find(|c| !is_plain_name(&c.table) || !is_plain_name(&c.id) || !c.id_matches()) {
         return Err(ApiError::bad_request(format!("Invalid table or id: {}/{}", bad.table, bad.id)));
     }
     if body.changes.iter().any(|c| Value::Object(c.fields.clone()).to_string().len() > MAX_RECORD_BYTES) {
@@ -123,6 +124,7 @@ pub struct PullQuery {
 }
 
 pub async fn pull(State(s): State<AppState>, auth: AuthUser, Query(query): Query<PullQuery>) -> Result<Json<PullResponse>, ApiError> {
+    crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
     let mut rows = sync_record::Entity::find()
         .filter(sync_record::Column::UserId.eq(&auth.user_id))
         .filter(sync_record::Column::Seq.gt(query.since))

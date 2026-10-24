@@ -71,6 +71,7 @@ export const nordThemes: ExtensionManifest = {
   ],
   version: "0.1.0",
   publisher: "Axiom",
+  builtIn: true,
   icon: Snowflake,
   themes,
 };

@@ -4,6 +4,12 @@ mod m001_accounts;
 mod m002_sync;
 mod m003_password_resets;
 mod m004_spaces;
+mod m005_waitlist;
+mod m006_profiles;
+mod m007_notifications;
+mod m008_roles;
+mod m009_encryption;
+mod m010_login_keys;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
 use sea_orm_migration::prelude::*;
@@ -18,6 +24,12 @@ impl MigratorTrait for Migrator {
             Box::new(m002_sync::Migration),
             Box::new(m003_password_resets::Migration),
             Box::new(m004_spaces::Migration),
+            Box::new(m005_waitlist::Migration),
+            Box::new(m006_profiles::Migration),
+            Box::new(m007_notifications::Migration),
+            Box::new(m008_roles::Migration),
+            Box::new(m009_encryption::Migration),
+            Box::new(m010_login_keys::Migration),
         ]
     }
 

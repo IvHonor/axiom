@@ -1,0 +1,121 @@
+/* Layout decisions use the tile body's measured width and height. Only the overview scrolls. */
+.rd-ov-title { display: block; min-width: 0; }
+.rd-ov-title.is-compact .tile-display-title > .tile-title { display: none; }
+.rd-ov-root { display: flex; flex-direction: column; gap: 8px; height: 100%; min-width: 0; min-height: 0; }
+.rd-ov-heading, .rd-ov-footer, .rd-ov-notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 24px; flex: 0 0 24px; min-width: 0; }
+.rd-ov-heading > strong { font-size: 12px; line-height: 18px; font-weight: 600; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd-ov-content { flex: 1; min-height: 0; min-width: 0; }
+.rd-ov-root :is(button, span, p, section, div) { min-width: 0; }
+.rd-ov-root button:focus-visible { outline-offset: -2px; }
+.rd-ov-footer { border-top: 1px solid var(--line); font-size: 10px; color: var(--text-dim); }
+.rd-ov-footer > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.rd-ov-footer > button { flex: none; }
+.rd-ov-link { display: inline-flex; align-items: center; gap: 4px; color: var(--area-reading); font-size: 11px; text-align: left; }
+.rd-ov-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.rd-ov-link > svg { flex: none; }
+.rd-ov-notice { color: var(--warning); font-size: 10px; }
+.rd-ov-notice > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-ov-status { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 6px; height: 100%; font-size: 11px; color: var(--text-dim); overflow-wrap: anywhere; }
+.rd-ov-status > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rd-ov-glance { display: flex; flex-wrap: wrap; align-content: center; align-items: center; gap: 6px 10px; height: 100%; }
+.rd-ov-glance > button { flex: 1; text-align: left; }
+.rd-ov-glance strong, .rd-ov-glance small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd-ov-glance strong { font-size: 13px; font-weight: 600; line-height: 18px; }
+.rd-ov-glance small { font-size: 10px; line-height: 15px; color: var(--text-dim); }
+.rd-ov-glance-percent { color: var(--area-reading); font-size: 17px; font-variant-numeric: tabular-nums; }
+.rd-ov-meter { display: block; width: 100%; height: 4px; flex: none; overflow: hidden; border-radius: 3px; background: var(--line); }
+.rd-ov-meter > span { display: block; height: 100%; background: var(--area-reading); border-radius: inherit; }
+.rd-ov-collection { display: flex; flex-direction: column; gap: 0; height: 100%; min-height: 0; }
+.rd-ov-books { display: grid; column-gap: 12px; align-content: start; min-height: 0; }
+.rd-ov-book { display: flex; align-items: center; gap: 10px; width: 100%; height: 100%; padding: 5px 0; text-align: left; border-bottom: 1px solid var(--line); }
+.rd-ov-book:hover strong { color: var(--area-reading); }
+.rd-ov-book.is-condensed { padding: 2px 0; }
+.rd-ov-root .rd-ov-book > .rd-cover { --w: 24px; box-shadow: none; }
+.rd-ov-root .rd-cover { background: color-mix(in srgb, var(--area-reading) 9%, var(--panel)); border-color: color-mix(in srgb, var(--area-reading) 22%, var(--line)); }
+.rd-ov-root .rd-cover-blank { color: var(--area-reading); }
+.rd-ov-copy { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.rd-ov-copy > strong { display: block; font-size: 13px; line-height: 18px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-ov-author, .rd-ov-book-meta { display: block; font-size: 11px; line-height: 15px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-ov-copy > .rd-ov-meter { height: 3px; }
+.rd-ov-pager { display: flex; align-items: center; justify-content: flex-end; gap: 4px; height: 28px; flex: 0 0 28px; margin-top: auto; }
+.rd-ov-pager > span { margin-right: auto; font-size: 10px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd-ov-pager > .icon-btn { width: 24px; height: 24px; }
+.rd-ov-pager.is-narrow > .icon-btn { width: 20px; }
+.rd-ov-pager.is-narrow > span { font-size: 9px; }
+.rd-ov-pager button:disabled { opacity: .35; }
+.rd-ov-empty-note { font-size: 11px; color: var(--text-dim); line-height: 1.5; padding-top: 6px; overflow-wrap: anywhere; }
+.rd-ov-start { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 12px; height: 100%; max-width: 430px; }
+.rd-ov-start > svg { color: var(--area-reading); }
+.rd-ov-start > strong { font-size: 19px; font-weight: 600; line-height: 1.25; text-wrap: balance; }
+.rd-ov-start > p { font-size: 12px; line-height: 1.5; color: var(--text-dim); text-wrap: pretty; }
+.rd-ov-start.is-small { gap: 8px; }
+.rd-ov-start.is-small > strong { font-size: 13px; line-height: 18px; }
+.rd-ov-feature { display: flex; gap: 16px; align-items: center; width: 100%; height: 100%; text-align: left; }
+.rd-ov-feature:hover .rd-ov-feature-copy > strong { color: var(--area-reading); }
+.rd-ov-feature-cover { flex: none; }
+.rd-ov-feature-cover > .rd-cover { --w: var(--cover-width); }
+.rd-ov-feature-copy { display: flex; flex-direction: column; gap: 7px; flex: 1; }
+.rd-ov-feature-copy > small { display: flex; align-items: center; gap: 5px; color: var(--area-reading); font-size: 11px; line-height: 15px; }
+.rd-ov-feature-copy > small > svg { flex: none; }
+.rd-ov-feature-copy > strong { font-size: 18px; font-weight: 600; line-height: 22px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.rd-ov-feature.is-generous .rd-ov-feature-copy > strong { font-size: clamp(17px, 1.5vw, 23px); line-height: 1.2; -webkit-line-clamp: 3; }
+.rd-ov-feature-progress { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; line-height: 16px; color: var(--text-dim); }
+.rd-ov-feature-progress > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd-ov-feature-progress > b { flex: none; color: var(--area-reading); font-weight: 500; }
+.rd-ov-estimate { font-size: 10px; line-height: 15px; color: var(--text-dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rd-ov-feature-action, .rd-ov-goal-action { display: flex; align-items: center; gap: 4px; color: var(--area-reading); font-size: 11px; line-height: 16px; margin-top: 4px; }
+.rd-ov-continue { display: flex; flex-direction: column; height: 100%; gap: 10px; }
+.rd-ov-continue > .rd-ov-feature { flex: 1; min-height: 0; }
+.rd-ov-habit { display: flex; align-items: center; gap: 20px; min-height: 56px; flex: 0 0 56px; border-top: 1px solid var(--line); }
+.rd-ov-habit > span { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.rd-ov-habit svg { color: var(--area-reading); flex: none; }
+.rd-ov-habit strong { font-size: 17px; font-weight: 500; line-height: 20px; font-variant-numeric: tabular-nums; }
+.rd-ov-habit small { color: var(--text-dim); font-size: 10px; line-height: 14px; }
+.rd-ov-goal { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 7px; width: 100%; height: 100%; text-align: left; }
+.rd-ov-kicker { display: flex; gap: 5px; align-items: center; color: var(--text-dim); font-size: 11px; line-height: 15px; }
+.rd-ov-goal-number { line-height: 1; font-size: 17px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.rd-ov-goal-number > strong { font-size: 35px; font-weight: 500; color: var(--area-reading); }
+.rd-ov-goal-number > small { display: block; font-size: 10px; line-height: 15px; margin-top: 5px; color: var(--text-dim); }
+.rd-ov-goal.is-roomy .rd-ov-goal-number > strong { font-size: 51px; }
+.rd-ov-goal-message { font-size: 12px; line-height: 17px; overflow-wrap: anywhere; }
+.rd-ov-library { display: flex; flex-direction: column; gap: 10px; height: 100%; }
+.rd-ov-shelves { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; height: 62px; flex: 0 0 62px; }
+.rd-ov-shelves > button { display: flex; flex-direction: column; justify-content: center; gap: 5px; text-align: left; }
+.rd-ov-shelves strong { font-size: 22px; font-weight: 500; line-height: 25px; color: var(--area-reading); }
+.rd-ov-shelves span { font-size: 9px; line-height: 13px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; color: var(--text-dim); }
+.rd-ov-subheading { display: flex; justify-content: space-between; align-items: center; gap: 8px; height: 20px; flex: 0 0 20px; font-size: 10px; color: var(--text-dim); }
+.rd-ov-subheading > strong { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd-ov-subheading .rd-ov-link { font-size: 10px; }
+.rd-ov-library-list, .rd-ov-dashboard-list { flex: 1; min-height: 0; }
+.rd-ov-dashboard { display: grid; gap: 20px; height: 100%; }
+.rd-ov-dashboard-main, .rd-ov-dashboard-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.rd-ov-dashboard-side { padding-left: 20px; border-left: 1px solid var(--line); }
+.rd-ov-dashboard .rd-ov-habit { gap: 12px; min-height: 58px; flex-basis: 58px; }
+.rd-ov-dashboard .rd-ov-habit > span { flex: 1; }
+.rd-ov-dashboard .rd-ov-habit small { flex-basis: 100%; }
+.rd-ov-reflection { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; height: 100%; gap: 8px; color: var(--text-dim); font-size: 11px; line-height: 17px; }
+.rd-ov-reflection > svg { color: var(--area-reading); }
+.rd-ov-year { display: flex; flex-direction: column; gap: 12px; height: 100%; }
+.rd-ov-year-stats { display: flex; justify-content: space-between; align-items: center; gap: 12px; height: 34px; flex: 0 0 34px; color: var(--text-dim); font-size: 10px; }
+.rd-ov-year-stats strong { font-size: 23px; font-weight: 500; color: var(--area-reading); }
+.rd-ov-chart { display: flex; gap: 7px; flex: 1; min-height: 0; }
+.rd-ov-month { flex: 1; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.rd-ov-month-track { flex: 1; display: flex; align-items: flex-end; min-height: 0; border-bottom: 1px solid var(--line); }
+.rd-ov-month-track > span { display: block; width: 100%; background: var(--area-reading); border-radius: 3px 3px 0 0; }
+.rd-ov-month > small { font-size: 9px; line-height: 13px; color: var(--text-dim); text-align: center; }
+.rd-ov-year-detail { display: flex; justify-content: space-between; gap: 8px; color: var(--text-dim); font-size: 10px; line-height: 15px; }
+.rd-ov-collection.is-covers .rd-ov-book { flex-direction: column; align-items: flex-start; gap: 7px; padding: 4px 0 8px; border-bottom: 0; }
+.rd-ov-collection.is-covers .rd-cover { --w: calc(var(--shelf-cover-height) * 2 / 3); height: var(--shelf-cover-height); width: var(--w); aspect-ratio: 2 / 3; box-shadow: 0 3px 8px rgb(0 0 0 / .12); }
+.rd-ov-collection.is-covers .rd-ov-copy { width: 100%; flex: none; }
+.rd-ov-collection.is-covers .rd-ov-copy > strong { font-size: 12px; }
+.rd-ov-collection.is-stack :is(.rd-ov-author, .rd-ov-book-meta) { display: none; }
+.rd-ov-collection.is-stack .rd-ov-book { padding-bottom: 5px; }
+.rd-ov-strip { display: grid; height: 100%; gap: 16px; align-items: center; }
+.rd-ov-strip > button { display: flex; flex-direction: column; gap: 3px; text-align: left; }
+.rd-ov-strip strong, .rd-ov-strip button > span:not(.rd-ov-meter) { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.rd-ov-strip strong { font-weight: 500; font-size: 11px; line-height: 16px; }
+.rd-ov-strip button > span:not(.rd-ov-meter) { font-size: 10px; line-height: 13px; color: var(--text-dim); }
+.rd-ov-strip .rd-ov-meter { height: 3px; }
+.rd-ov-strip .rd-ov-strip-more { color: var(--area-reading); font-size: 10px; line-height: 16px; }
+.rd-ov-narrow-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px; color: var(--area-reading); text-align: center; }
+.rd-ov-narrow-empty .rd-ov-link { text-align: center; }

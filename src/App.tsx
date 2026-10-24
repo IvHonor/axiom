@@ -15,32 +15,43 @@ import { useSync } from "./shell/useSync";
 import { useUpdater } from "./shell/useUpdater";
 import { UpdatePrompt } from "./shell/UpdatePrompt";
 import { useInstalled } from "./shell/useInstalled";
+import { useOverviewVisibility } from "./shell/useOverviewVisibility";
 import { useTabs } from "./shell/useTabs";
+import { AreaNotifications } from "./shell/notifications/AreaNotifications";
+import { setNotificationsOff } from "./lib/notifications";
+import { AdminView } from "./shell/views/AdminView";
+import { ADMIN } from "./shell/view";
 import { ExtensionInfoView } from "./shell/views/ExtensionInfoView";
 import { ExtensionView } from "./shell/views/ExtensionView";
 import { OverviewView } from "./shell/views/OverviewView";
+import { SidebarFrame } from "./shell/ui/SidebarFrame";
 
 export default function App() {
   const status = useAppStatus();
   const [account, setAccount] = useAccount();
   const sync = useSync();
   const updater = useUpdater();
-  const { installedIds, install, uninstall } = useInstalled();
+  const { installedIds, install, uninstall, setEnabled, isOn } = useInstalled();
+  const { hiddenIds, setHidden } = useOverviewVisibility();
   const { tabs, active, previewKey, open, pin, close, closeExtension } = useTabs();
   const [panel, setPanel] = useState<SidePanel | null>("areas");
   const [extQuery, setExtQuery] = useState("");
   const [extKind, setExtKind] = useState<ExtensionKind>("all");
 
-  const installed: ExtensionManifest[] = [
-    ...EXTENSIONS.filter((ext) => ext.builtIn),
-    ...installedIds.map(findExtension).filter((ext): ext is ExtensionManifest => !!ext),
-  ];
+  // Built in or installed, and switched on: everything else stays out of the way.
+  const installed: ExtensionManifest[] = EXTENSIONS.filter(isOn);
   const areas = installed.filter((ext) => ext.area);
+
+  // Extensions that are off send no notifications, on any channel.
+  const offIds = EXTENSIONS.filter((ext) => !isOn(ext)).map((ext) => ext.id).join();
+  useEffect(() => {
+    setNotificationsOff(offIds ? offIds.split(",") : []).catch(() => {});
+  }, [offIds]);
   const withSidebar = areas.filter((ext) => ext.area?.Sidebar);
   const shownArea = withSidebar.find((ext) => panel === `area:${ext.id}`);
   const AreaSidebar = shownArea?.area?.Sidebar;
   const isInstalled = (ext: ExtensionManifest) => !!ext.builtIn || installedIds.includes(ext.id);
-  const current = active.kind === "overview" ? undefined : findExtension(active.id);
+  const current = active.kind === "extension" || active.kind === "extension-info" ? findExtension(active.id) : undefined;
 
   const togglePanel = (next: SidePanel) => setPanel((shown) => (shown === next ? null : next));
 
@@ -50,14 +61,13 @@ export default function App() {
     setPanel("extensions");
   };
 
-  // An area's tab closes when it's uninstalled (its details page stays open).
+  // An area's tab closes when it's switched off or uninstalled (its details page stays open).
   useEffect(() => {
     for (const tab of tabs) {
-      if (tab.kind === "extension" && !installedIds.includes(tab.id) && !findExtension(tab.id)?.builtIn) {
-        closeExtension(tab.id);
-      }
+      const ext = tab.kind === "extension" ? findExtension(tab.id) : undefined;
+      if (tab.kind === "extension" && (!ext || !isOn(ext))) closeExtension(tab.id);
     }
-  }, [tabs, installedIds, closeExtension]);
+  }, [tabs, isOn, closeExtension]);
 
   // An area's own sidebar closes when the area is uninstalled.
   useEffect(() => {
@@ -110,15 +120,22 @@ export default function App() {
       <ExtensionInfoView
         ext={current}
         installed={isInstalled(current)}
+        enabled={isOn(current)}
+        onEnabledChange={(on) => setEnabled(current.id, on)}
         onInstall={() => install(current.id)}
         onUninstall={() => uninstall(current.id)}
         onOpen={() => open({ kind: "extension", id: current.id })}
+        signedIn={account?.state === "signed_in"}
       />
     );
+  } else if (active.kind === "admin") {
+    main = <AdminView email={account?.state === "signed_in" ? account.email : null} admin={account?.state === "signed_in" && account.admin} />;
   } else {
     main = (
       <OverviewView
         areas={areas}
+        hiddenIds={hiddenIds}
+        onVisibilityChange={setHidden}
         onOpen={(id) => open({ kind: "extension", id })}
         onBrowse={() => setPanel("extensions")}
       />
@@ -131,28 +148,37 @@ export default function App() {
         <TopBar tabs={tabs} active={active} previewKey={previewKey} onSelect={open} onPin={pin} onClose={close} />
         <div className="workbench">
           <ActivityBar
+            hiddenIds={hiddenIds}
+            onVisibilityChange={setHidden}
             active={panel}
-            areas={withSidebar.map((ext) => ({ id: `area:${ext.id}` as const, label: ext.name, icon: ext.icon }))}
+            areas={withSidebar.map((ext) => ({ id: `area:${ext.id}` as const, label: ext.name, icon: ext.icon, extension: ext }))}
             onToggle={togglePanel}
             accountEmail={account?.state === "signed_in" ? account.email : undefined}
+            admin={account?.state === "signed_in" && account.admin ? { open: active.kind === "admin", onOpen: () => open(ADMIN) } : undefined}
           />
+          <SidebarFrame open={!!panel && (!panel.startsWith("area:") || !!shownArea)}>
           {panel === "areas" && (
-            <AreasPanel areas={areas} view={active} onOpen={open} onBrowse={() => setPanel("extensions")} />
+            <AreasPanel areas={areas} view={active} onOpen={open} onBrowse={() => setPanel("extensions")}
+              hiddenIds={hiddenIds} onVisibilityChange={setHidden} />
           )}
           {panel === "extensions" && (
             <ExtensionsPanel
+              hiddenIds={hiddenIds}
+              onVisibilityChange={setHidden}
               query={extQuery}
               onQueryChange={setExtQuery}
               kind={extKind}
               onKindChange={setExtKind}
               installedIds={installedIds}
+              isOn={isOn}
+              onEnabledChange={setEnabled}
               selectedId={active.kind === "extension-info" ? active.id : null}
               onOpen={(id, inNewTab) => open({ kind: "extension-info", id }, { preview: !inNewTab })}
               onInstall={install}
               onUninstall={uninstall}
             />
           )}
-          {panel === "account" && <AccountPanel status={account} sync={sync} onChange={setAccount} />}
+          {panel === "account" && <AccountPanel status={account} sync={sync} onChange={setAccount} extensions={areas.map((ext) => ext.id)} />}
           {panel === "themes" && <ThemesPanel onBrowse={browseThemes} />}
           {shownArea && AreaSidebar && (
             <aside className="sidebar" aria-label={shownArea.name}>
@@ -162,9 +188,11 @@ export default function App() {
                   active={active.kind === "extension" && active.id === shownArea.id}
                   onOpen={() => open({ kind: "extension", id: shownArea.id })}
                 />
+                <AreaNotifications extension={shownArea.id} signedIn={account?.state === "signed_in"} />
               </div>
             </aside>
           )}
+          </SidebarFrame>
           <main className="main">{main}</main>
         </div>
         {updater.offered && <UpdatePrompt status={updater.status} onInstall={updater.install} onLater={updater.later} />}

@@ -1,6 +1,10 @@
-import { LayoutDashboard } from "lucide-react";
+import { EyeOff, LayoutDashboard } from "lucide-react";
+import { useState } from "react";
+import { AreaContextMenu } from "./ui/AreaContextMenu";
+import type { MenuPosition } from "./ui/ContextMenu";
 import type { ExtensionManifest } from "../extensions/types";
 import { Section } from "./ui/Section";
+import { ExtensionIcon } from "./ui/ExtensionIcon";
 import type { View } from "./view";
 
 interface AreasPanelProps {
@@ -8,11 +12,14 @@ interface AreasPanelProps {
   view: View;
   onOpen: (view: View) => void;
   onBrowse: () => void;
+  hiddenIds?: string[];
+  onVisibilityChange?: (id: string, hidden: boolean) => void;
 }
 
 /** Sidebar listing the overview and every installed area. */
-export function AreasPanel({ areas, view, onOpen, onBrowse }: AreasPanelProps) {
+export function AreasPanel({ areas, view, onOpen, onBrowse, hiddenIds = [], onVisibilityChange }: AreasPanelProps) {
   const isActive = (id: string) => view.kind === "extension" && view.id === id;
+  const [menu, setMenu] = useState<{ ext: ExtensionManifest; at: MenuPosition } | null>(null);
 
   return (
     <aside className="sidebar">
@@ -40,14 +47,22 @@ export function AreasPanel({ areas, view, onOpen, onBrowse }: AreasPanelProps) {
                 key={ext.id}
                 className={isActive(ext.id) ? "nav-item is-active" : "nav-item"}
                 onClick={() => onOpen({ kind: "extension", id: ext.id })}
+                title={hiddenIds.includes(ext.id) ? `${ext.name} · hidden on overview` : ext.name}
+                onContextMenu={onVisibilityChange ? (event) => {
+                  event.preventDefault();
+                  setMenu({ ext, at: { x: event.clientX, y: event.clientY } });
+                } : undefined}
               >
-                <ext.icon size={16} strokeWidth={1.5} />
-                {ext.name}
+                <ExtensionIcon ext={ext} />
+                <span className="nav-label">{ext.name}</span>
+                {hiddenIds.includes(ext.id) && <EyeOff size={13} className="nav-hidden" aria-label="Hidden on overview" />}
               </button>
             ))
           )}
         </Section>
       </div>
+      {menu && onVisibilityChange && <AreaContextMenu ext={menu.ext} at={menu.at} hidden={hiddenIds.includes(menu.ext.id)}
+        onOpen={() => onOpen({ kind: "extension", id: menu.ext.id })} onClose={() => setMenu(null)} onVisibilityChange={onVisibilityChange} />}
     </aside>
   );
 }

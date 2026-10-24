@@ -15,8 +15,13 @@ export interface ExtensionManifest {
   version: string;
   publisher: string;
   icon: LucideIcon;
-  /** Ships with Axiom: always installed and can't be uninstalled. */
+  /** CSS colour for the extension's identity; theme packages use their own palette by default. */
+  color?: string;
+  /** Ships with Axiom: always installed and can't be uninstalled, but can be
+   * switched off (see `required`). Extensions from the library are installed. */
   builtIn?: boolean;
+  /** Can't be switched off either: Axiom needs it (the default themes). */
+  required?: boolean;
   /** A life area: listed under Areas and shown as a tile on the overview. */
   area?: AreaContribution;
   /** Themes this extension adds to the theme picker. */
@@ -36,6 +41,31 @@ export interface AreaContribution {
   /** A sidebar of the area's own, opened from its icon in the activity bar
    * (under Extensions). The shell draws the frame and title; this is the body. */
   Sidebar?: ComponentType<AreaSidebarProps>;
+  /** More tiles for the overview beside the area's own: one per sticky note,
+   * say. Hidden along with the area. */
+  tiles?: TileSource;
+}
+
+/** A tile an area adds to the overview, which it draws whole, frame and all
+ * (put `<TileMoveHandle />` in it so it can be moved). */
+export interface OverviewTile {
+  /** Unique across the overview and stable: it's where the tile's place and
+   * size are remembered. */
+  id: string;
+  /** What the tile shows, for the Tile component (e.g. a note's id). */
+  item: string;
+  /** Names it for screen readers ("Resize …"). */
+  label: string;
+  /** Its size until resized, in grid cells. */
+  size?: { w: number; h: number };
+  Tile: ComponentType<{ item: string; onOpen: () => void }>;
+}
+
+/** The extra tiles, as an external store: what's there now, and a way to
+ * hear when that changes. `get` must return the same array until it does. */
+export interface TileSource {
+  subscribe: (listener: () => void) => () => void;
+  get: () => OverviewTile[];
 }
 
 export interface AreaSidebarProps {

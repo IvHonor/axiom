@@ -2,6 +2,17 @@
    which src/shell/theme/applyTheme.ts writes onto :root as CSS variables. */
 
 :root {
+  --area-board: light-dark(#3569b3, #86ade8);
+  --area-plan: light-dark(#956515, #dcb567);
+  --area-reading: light-dark(#237c79, #78c5bd);
+  --area-uni: light-dark(#7954b3, #b7a0df);
+  --area-finance: light-dark(#357b50, #83bf96);
+  --area-journal: light-dark(#a84d6b, #e39ab2);
+  --area-notes: light-dark(#b0581c, #efa56f);
+  --area-birthdays: light-dark(#a8479a, #e19ad6);
+  --area-goals: light-dark(#2f6fa8, #7fb3e6);
+  --success: light-dark(#357b50, #83bf96);
+  --warning: light-dark(#956515, #dcb567);
   font-family: var(--font-ui);
   font-size: var(--font-size);
   line-height: 1.4;

@@ -142,6 +142,8 @@ export interface CalendarAccount {
   /** The CalDAV server; empty for Google and Microsoft. */
   server: string;
   problem: string | null;
+  /** The sign-in stopped working: reconnecting fixes it. */
+  signedOut: boolean;
   createdAt: string;
 }
 

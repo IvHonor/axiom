@@ -1,7 +1,12 @@
-import { GraduationCap, Wallet } from "lucide-react";
+import { birthdays } from "../features/birthdays";
 import { dailyPlan } from "../features/daily_plan";
+import { finance } from "../features/finance";
+import { goals } from "../features/goals";
+import { journal } from "../features/journal";
+import { notes } from "../features/notes";
 import { projectBoard } from "../features/project_board";
 import { reading } from "../features/reading";
+import { uni } from "../features/uni";
 import { emberThemes } from "../themes/ember_themes";
 import { modernThemes } from "../themes/modern_themes";
 import { wireframeThemes } from "../themes/wireframe_themes";
@@ -22,43 +27,15 @@ import type { ExtensionManifest } from "./types";
  * Themes: each theme extension lives in src/themes/<id>/ and exports its manifest.
  */
 export const EXTENSIONS: ExtensionManifest[] = [
-  {
-    id: "finance",
-    name: "Finance",
-    description: "Spending, income and budgets across your accounts.",
-    about: [
-      "See where your money goes. Finance brings your spending, income and budgets into one place, so you can tell at a glance whether the month is on track.",
-    ],
-    features: [
-      "Record spending and income by category",
-      "Set monthly budgets and watch how much is left",
-      "Spot trends with month-by-month charts",
-    ],
-    version: "0.1.0",
-    publisher: "Axiom",
-    icon: Wallet,
-    area: {},
-  },
-  {
-    id: "uni",
-    name: "University",
-    description: "Modules, deadlines and grades for each term.",
-    about: [
-      "Keep your studies organised. University tracks your modules, coursework deadlines and grades term by term, so nothing sneaks up on you.",
-    ],
-    features: [
-      "Organise modules by term",
-      "Track coursework deadlines and exams",
-      "Record grades and follow your running average",
-    ],
-    version: "0.1.0",
-    publisher: "Axiom",
-    icon: GraduationCap,
-    area: {},
-  },
+  birthdays,
   dailyPlan,
+  finance,
+  goals,
+  journal,
+  notes,
   projectBoard,
   reading,
+  uni,
   wireframeThemes,
   emberThemes,
   catppuccinThemes,

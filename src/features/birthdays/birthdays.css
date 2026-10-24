@@ -1,0 +1,940 @@
+/* Birthdays. Colors, fonts and shapes come from the active theme; the
+   toolbar reuses the Project Board's. Today is always the area's colour. */
+
+.bd-view {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.bd-banner:has(.vault-lock) {
+  padding: 12px 20px 0;
+}
+
+.bd-pad {
+  padding: 16px 20px;
+}
+
+.bd-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--danger);
+  user-select: text;
+}
+
+.bd-empty {
+  margin: 0;
+  padding: 8px 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.bd-small {
+  font-size: 12px;
+}
+
+.bd-note {
+  max-width: 340px;
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
+.bd-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.bd-split.has-person {
+  grid-template-columns: 1fr minmax(320px, 400px);
+}
+
+.bd-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.bd-side {
+  min-height: 0;
+  overflow: auto;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+}
+
+.bd-page {
+  max-width: 820px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 24px 32px;
+}
+
+.bd-heading {
+  margin: 0 0 8px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--tracking);
+  text-transform: var(--label-case);
+  color: var(--text-faint);
+}
+
+/* ---------- Someone in a list ---------- */
+
+.bd-rows {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.bd-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.bd-row:last-child {
+  border-bottom: 0;
+}
+
+.bd-row:hover,
+.bd-row.is-active {
+  background: var(--hover);
+}
+
+.bd-row.is-active {
+  box-shadow: inset 3px 0 0 var(--area-birthdays);
+}
+
+.bd-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.bd-row-text b {
+  overflow: hidden;
+  font-size: 13.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bd-row-text .dim {
+  font-size: 12px;
+}
+
+.bd-ideas {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--area-birthdays);
+}
+
+.bd-countdown {
+  min-width: 82px;
+  font-size: 12px;
+  text-align: right;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.bd-countdown.is-soon {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bd-countdown.is-today {
+  font-weight: 700;
+  color: var(--area-birthdays);
+}
+
+/* A tear-off calendar page. */
+.bd-date {
+  width: 40px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+}
+
+.bd-date-month {
+  width: 100%;
+  padding: 1px 0;
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: color-mix(in srgb, var(--area-birthdays) 75%, var(--text-faint));
+}
+
+.bd-date-day {
+  padding: 1px 0 2px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.bd-date.is-today {
+  border-color: var(--area-birthdays);
+}
+
+.bd-date.is-today .bd-date-month {
+  background: var(--area-birthdays);
+}
+
+.bd-avatar {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  border-radius: 50%;
+  box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.12);
+  user-select: none;
+}
+
+.bd-avatar-ring {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  font-size: 0.55em;
+  line-height: 1;
+}
+
+/* ---------- Today ---------- */
+
+.bd-celebrate {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px;
+  background: color-mix(in srgb, var(--area-birthdays) 10%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--area-birthdays) 35%, transparent);
+  border-radius: var(--radius);
+}
+
+/* Confetti, drawn with gradients: no images. */
+.bd-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(circle at 8% 20%, #f6c343 0 3px, transparent 4px),
+    radial-gradient(circle at 22% 80%, #4fb3e8 0 2.5px, transparent 3.5px),
+    radial-gradient(circle at 40% 12%, #e8606a 0 2px, transparent 3px),
+    radial-gradient(circle at 63% 85%, #6cc36c 0 3px, transparent 4px),
+    radial-gradient(circle at 78% 18%, #b07ce8 0 2.5px, transparent 3.5px),
+    radial-gradient(circle at 92% 60%, #f6c343 0 2px, transparent 3px),
+    radial-gradient(circle at 52% 45%, #e8606a 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 86% 88%, #4fb3e8 0 2px, transparent 3px);
+}
+
+.bd-celebrate-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 14px -8px rgb(0 0 0 / 0.35);
+}
+
+.bd-celebrate-card:hover {
+  border-color: var(--area-birthdays);
+}
+
+.bd-celebrate-card > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bd-celebrate-card b {
+  font-size: 15px;
+}
+
+.bd-celebrate-emoji {
+  font-size: 30px;
+  line-height: 1;
+  animation: bd-bob 2.4s ease-in-out infinite;
+}
+
+@keyframes bd-bob {
+  50% {
+    transform: translateY(-3px) rotate(-6deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bd-celebrate-emoji {
+    animation: none;
+  }
+}
+
+/* ---------- Welcome ---------- */
+
+.bd-welcome {
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 64px 24px;
+  text-align: center;
+}
+
+.bd-welcome-emoji {
+  font-size: 54px;
+  line-height: 1;
+}
+
+.bd-welcome h1 {
+  margin: 6px 0 0;
+  font-size: 22px;
+}
+
+.bd-welcome p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.bd-welcome-actions {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+/* ---------- Calendar ---------- */
+
+.bd-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.bd-month {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.bd-month h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.bd-month-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--area-birthdays);
+  background: color-mix(in srgb, var(--area-birthdays) 14%, transparent);
+  border-radius: 999px;
+}
+
+.bd-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.bd-grid-head {
+  font-size: 10px;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.bd-cell {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  border-radius: 6px;
+}
+
+.bd-cell.has-people {
+  font-weight: 700;
+  color: var(--text);
+  background: color-mix(in srgb, var(--area-birthdays) 16%, transparent);
+}
+
+.bd-cell.has-people:hover {
+  background: color-mix(in srgb, var(--area-birthdays) 28%, transparent);
+}
+
+.bd-cell.is-today {
+  box-shadow: inset 0 0 0 1.5px var(--area-birthdays);
+}
+
+.bd-cell-dots {
+  position: absolute;
+  bottom: 2px;
+  display: flex;
+  gap: 2px;
+}
+
+.bd-cell-dots i {
+  width: 3px;
+  height: 3px;
+  background: var(--area-birthdays);
+  border-radius: 50%;
+}
+
+.bd-month-list {
+  margin: 0;
+  padding: 6px 0 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.bd-month-list button {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 2px;
+  overflow: hidden;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: 4px;
+}
+
+.bd-month-list button:hover {
+  background: var(--hover);
+}
+
+.bd-month-day {
+  min-width: 18px;
+  font-weight: 700;
+  color: var(--area-birthdays);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Everyone ---------- */
+
+.bd-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bd-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 4px 0 10px;
+  color: var(--text-faint);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.bd-search:focus-within {
+  border-color: var(--accent);
+}
+
+.bd-search input {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.bd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bd-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--hover);
+  border-radius: 999px;
+}
+
+.bd-chips button span {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.bd-chips button.is-on {
+  color: var(--area-birthdays);
+  background: color-mix(in srgb, var(--area-birthdays) 15%, transparent);
+}
+
+/* ---------- Someone ---------- */
+
+.bd-person {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+
+.bd-person-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.bd-person-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.bd-person-name h2 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 19px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bd-person-name p {
+  margin: 3px 0 0;
+  font-size: 12px;
+}
+
+.bd-next {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.bd-next.is-today {
+  background: color-mix(in srgb, var(--area-birthdays) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--area-birthdays) 40%, transparent);
+}
+
+.bd-next-emoji {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.bd-next > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+}
+
+.bd-next b {
+  font-size: 14px;
+}
+
+.bd-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bd-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--hover);
+  border-radius: 999px;
+}
+
+.bd-fact-icon {
+  font-size: 13px;
+  color: var(--area-birthdays);
+}
+
+.bd-notes {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  background: var(--panel);
+  border-left: 3px solid var(--area-birthdays);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  user-select: text;
+}
+
+.bd-gifts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bd-gifts h3 {
+  margin: 0 0 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.bd-gifts h3 svg {
+  color: var(--area-birthdays);
+}
+
+.bd-given-head {
+  margin: 10px 0 0;
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: var(--tracking);
+  color: var(--text-faint);
+}
+
+.bd-gift {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.bd-gift-idea {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.bd-gift.is-given .bd-gift-idea {
+  color: var(--text-dim);
+}
+
+.bd-gift.is-bought {
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
+}
+
+.bd-gift-add {
+  display: flex;
+  gap: 6px;
+}
+
+.bd-gift-add input {
+  flex: 2;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.bd-gift-add input + input {
+  flex: 1;
+}
+
+.bd-gift-add input:focus {
+  border-color: var(--accent);
+}
+
+.bd-person-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.bd-delete {
+  color: var(--text-dim);
+}
+
+.bd-delete:hover,
+.bd-delete.is-armed {
+  color: var(--danger);
+}
+
+/* A small segmented control. */
+.bd-seg {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--hover);
+  border-radius: var(--radius-sm);
+}
+
+.bd-seg button {
+  flex: 1;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+.bd-seg button.is-on {
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.bd-seg-sm button {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+.bd-gift.is-given .bd-seg button.is-on {
+  color: var(--area-birthdays);
+}
+
+/* ---------- Adding someone ---------- */
+
+.bd-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bd-form > .bd-seg {
+  align-self: flex-start;
+}
+
+.bd-date-fields,
+.bd-pair {
+  display: flex;
+  gap: 10px;
+}
+
+.bd-pair > .field {
+  flex: 1;
+}
+
+.bd-date-fields .field:first-child {
+  width: 80px;
+}
+
+.bd-date-fields .field:last-child {
+  width: 130px;
+}
+
+.bd-grow {
+  flex: 1;
+}
+
+.bd-select,
+.bd-textarea {
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.bd-select {
+  height: 30px;
+  padding: 0 6px;
+}
+
+.bd-textarea {
+  padding: 7px 10px;
+  font-family: inherit;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.bd-select:focus,
+.bd-textarea:focus {
+  border-color: var(--accent);
+}
+
+.bd-hint {
+  margin: -6px 0 0;
+}
+
+.bd-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ---------- Side panel and overview tile ---------- */
+
+.bs-next {
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px 8px;
+}
+
+.bs-person {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  font-size: 12.5px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+.bs-person:hover {
+  background: var(--hover);
+}
+
+.bs-person-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bs-when {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.bs-when.is-today {
+  font-weight: 700;
+  color: var(--area-birthdays);
+}
+
+.bs-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.bt-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bt-today {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  text-align: left;
+  background: color-mix(in srgb, var(--area-birthdays) 12%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.bt-today > span:last-child {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+
+.bt-today b {
+  font-size: 13.5px;
+}
+
+.bt-today-emoji {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.bt-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.bt-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 0;
+  font-size: 12.5px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.bt-row:last-child {
+  border-bottom: 0;
+}
+
+.bt-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bt-when {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.bt-when.is-soon {
+  font-weight: 600;
+  color: var(--area-birthdays);
+}
+
+@media (max-width: 860px) {
+  .bd-split.has-person {
+    grid-template-columns: 1fr;
+  }
+
+  .bd-split.has-person .bd-main {
+    display: none;
+  }
+}

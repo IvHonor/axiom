@@ -91,8 +91,9 @@ export function syncDot(sync: SyncStatus): string {
     case "syncing":
       return "is-connecting";
     case "offline":
-    case "error":
     case "needs_choice":
+      return "is-warning";
+    case "error":
       return "is-error";
     case "off":
       return "";

@@ -4,14 +4,15 @@ pub mod password;
 pub mod tokens;
 
 use axiom_protocol::{
-    Credentials, ForgotPassword, RefreshRequest, ResetPassword, Session, User, check_email, check_password, normalize_code,
-    normalize_email,
+    Credentials, ForgotPassword, PLAIN_PASSWORD, RefreshRequest, ResetPassword, Session, User, Waitlisted, check_email, check_password,
+    is_login_key, normalize_code, normalize_email,
 };
 use axum::Json;
 use axum::extract::{FromRequestParts, State};
 use axum::http::header::AUTHORIZATION;
 use axum::http::request::Parts;
 use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 use sea_orm::sea_query::{Condition, Expr};
 use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set, SqlErr, TransactionTrait};
@@ -25,24 +26,43 @@ use tokens::{ACCESS_TTL, REFRESH_TTL_DAYS, hash_token, new_refresh_token};
 
 const WRONG_CREDENTIALS: &str = "Email or password is incorrect.";
 const SIGNED_OUT: &str = "You've been signed out. Sign in again to continue.";
+pub(crate) const WAITING: &str =
+    "Your account is on the waiting list. We'll email you as soon as it's approved, and then you can sign in.";
 
-pub async fn sign_up(State(s): State<AppState>, ip: ClientIp, Json(body): Json<Credentials>) -> Result<Json<Session>, ApiError> {
+/// Creates an account. With the waiting list on, it can't sign in until an
+/// admin approves it: the answer is then 202 with `Waitlisted` rather than a
+/// session, and the admins are emailed.
+pub async fn sign_up(State(s): State<AppState>, ip: ClientIp, Json(body): Json<Credentials>) -> Result<Response, ApiError> {
     s.limits.check_ip(&ip)?;
     let email = normalize_email(&body.email);
     check_email(&email).map_err(ApiError::bad_request)?;
     check_password(&body.password).map_err(ApiError::bad_request)?;
 
     let taken = || ApiError::new(StatusCode::CONFLICT, "An account with this email already exists. Sign in instead.");
-    if find_user(&s, &email).await?.is_some() {
+    if let Some(existing) = find_user(&s, &email).await? {
+        if !s.is_approved(&existing) {
+            return Err(ApiError::new(StatusCode::CONFLICT, WAITING));
+        }
         return Err(taken());
     }
 
+    let now = Utc::now();
+    let approved = !s.waitlist_on() || s.is_owner(&email);
+    let defaults = s.settings.read().unwrap().default_permissions.join(",");
+    let login_key = is_login_key(&body.password);
     let user = user::ActiveModel {
         id: Set(new_id()),
         email: Set(email),
         password_hash: Set(password::hash(body.password).await?),
-        created_at: Set(Utc::now()),
+        created_at: Set(now),
         sync_seq: Set(0),
+        approved_at: Set(approved.then_some(now)),
+        display_name: Set(None),
+        avatar: Set(None),
+        role: Set("member".into()),
+        permissions: Set(defaults),
+        encryption_key: Set(None),
+        login_key: Set(login_key),
     }
     .insert(&s.db)
     .await
@@ -52,7 +72,20 @@ pub async fn sign_up(State(s): State<AppState>, ip: ClientIp, Json(body): Json<C
         _ => err.into(),
     })?;
 
-    start_session(&s, user, &body.device_name).await
+    if approved {
+        return Ok(start_session(&s, user, &body.device_name).await?.into_response());
+    }
+    tracing::info!("A new account joined the waiting list");
+    let state = s.clone();
+    let email = user.email.clone();
+    tokio::spawn(async move {
+        for admin in &state.admins {
+            if let Err(err) = state.mailer.send(mail::waitlist_request(admin, &email)).await {
+                tracing::error!("Couldn't tell an admin about a waiting list request: {err}");
+            }
+        }
+    });
+    Ok((StatusCode::ACCEPTED, Json(Waitlisted { email: user.email })).into_response())
 }
 
 pub async fn sign_in(State(s): State<AppState>, ip: ClientIp, Json(body): Json<Credentials>) -> Result<Json<Session>, ApiError> {
@@ -65,7 +98,8 @@ pub async fn sign_in(State(s): State<AppState>, ip: ClientIp, Json(body): Json<C
     let user = find_user(&s, &email).await?;
     let stored = user.as_ref().map(|u| u.password_hash.clone());
     let user = match user {
-        Some(user) if password::verify(body.password, stored).await => user,
+        Some(user) if password::verify(body.password.clone(), stored).await => user,
+        Some(user) if still_plain(&user, &body.password) => return Err(plain_password()),
         _ => {
             // Unknown email and wrong password look identical, so the form
             // can't be used to find out who has an account.
@@ -77,6 +111,11 @@ pub async fn sign_in(State(s): State<AppState>, ip: ClientIp, Json(body): Json<C
     };
 
     s.limits.failed_sign_ins.clear(&email);
+    let user = upgrade(&s, user, body.login_key).await?;
+    // Only someone with the right password learns they're still waiting.
+    if !s.is_approved(&user) {
+        return Err(ApiError::new(StatusCode::FORBIDDEN, WAITING));
+    }
     start_session(&s, user, &body.device_name).await
 }
 
@@ -221,6 +260,7 @@ pub async fn reset_password(State(s): State<AppState>, ip: ClientIp, Json(body):
         return Err(ApiError::bad_request(WRONG_CODE));
     }
 
+    let login_key = is_login_key(&body.new_password);
     let password_hash = password::hash(body.new_password).await?;
     let txn = s.db.begin().await?;
     let mut reset: password_reset::ActiveModel = reset.into();
@@ -228,26 +268,60 @@ pub async fn reset_password(State(s): State<AppState>, ip: ClientIp, Json(body):
     reset.update(&txn).await?;
     let mut active: user::ActiveModel = user.into();
     active.password_hash = Set(password_hash);
+    active.login_key = Set(login_key);
     let user = active.update(&txn).await?;
     revoke_sessions(&txn, &user.id, None).await?;
     txn.commit().await?;
 
     s.limits.failed_sign_ins.clear(&email);
+    if !s.is_approved(&user) {
+        return Err(ApiError::new(StatusCode::FORBIDDEN, format!("Your new password is set. {WAITING}")));
+    }
     start_session(&s, user, &body.device_name).await
 }
 
 /// Checks a signed-in user's password before a sensitive change. Wrong
-/// guesses count towards the same lockout as signing in.
-pub(crate) async fn confirm_password(s: &AppState, user: &user::Model, password: String) -> Result<(), ApiError> {
+/// guesses count towards the same lockout as signing in. `login_key`, sent
+/// with a password from before login keys, replaces it.
+pub(crate) async fn confirm_password(s: &AppState, user: &user::Model, password: String, login_key: Option<String>) -> Result<(), ApiError> {
     if s.limits.failed_sign_ins.is_blocked(&user.email) {
         return Err(ApiError::too_many("Too many wrong passwords for this account. Try again in 15 minutes."));
     }
-    if password::verify(password, Some(user.password_hash.clone())).await {
+    if password::verify(password.clone(), Some(user.password_hash.clone())).await {
         s.limits.failed_sign_ins.clear(&user.email);
+        upgrade(s, user.clone(), login_key).await?;
         Ok(())
+    } else if still_plain(user, &password) {
+        Err(plain_password())
     } else {
         s.limits.failed_sign_ins.hit(&user.email);
         Err(ApiError::new(StatusCode::FORBIDDEN, "That password isn't right."))
+    }
+}
+
+/// A login key sent to an account that still has the password itself: it
+/// can't match, so the device is asked for the password (see `PLAIN_PASSWORD`).
+/// Not a wrong guess, so it doesn't count towards the lockout.
+fn still_plain(user: &user::Model, sent: &str) -> bool {
+    !user.login_key && is_login_key(sent)
+}
+
+fn plain_password() -> ApiError {
+    let status = StatusCode::from_u16(PLAIN_PASSWORD).expect("a valid status");
+    ApiError::new(status, "This account's password is from an older version of Axiom. Sign in again to update it.")
+}
+
+/// After the password itself was right: swaps it for the login key sent with
+/// it, so the server needn't see the password again.
+async fn upgrade(s: &AppState, user: user::Model, login_key: Option<String>) -> Result<user::Model, ApiError> {
+    match login_key {
+        Some(key) if !user.login_key && is_login_key(&key) => {
+            let mut active: user::ActiveModel = user.into();
+            active.password_hash = Set(password::hash(key).await?);
+            active.login_key = Set(true);
+            Ok(active.update(&s.db).await?)
+        }
+        _ => Ok(user),
     }
 }
 
@@ -279,7 +353,7 @@ pub async fn me(State(s): State<AppState>, auth: AuthUser) -> Result<Json<User>,
         .one(&s.db)
         .await?
         .ok_or_else(|| ApiError::unauthorized(SIGNED_OUT))?;
-    Ok(Json(user.into()))
+    Ok(Json(s.user_view(user)))
 }
 
 /// The signed-in user, from the `Authorization: Bearer` header. Add it as a
@@ -343,7 +417,7 @@ fn issue(s: &AppState, user: user::Model, session_id: &str, refresh_token: Strin
         access_token: s.keys.access_token(&user.id, session_id),
         expires_in: ACCESS_TTL.as_secs(),
         refresh_token,
-        user: user.into(),
+        user: s.user_view(user),
     }
 }
 

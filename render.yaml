@@ -25,3 +25,9 @@ services:
       # A sender on a domain verified in Resend, e.g. "Axiom <noreply@yourdomain.com>".
       - key: EMAIL_FROM
         sync: false
+      # Comma-separated emails of the admins who approve the waiting list.
+      - key: ADMIN_EMAILS
+        sync: false
+      # New accounts wait for approval. Set to "off" to let anyone sign up.
+      - key: WAITLIST
+        value: "on"

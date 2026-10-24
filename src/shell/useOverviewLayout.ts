@@ -11,8 +11,9 @@ function readPositions(saved: unknown): Record<string, TilePosition> {
 }
 
 /** Sizes and positions use separate keys so existing tile sizes migrate unchanged. */
-export function useOverviewLayout(ids: string[]) {
-  const { sizeOf, resize: resizeTile } = useTileSizes();
+export function useOverviewLayout(ids: string[], defaults: Record<string, TileSize> = {}) {
+  const { sizeOf: savedSize, resize: resizeTile } = useTileSizes();
+  const sizeOf = (id: string) => savedSize(id, defaults[id]);
   const [saved, setSaved] = usePersistentState("axiom.tilePositions.v1", readPositions);
   const [preview, setPreview] = useState<{ id: string; position: TilePosition } | null>(null);
   const tiles = ids.map(id => ({ id, size: sizeOf(id) }));

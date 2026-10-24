@@ -3,9 +3,12 @@
 use std::time::Duration;
 
 use axiom_protocol::{
-    Adopt, Adopted, ApiError, ChangePassword, ChangeRole, CreateSpace, Credentials, DeleteAccount, Device, ForgotPassword, Invite, Members,
-    MyInvite, NewInvite, PullResponse, PushRequest, PushResponse, RefreshRequest, ResetPassword, Role, Session, Space, route, routes,
+    AccountChange, AdminAccount, AdminSettings, Adopt, Adopted, ApiError, ChangePassword, ChangeRole, ConfirmPassword, CreateSpace, Credentials, DeleteAccount, Device,
+    EncryptionKey, ForgotPassword,
+    Invite, Members, MyInvite, NewInvite, Profile, PullResponse, PushRequest, PushResponse, RefreshRequest, ResetPassword, Role, Session, Space,
+    Waitlisted, route, routes,
 };
+use axiom_protocol::notify::{PlanEmails, PlanResult};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -15,6 +18,13 @@ const TIMEOUT: Duration = Duration::from_secs(90);
 pub struct Client {
     base: String,
     http: reqwest::Client,
+}
+
+/// What signing up gets you.
+pub enum SignUp {
+    Session(Session),
+    /// The account exists but waits for an admin's approval.
+    Waitlisted(Waitlisted),
 }
 
 #[derive(Debug)]
@@ -61,8 +71,15 @@ impl Client {
         !self.base.is_empty()
     }
 
-    pub async fn sign_up(&self, credentials: &Credentials) -> Result<Session, ClientError> {
-        self.post(routes::SIGN_UP, credentials).await
+    /// A session, or (status 202) a place on the waiting list.
+    pub async fn sign_up(&self, credentials: &Credentials) -> Result<SignUp, ClientError> {
+        let sent = self.http.post(self.url(routes::SIGN_UP)).json(credentials).send().await;
+        let response = check(sent.map_err(|_| ClientError::Offline)?).await?;
+        if response.status() == reqwest::StatusCode::ACCEPTED {
+            parse(response).await.map(SignUp::Waitlisted)
+        } else {
+            parse(response).await.map(SignUp::Session)
+        }
     }
 
     pub async fn sign_in(&self, credentials: &Credentials) -> Result<Session, ClientError> {
@@ -102,6 +119,30 @@ impl Client {
 
     pub async fn change_password(&self, token: &str, request: &ChangePassword) -> Result<(), ClientError> {
         empty(self.http.post(self.url(routes::CHANGE_PASSWORD)).bearer_auth(token).json(request).send().await).await
+    }
+
+    pub async fn encryption_key(&self, token: &str) -> Result<EncryptionKey, ClientError> {
+        read(self.http.get(self.url(routes::ENCRYPTION_KEY)).bearer_auth(token).send().await).await
+    }
+
+    pub async fn set_encryption_key(&self, token: &str, key: &EncryptionKey) -> Result<(), ClientError> {
+        empty(self.http.put(self.url(routes::ENCRYPTION_KEY)).bearer_auth(token).json(key).send().await).await
+    }
+
+    pub async fn verify_password(&self, token: &str, body: &ConfirmPassword) -> Result<(), ClientError> {
+        empty(self.http.post(self.url(routes::VERIFY_PASSWORD)).bearer_auth(token).json(body).send().await).await
+    }
+
+    pub async fn plan_emails(&self, token: &str, plan: &PlanEmails) -> Result<PlanResult, ClientError> {
+        read(self.http.put(self.url(routes::NOTIFY_EMAILS)).bearer_auth(token).json(plan).send().await).await
+    }
+
+    pub async fn profile(&self, token: &str) -> Result<Profile, ClientError> {
+        read(self.http.get(self.url(routes::PROFILE)).bearer_auth(token).send().await).await
+    }
+
+    pub async fn update_profile(&self, token: &str, profile: &Profile) -> Result<Profile, ClientError> {
+        read(self.http.put(self.url(routes::PROFILE)).bearer_auth(token).json(profile).send().await).await
     }
 
     pub async fn devices(&self, token: &str) -> Result<Vec<Device>, ClientError> {
@@ -182,6 +223,37 @@ impl Client {
         empty(self.http.post(self.url(&route(routes::INVITE_DECLINE, &[("id", id)]))).bearer_auth(token).send().await).await
     }
 
+
+    // ---------- Waiting list (admins only) ----------
+
+    pub async fn admin_accounts(&self, token: &str) -> Result<Vec<AdminAccount>, ClientError> {
+        read(self.http.get(self.url(routes::ADMIN_ACCOUNTS)).bearer_auth(token).send().await).await
+    }
+
+    pub async fn approve(&self, token: &str, id: &str) -> Result<(), ClientError> {
+        empty(self.http.post(self.url(&route(routes::ADMIN_APPROVE, &[("id", id)]))).bearer_auth(token).send().await).await
+    }
+
+    pub async fn decline(&self, token: &str, id: &str) -> Result<(), ClientError> {
+        empty(self.http.delete(self.url(&route(routes::ADMIN_ACCOUNT, &[("id", id)]))).bearer_auth(token).send().await).await
+    }
+
+    pub async fn revoke(&self, token: &str, id: &str) -> Result<(), ClientError> {
+        empty(self.http.post(self.url(&route(routes::ADMIN_REVOKE, &[("id", id)]))).bearer_auth(token).send().await).await
+    }
+
+    pub async fn admin_update(&self, token: &str, id: &str, change: &AccountChange) -> Result<AdminAccount, ClientError> {
+        read(self.http.patch(self.url(&route(routes::ADMIN_ACCOUNT, &[("id", id)]))).bearer_auth(token).json(change).send().await).await
+    }
+
+    pub async fn admin_settings(&self, token: &str) -> Result<AdminSettings, ClientError> {
+        read(self.http.get(self.url(routes::ADMIN_SETTINGS)).bearer_auth(token).send().await).await
+    }
+
+    pub async fn save_admin_settings(&self, token: &str, settings: &AdminSettings) -> Result<AdminSettings, ClientError> {
+        read(self.http.put(self.url(routes::ADMIN_SETTINGS)).bearer_auth(token).json(settings).send().await).await
+    }
+
     async fn post<B: Serialize, T: DeserializeOwned>(&self, path: &str, body: &B) -> Result<T, ClientError> {
         read(self.http.post(self.url(path)).json(body).send().await).await
     }
@@ -193,7 +265,11 @@ impl Client {
 
 /// Checks the status and reads the JSON body.
 async fn read<T: DeserializeOwned>(sent: reqwest::Result<reqwest::Response>) -> Result<T, ClientError> {
-    let response = check(sent.map_err(|_| ClientError::Offline)?).await?;
+    parse(check(sent.map_err(|_| ClientError::Offline)?).await?).await
+}
+
+/// Reads the JSON body of a successful response.
+async fn parse<T: DeserializeOwned>(response: reqwest::Response) -> Result<T, ClientError> {
     response.json().await.map_err(|_| ClientError::Rejected {
         status: 502,
         message: "The server sent an answer Axiom doesn't understand. Try updating Axiom.".into(),

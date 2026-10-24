@@ -2,49 +2,64 @@ import { Check } from "lucide-react";
 import { isComingSoon } from "../../extensions";
 import type { ExtensionManifest } from "../../extensions/types";
 import { useLabels, useTheme } from "../theme/ThemeProvider";
+import { NotificationSettings } from "../notifications/NotificationSettings";
 import { Panel } from "../ui/Panel";
 import { ThemeSwatch } from "../ui/ThemeSwatch";
+import { ExtensionIcon } from "../ui/ExtensionIcon";
+import { Publisher } from "../ui/Publisher";
 
 interface ExtensionInfoViewProps {
   ext: ExtensionManifest;
   installed: boolean;
+  /** Installed (or built in) and switched on. */
+  enabled: boolean;
+  onEnabledChange: (enabled: boolean) => void;
   onInstall: () => void;
   onUninstall: () => void;
   onOpen: () => void;
+  /** Emails need an account. */
+  signedIn: boolean;
 }
 
 /** The page shown when an extension is clicked in the Extensions sidebar. */
-export function ExtensionInfoView({ ext, installed, onInstall, onUninstall, onOpen }: ExtensionInfoViewProps) {
+export function ExtensionInfoView({ ext, installed, enabled, onEnabledChange, onInstall, onUninstall, onOpen, signedIn }: ExtensionInfoViewProps) {
   const { theme: activeTheme, setTheme } = useTheme();
   const { label, sep } = useLabels();
   const comingSoon = isComingSoon(ext);
-  const state = comingSoon ? "coming soon" : ext.builtIn ? "built-in" : installed ? "installed" : "not installed";
+  const state = comingSoon ? "coming soon" : ext.builtIn ? (enabled ? "built-in" : "built-in, off") : installed ? (enabled ? "installed" : "installed, off") : "not installed";
   // A coming-soon area has a badge instead, so its state isn't repeated here.
-  const meta = comingSoon ? [ext.publisher] : [ext.publisher, `v${ext.version}`, label(state)];
+  const meta = comingSoon ? [] : [`v${ext.version}`, label(state)];
 
   return (
     <div className="page">
       <Panel>
         <div className="ext-hero">
-          <div className="ext-hero-icon">
-            <ext.icon size={36} strokeWidth={1.25} />
-          </div>
+          <ExtensionIcon ext={ext} size={36} frame="large" />
           <div>
             <h1 className="ext-hero-name">{ext.name}</h1>
-            <div className="ext-meta">{meta.join(` ${sep} `)}</div>
+            <div className="ext-meta">
+              <Publisher name={ext.publisher} />
+              {meta.length > 0 && ` ${sep} ${meta.join(` ${sep} `)}`}
+            </div>
             <p className="ext-hero-desc">{ext.description}</p>
             <div className="row">
               {comingSoon && <span className="ext-soon">Coming soon</span>}
-              {!comingSoon && !installed && (
+              {!comingSoon && !installed && !ext.builtIn && (
                 <button className="btn" onClick={onInstall}>
                   Install
                 </button>
               )}
-              {installed && ext.area && (
+              {enabled && ext.area && (
                 <button className="btn" onClick={onOpen}>
                   Open
                 </button>
               )}
+              {(ext.builtIn || installed) && !comingSoon && !ext.required && (
+                <button className={enabled ? "btn btn-ghost" : "btn"} onClick={() => onEnabledChange(!enabled)}>
+                  {enabled ? "Switch off" : "Switch on"}
+                </button>
+              )}
+              {ext.required && <span className="ext-soon">Always on</span>}
               {installed && !ext.builtIn && (
                 <button className="btn btn-ghost" onClick={onUninstall}>
                   Uninstall
@@ -72,8 +87,14 @@ export function ExtensionInfoView({ ext, installed, onInstall, onUninstall, onOp
         </div>
       </Panel>
 
+      {enabled && ext.area?.View && (
+        <Panel title="Notifications">
+          <NotificationSettings extensions={[ext.id]} signedIn={signedIn} />
+        </Panel>
+      )}
+
       {ext.themes && (
-        <Panel title="Themes" meta={installed ? undefined : label("Install to use")}>
+        <Panel title="Themes" meta={enabled ? undefined : label(ext.builtIn ? "Switch on to use" : "Install to use")}>
           <ul className="theme-rows">
             {ext.themes.map((theme) => {
               const isActive = theme.id === activeTheme.id;
@@ -86,7 +107,7 @@ export function ExtensionInfoView({ ext, installed, onInstall, onUninstall, onOp
                   </span>
                   <button
                     className={isActive ? "btn btn-sm btn-ghost" : "btn btn-sm"}
-                    disabled={!installed || isActive}
+                    disabled={!enabled || isActive}
                     onClick={() => setTheme(theme.id)}
                   >
                     {isActive ? "Active" : "Apply"}

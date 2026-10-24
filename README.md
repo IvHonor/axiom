@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="src-tauri/icons/128x128@2x.png" width="96" alt="Axiom logo">
-
-# Axiom
+<img src="public/branding/lockup.svg" width="160" alt="Axiom">
 
 **Track every area of your life in one place.**
 

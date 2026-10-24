@@ -17,6 +17,13 @@ impl MigratorTrait for Migrator {
         // New migrations go after the ones already shipped.
         all.extend(crate::features::daily_plan::migrations::all());
         all.extend(crate::features::reading::migrations::all());
+        all.extend(crate::features::uni::migrations::all());
+        all.extend(crate::notifications::migrations::all());
+        all.extend(crate::features::finance::migrations::all());
+        all.extend(crate::features::journal::migrations::all());
+        all.extend(crate::features::notes::migrations::all());
+        all.extend(crate::features::birthdays::migrations::all());
+        all.extend(crate::features::goals::migrations::all());
         all
     }
 }

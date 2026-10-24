@@ -3,6 +3,7 @@ import { BookOpen } from "lucide-react";
 import type { ExtensionManifest } from "../../extensions/types";
 import { ReadingSidebar } from "./ReadingSidebar";
 import { ReadingSummary } from "./ReadingSummary";
+import { ReadingSummaryTitle } from "./overview/ReadingOverviewMenu";
 import { ReadingView } from "./ReadingView";
 
 export const reading: ExtensionManifest = {
@@ -26,6 +27,8 @@ export const reading: ExtensionManifest = {
   ],
   version: "0.1.0",
   publisher: "Axiom",
+  builtIn: true,
   icon: BookOpen,
-  area: { View: ReadingView, Summary: ReadingSummary, Sidebar: ReadingSidebar },
+  color: "var(--area-reading)",
+  area: { View: ReadingView, Summary: ReadingSummary, SummaryTitle: ReadingSummaryTitle, fittedSummary: true, Sidebar: ReadingSidebar },
 };

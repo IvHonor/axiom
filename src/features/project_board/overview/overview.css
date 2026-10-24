@@ -51,7 +51,7 @@
 .pb-ov-project-meta > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .pb-ov-project.is-card { height: calc(100% - 8px); width: calc(100% - 8px); margin: 4px; padding: 12px; gap: 9px; border: 1px solid var(--line); border-top: 2px solid var(--project); border-radius: 6px; }
 .pb-ov-bar { height: 4px; flex: none; width: 100%; border-radius: 3px; overflow: hidden; background: var(--line); }
-.pb-ov-bar > span { display: block; height: 100%; background: var(--project, var(--accent)); }
+.pb-ov-bar > span { display: block; height: 100%; background: var(--project, var(--area-board)); }
 .pb-ov-progress { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
 .pb-ov-progress-main { display: flex; align-items: center; gap: 16px; }
 .pb-ov-progress-main > strong { font-size: 31px; color: var(--accent); line-height: 1.1; }

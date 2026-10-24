@@ -35,9 +35,16 @@ use tokio::sync::Notify;
 use tokio::time::Instant;
 
 use crate::account::{Account, ServerError};
+use crate::vault::DataKey;
 use crate::db::Db;
 pub use commands::*;
 use local::{Cursor, Link};
+
+/// Tables whose rows are end-to-end encrypted (see `crate::vault`): sealed
+/// before they're pushed and opened after they're pulled. While this computer
+/// is locked, their edits wait here and pulled rows are set aside.
+pub static ENCRYPTED: LazyLock<Vec<&'static str>> =
+    LazyLock::new(|| [crate::features::finance::SYNCED_TABLES, crate::features::journal::SYNCED_TABLES, crate::features::notes::SYNCED_TABLES, crate::features::birthdays::SYNCED_TABLES, crate::features::goals::SYNCED_TABLES].concat());
 
 /// Every table that syncs. Features list their own; add new lists here.
 pub static TABLES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
@@ -45,6 +52,13 @@ pub static TABLES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         crate::features::project_board::SYNCED_TABLES,
         crate::features::daily_plan::SYNCED_TABLES,
         crate::features::reading::SYNCED_TABLES,
+        crate::features::uni::SYNCED_TABLES,
+        crate::notifications::SYNCED_TABLES,
+        crate::features::finance::SYNCED_TABLES,
+        crate::features::journal::SYNCED_TABLES,
+        crate::features::notes::SYNCED_TABLES,
+        crate::features::birthdays::SYNCED_TABLES,
+        crate::features::goals::SYNCED_TABLES,
     ]
     .concat()
 });
@@ -67,7 +81,7 @@ pub enum SyncStatus {
     Off,
     /// This computer has data that isn't in the account yet; the user decides
     /// whether to upload it or replace it (see `Link`).
-    NeedsChoice { projects: i64, plan_tasks: i64 },
+    NeedsChoice { projects: i64, plan_tasks: i64, books: i64, modules: i64 },
     Syncing { last_synced: Option<DateTime<Utc>> },
     Synced { at: DateTime<Utc> },
     Offline { last_synced: Option<DateTime<Utc>> },
@@ -78,11 +92,13 @@ pub enum SyncStatus {
 pub struct SyncEngine {
     status: std::sync::Mutex<SyncStatus>,
     wake: Notify,
+    /// Sync by itself (after edits and every minute), or only when asked.
+    auto: std::sync::atomic::AtomicBool,
 }
 
 impl Default for SyncEngine {
     fn default() -> Self {
-        Self { status: std::sync::Mutex::new(SyncStatus::Off), wake: Notify::new() }
+        Self { status: std::sync::Mutex::new(SyncStatus::Off), wake: Notify::new(), auto: true.into() }
     }
 }
 
@@ -94,6 +110,15 @@ impl SyncEngine {
     /// Sync now rather than at the next scheduled time.
     pub fn wake(&self) {
         self.wake.notify_one();
+    }
+
+    pub fn auto(&self) -> bool {
+        self.auto.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn set_auto(&self, on: bool) {
+        self.auto.store(on, std::sync::atomic::Ordering::Relaxed);
+        self.wake();
     }
 
     fn set(&self, app: &AppHandle, status: SyncStatus) {
@@ -116,6 +141,7 @@ async fn run(app: AppHandle) {
     let Ok(conn) = db.conn().await else { return };
 
     let mut last_synced = local::state(&conn).await.ok().and_then(|s| s.last_synced_at);
+    engine.auto.store(local::auto_sync(&conn).await.unwrap_or(true), std::sync::atomic::Ordering::Relaxed);
     let mut next_pull = Instant::now();
     let mut retry_at: Option<Instant> = None;
     let mut backoff = Duration::from_secs(5);
@@ -127,11 +153,14 @@ async fn run(app: AppHandle) {
         };
         let now = Instant::now();
         let edited = local::has_pending(&conn).await.unwrap_or(false);
-        if !(asked || edited || now >= next_pull) || (!asked && retry_at.is_some_and(|at| now < at)) {
+        // With auto sync off, only "Sync now" (or signing in) syncs.
+        let scheduled = engine.auto() && (edited || now >= next_pull);
+        if !(asked || scheduled) || (!asked && retry_at.is_some_and(|at| now < at)) {
             continue;
         }
 
-        let outcome = sync_once(&conn, &account, || engine.set(&app, SyncStatus::Syncing { last_synced })).await;
+        let key = app.state::<crate::vault::Vault>().key();
+        let outcome = sync_once(&conn, &account, key.as_ref(), || engine.set(&app, SyncStatus::Syncing { last_synced })).await;
         next_pull = Instant::now() + PULL_EVERY;
         match outcome {
             Ok(Outcome::Synced { applied }) => {
@@ -143,7 +172,9 @@ async fn run(app: AppHandle) {
                     let _ = app.emit(DATA_CHANGED_EVENT, ());
                 }
             }
-            Ok(Outcome::NeedsChoice { projects, plan_tasks }) => engine.set(&app, SyncStatus::NeedsChoice { projects, plan_tasks }),
+            Ok(Outcome::NeedsChoice { projects, plan_tasks, books, modules }) => {
+                engine.set(&app, SyncStatus::NeedsChoice { projects, plan_tasks, books, modules })
+            },
             Ok(Outcome::SignedOut) => engine.set(&app, SyncStatus::Off),
             Err(ServerError::SignedOut) => {
                 // The server ended the session, so the account signed out.
@@ -152,7 +183,8 @@ async fn run(app: AppHandle) {
             }
             Err(err) => {
                 engine.set(&app, match err {
-                    ServerError::Failed(message) => SyncStatus::Error { message },
+                    // Refused (e.g. an admin switched syncing off): say why.
+                    ServerError::Failed(message) | ServerError::Forbidden(message) => SyncStatus::Error { message },
                     _ => SyncStatus::Offline { last_synced },
                 });
                 // Back off: 5 s, 10 s, 20 s ... up to a minute.
@@ -167,7 +199,7 @@ async fn run(app: AppHandle) {
 pub enum Outcome {
     /// `applied` rows changed here.
     Synced { applied: usize },
-    NeedsChoice { projects: i64, plan_tasks: i64 },
+    NeedsChoice { projects: i64, plan_tasks: i64, books: i64, modules: i64 },
     SignedOut,
 }
 
@@ -183,6 +215,7 @@ impl From<DbErr> for ServerError {
 pub async fn sync_once(
     db: &DatabaseConnection,
     account: &Account,
+    key: Option<&DataKey>,
     on_network: impl FnOnce(),
 ) -> Result<Outcome, ServerError> {
     let Some(user_id) = account.user_id().await else {
@@ -195,6 +228,8 @@ pub async fn sync_once(
             return Ok(Outcome::NeedsChoice {
                 projects: local::count_live(db, "project_board_projects").await?,
                 plan_tasks: local::count_live(db, "daily_plan_tasks").await?,
+                books: local::count_live(db, "reading_books").await?,
+                modules: local::count_live(db, "uni_modules").await?,
             });
         }
         // Nothing here to lose: link straight away and download.
@@ -207,14 +242,19 @@ pub async fn sync_once(
     let shared: HashSet<String> = spaces::list(db).await?.into_iter().map(|b| b.id).collect();
 
     loop {
-        let mut batch = local::outgoing(db, SYNC_BATCH).await?;
+        // Encrypted tables only go out sealed: without the key they wait.
+        let held: &[&str] = if key.is_some() { &[] } else { &ENCRYPTED };
+        let mut batch = local::outgoing(db, SYNC_BATCH, held).await?;
         if batch.is_empty() {
             break;
         }
         let mut own = Vec::new();
         let mut boards: HashMap<String, (Vec<_>, Vec<RecordRef>)> = HashMap::new();
         for item in batch.iter_mut() {
-            let Some(change) = item.change.take() else { continue };
+            let Some(mut change) = item.change.take() else { continue };
+            if let (Some(key), true) = (key, ENCRYPTED.contains(&change.table.as_str())) {
+                change.fields = key.seal_fields(&change.table, &change.id, &change.fields);
+            }
             let board = match &item.row {
                 Some(row) => spaces::project_of(db, &item.table, &item.id, row).await?.filter(|p| shared.contains(p)),
                 None => None,
@@ -255,7 +295,8 @@ pub async fn sync_once(
     loop {
         let page = account.pull(cursor).await?;
         let skip = spaces::shared_rows_in(db, &page.records, &shared).await?;
-        let keep = page.records.iter().filter(|r| !skip.contains(&(r.table.clone(), r.id.clone()))).collect();
+        let records = local::open_or_stash(db, key, &page.records).await?;
+        let keep = records.iter().filter(|r| !skip.contains(&(r.table.clone(), r.id.clone()))).collect();
         applied += local::apply_some(db, keep, Cursor::Account(page.cursor)).await?;
         cursor = page.cursor;
         if !page.more {

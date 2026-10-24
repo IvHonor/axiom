@@ -11,6 +11,7 @@ import {
 } from "react";
 import { TileMoveContext, useTileMovement, type TileMovement } from "./TileMoveHandle";
 import { TILE_GRID, type TilePosition, type TileSize } from "./tileLayout";
+import { useTileReflow } from "./useTileReflow";
 export { TILE_GRID, type TileSize } from "./tileLayout";
 
 interface TileLayout {
@@ -61,6 +62,7 @@ interface ResizableTileProps {
 export function ResizableTile({ size, position, movement, onResize, label, children }: ResizableTileProps) {
   const cell = useRef<HTMLDivElement>(null);
   const { control, moving } = useTileMovement(cell, label, size, position, movement);
+  useTileReflow(cell, position, moving);
   const drag = useRef<{ x: number; y: number; width: number; height: number; colStep: number } | null>(null);
   const [resizing, setResizing] = useState(false);
   const [bounds, setBounds] = useState({ width: 0, height: 0 });
@@ -123,7 +125,10 @@ export function ResizableTile({ size, position, movement, onResize, label, child
     update({ w: size.w + step.w, h: size.h + step.h });
   }
 
-  return (
+  return (<>
+    {moving && position && <div aria-hidden="true" className="tile-drop-target" style={{
+      gridColumn: `${position.col} / span ${size.w}`, gridRow: `${position.row} / span ${size.h}`,
+    }} />}
     <div
       ref={cell}
       className={`tile-cell${resizing ? " is-resizing" : ""}${moving ? " is-moving" : ""}`}
@@ -154,6 +159,6 @@ export function ResizableTile({ size, position, movement, onResize, label, child
           <path d="M9.5 2.5 2.5 9.5M9.5 6.5 6.5 9.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
         </svg>
       </button>
-    </div>
+    </div></>
   );
 }

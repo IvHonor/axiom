@@ -12,15 +12,16 @@ mod tests;
 use std::time::{Duration, Instant};
 
 use axiom_protocol::{
-    Adopt, Adopted, ChangePassword, Credentials, DeleteAccount, Device, Invite, Members, MyInvite, NewInvite, PullResponse, PushRequest,
-    PushResponse, ResetPassword, Role, Session, Space, check_email, check_password, normalize_email,
+    AccountChange, AccountRole, AdminAccount, AdminSettings, Adopt, Adopted, ChangePassword, Credentials, DeleteAccount, Device, Invite, Members, MyInvite, NewInvite, PullResponse, PushRequest,
+    PLAIN_PASSWORD, Profile, PushResponse, ResetPassword, Role, Session, Space, check_avatar, check_email, check_password, normalize_email,
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use tokio::sync::Mutex;
 
 use crate::error::{Error, Result};
-use client::{Client, ClientError};
+use crate::vault::login_key;
+use client::{Client, ClientError, SignUp};
 pub use store::{Keychain, Saved, SessionStore};
 
 /// The server this build talks to, set with `AXIOM_SERVER_URL` when building.
@@ -55,7 +56,17 @@ struct SignedIn {
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum AccountStatus {
     SignedOut,
-    SignedIn { email: String },
+    /// `admin`: runs the server's waiting list.
+    SignedIn { email: String, admin: bool },
+}
+
+/// What creating an account did. Mirrored by `SignUpOutcome` in `src/lib/account.ts`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum SignUpOutcome {
+    SignedIn { email: String, admin: bool },
+    /// The account waits for an admin's approval; nothing is saved here.
+    Waitlisted { email: String },
 }
 
 impl Account {
@@ -69,18 +80,28 @@ impl Account {
         status_of(&*self.state.lock().await)
     }
 
-    pub async fn sign_up(&self, email: &str, password: &str) -> Result<AccountStatus> {
+    /// Creates an account and signs in, or joins the waiting list if the
+    /// server has one.
+    pub async fn sign_up(&self, email: &str, password: &str) -> Result<SignUpOutcome> {
         self.require_server()?;
         let credentials = credentials(email, password)?;
         check_password(password).map_err(Error::Invalid)?;
-        let session = self.client.sign_up(&credentials).await.map_err(account_error)?;
-        self.start(session).await
+        let credentials = Credentials { password: login_key(&credentials.email, password), ..credentials };
+        match self.client.sign_up(&credentials).await.map_err(account_error)? {
+            SignUp::Waitlisted(waiting) => Ok(SignUpOutcome::Waitlisted { email: waiting.email }),
+            SignUp::Session(session) => match self.start(session).await? {
+                AccountStatus::SignedIn { email, admin } => Ok(SignUpOutcome::SignedIn { email, admin }),
+                AccountStatus::SignedOut => unreachable!("start always signs in"),
+            },
+        }
     }
 
     pub async fn sign_in(&self, email: &str, password: &str) -> Result<AccountStatus> {
         self.require_server()?;
         let credentials = credentials(email, password)?;
-        let session = self.client.sign_in(&credentials).await.map_err(account_error)?;
+        let (client, sent) = (&self.client, &credentials);
+        let sign_in = |password, login_key| async move { client.sign_in(&Credentials { password, login_key, ..sent.clone() }).await };
+        let session = with_password(&credentials.email, password, sign_in).await.map_err(account_error)?;
         self.start(session).await
     }
 
@@ -101,18 +122,72 @@ impl Account {
         if code.trim().is_empty() {
             return Err(Error::Invalid("Enter the code from the email.".into()));
         }
-        let request = ResetPassword { email, code: code.into(), new_password: password.into(), device_name };
+        let request = ResetPassword { new_password: login_key(&email, password), email, code: code.into(), device_name };
         let session = self.client.reset_password(&request).await.map_err(account_error)?;
         self.start(session).await
     }
 
     /// Changes the password. Other devices are signed out; this one stays in.
-    pub async fn change_password(&self, current: &str, new: &str) -> Result<()> {
+    /// `encryption_key` is the data key wrapped with the new password (see `crate::vault`).
+    pub async fn change_password(&self, current: &str, new: &str, encryption_key: Option<String>) -> Result<()> {
         check_password(new).map_err(Error::Invalid)?;
-        let request = ChangePassword { current_password: current.into(), new_password: new.into() };
+        let email = self.email().await?;
+        let new_password = login_key(&email, new);
         let token = self.access_token().await?;
-        let result = self.client.change_password(&token, &request).await;
+        let (client, token, new_password, encryption_key) = (&self.client, &token, &new_password, &encryption_key);
+        let change = |current_password, _| async move {
+            let request = ChangePassword { current_password, new_password: new_password.clone(), encryption_key: encryption_key.clone() };
+            client.change_password(token, &request).await
+        };
+        let result = with_password(&email, current, change).await;
         Ok(self.after_call(result).await?)
+    }
+
+    /// The end-to-end encryption key, wrapped (see `crate::vault`).
+    pub async fn encryption_key(&self) -> std::result::Result<Option<String>, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.encryption_key(&token).await;
+        Ok(self.after_call(result).await?.wrapped)
+    }
+
+    pub async fn set_encryption_key(&self, wrapped: Option<String>) -> std::result::Result<(), ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.set_encryption_key(&token, &axiom_protocol::EncryptionKey { wrapped }).await;
+        self.after_call(result).await
+    }
+
+    /// Checks the password with the server.
+    pub async fn verify_password(&self, password: &str) -> Result<()> {
+        let email = self.email().await?;
+        let token = self.access_token().await?;
+        let (client, token) = (&self.client, &token);
+        let verify = |password, login_key| async move { client.verify_password(token, &axiom_protocol::ConfirmPassword { password, login_key }).await };
+        let result = with_password(&email, password, verify).await;
+        Ok(self.after_call(result).await?)
+    }
+
+    /// Replaces the notification emails the server will send (see `crate::notifications`).
+    pub async fn plan_emails(&self, plan: &axiom_protocol::notify::PlanEmails) -> std::result::Result<axiom_protocol::notify::PlanResult, ServerError> {
+        let token = self.access_token().await?;
+        let result = self.client.plan_emails(&token, plan).await;
+        self.after_call(result).await
+    }
+
+    /// The name and picture the account shows.
+    pub async fn profile(&self) -> Result<ProfileView> {
+        let token = self.access_token().await?;
+        let result = self.client.profile(&token).await;
+        Ok(self.after_call(result).await?.into())
+    }
+
+    /// Replaces the name and picture. The picture is a small `data:image/...` URL.
+    pub async fn update_profile(&self, display_name: Option<String>, avatar: Option<String>) -> Result<ProfileView> {
+        if let Some(avatar) = &avatar {
+            check_avatar(avatar).map_err(|message| Error::Invalid(message.into()))?;
+        }
+        let token = self.access_token().await?;
+        let result = self.client.update_profile(&token, &Profile { display_name, avatar }).await;
+        Ok(self.after_call(result).await?.into())
     }
 
     /// Every device signed in to the account.
@@ -130,8 +205,11 @@ impl Account {
 
     /// Deletes the account on the server, then signs out here.
     pub async fn delete_account(&self, password: &str) -> Result<()> {
+        let email = self.email().await?;
         let token = self.access_token().await?;
-        let result = self.client.delete_account(&token, &DeleteAccount { password: password.into() }).await;
+        let (client, token) = (&self.client, &token);
+        let delete = |password, _| async move { client.delete_account(token, &DeleteAccount { password }).await };
+        let result = with_password(&email, password, delete).await;
         self.after_call(result).await?;
         *self.state.lock().await = None;
         self.store.clear();
@@ -147,6 +225,10 @@ impl Account {
             let _ = self.client.sign_out(&signed_in.saved.refresh_token).await;
         }
         AccountStatus::SignedOut
+    }
+
+    async fn email(&self) -> std::result::Result<String, ServerError> {
+        self.state.lock().await.as_ref().map(|s| s.saved.user.email.clone()).ok_or(ServerError::SignedOut)
     }
 
     /// The signed-in user's id, if any.
@@ -280,6 +362,54 @@ impl Account {
         self.after_call(result).await
     }
 
+    // ---------- Waiting list (admins only) ----------
+
+    pub async fn admin_accounts(&self) -> Result<Vec<AdminAccountView>> {
+        let token = self.access_token().await?;
+        let result = self.client.admin_accounts(&token).await;
+        Ok(self.after_call(result).await?.into_iter().map(AdminAccountView::from).collect())
+    }
+
+    pub async fn approve(&self, id: &str) -> Result<()> {
+        let token = self.access_token().await?;
+        let result = self.client.approve(&token, id).await;
+        Ok(self.after_call(result).await?)
+    }
+
+    pub async fn decline(&self, id: &str) -> Result<()> {
+        let token = self.access_token().await?;
+        let result = self.client.decline(&token, id).await;
+        Ok(self.after_call(result).await?)
+    }
+
+    pub async fn revoke(&self, id: &str) -> Result<()> {
+        let token = self.access_token().await?;
+        let result = self.client.revoke(&token, id).await;
+        Ok(self.after_call(result).await?)
+    }
+
+    /// Changes an account's role or permissions.
+    pub async fn admin_update(&self, id: &str, role: Option<AccountRole>, permissions: Option<Vec<String>>) -> Result<AdminAccountView> {
+        let token = self.access_token().await?;
+        let result = self.client.admin_update(&token, id, &AccountChange { role, permissions }).await;
+        Ok(self.after_call(result).await?.into())
+    }
+
+    pub async fn admin_settings(&self) -> Result<AdminSettingsView> {
+        let token = self.access_token().await?;
+        let result = self.client.admin_settings(&token).await;
+        let s = self.after_call(result).await?;
+        Ok(AdminSettingsView { waitlist: s.waitlist, default_permissions: s.default_permissions })
+    }
+
+    pub async fn save_admin_settings(&self, settings: AdminSettingsView) -> Result<AdminSettingsView> {
+        let token = self.access_token().await?;
+        let body = AdminSettings { waitlist: settings.waitlist, default_permissions: settings.default_permissions };
+        let result = self.client.save_admin_settings(&token, &body).await;
+        let s = self.after_call(result).await?;
+        Ok(AdminSettingsView { waitlist: s.waitlist, default_permissions: s.default_permissions })
+    }
+
     /// A refused token means the session was ended elsewhere: sign out here.
     async fn after_call<T>(&self, result: std::result::Result<T, ClientError>) -> std::result::Result<T, ServerError> {
         let result = result.map_err(ServerError::from);
@@ -313,7 +443,7 @@ impl Account {
 
 fn status_of(state: &Option<SignedIn>) -> AccountStatus {
     match state {
-        Some(signed_in) => AccountStatus::SignedIn { email: signed_in.saved.user.email.clone() },
+        Some(signed_in) => AccountStatus::SignedIn { email: signed_in.saved.user.email.clone(), admin: signed_in.saved.user.admin },
         None => AccountStatus::SignedOut,
     }
 }
@@ -324,7 +454,23 @@ fn credentials(email: &str, password: &str) -> Result<Credentials> {
     if password.is_empty() {
         return Err(Error::Invalid("Enter your password.".into()));
     }
-    Ok(Credentials { email, password: password.into(), device_name: device_name() })
+    Ok(Credentials { email, password: password.into(), device_name: device_name(), login_key: None })
+}
+
+/// Calls the server with the login key in place of the password, so it never
+/// sees the password (see `crate::vault::login_key`). An account still on its
+/// password from an older Axiom answers `PLAIN_PASSWORD`: then the password
+/// goes once more, with the key to replace it.
+async fn with_password<T, Call, Sent>(email: &str, password: &str, call: Call) -> std::result::Result<T, ClientError>
+where
+    Call: Fn(String, Option<String>) -> Sent,
+    Sent: Future<Output = std::result::Result<T, ClientError>>,
+{
+    let key = login_key(email, password);
+    match call(key.clone(), None).await {
+        Err(err) if err.status() == Some(PLAIN_PASSWORD) => call(password.into(), Some(key)).await,
+        result => result,
+    }
 }
 
 /// Shown in the account's device list, e.g. "DESKTOP-4F2 (Windows)".
@@ -359,6 +505,58 @@ impl From<Device> for DeviceView {
     fn from(d: Device) -> Self {
         Self { id: d.id, name: d.name, signed_in_at: d.signed_in_at, last_active_at: d.last_active_at, current: d.current }
     }
+}
+
+/// The account's name and picture. Mirrored by `Profile` in `src/lib/account.ts`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileView {
+    pub display_name: Option<String>,
+    pub avatar: Option<String>,
+}
+
+impl From<Profile> for ProfileView {
+    fn from(p: Profile) -> Self {
+        Self { display_name: p.display_name, avatar: p.avatar }
+    }
+}
+
+/// An account on the server, for an admin. Mirrored by `AdminAccount` in `src/lib/account.ts`.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminAccountView {
+    pub id: String,
+    pub email: String,
+    pub display_name: Option<String>,
+    pub created_at: DateTime<Utc>,
+    /// None while on the waiting list.
+    pub approved_at: Option<DateTime<Utc>>,
+    pub role: AccountRole,
+    pub permissions: Vec<String>,
+    pub last_active_at: Option<DateTime<Utc>>,
+}
+
+impl From<AdminAccount> for AdminAccountView {
+    fn from(a: AdminAccount) -> Self {
+        Self {
+            id: a.id,
+            email: a.email,
+            display_name: a.display_name,
+            created_at: a.created_at,
+            approved_at: a.approved_at,
+            role: a.role,
+            permissions: a.permissions,
+            last_active_at: a.last_active_at,
+        }
+    }
+}
+
+/// The server's settings, for the admin panel. Mirrored by `AdminSettings` in `src/lib/account.ts`.
+#[derive(Clone, Debug, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminSettingsView {
+    pub waitlist: bool,
+    pub default_permissions: Vec<String>,
 }
 
 /// Lets commands use `?` on server calls; the message is ready to show.

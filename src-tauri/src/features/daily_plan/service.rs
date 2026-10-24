@@ -1146,3 +1146,48 @@ pub async fn range(db: &DatabaseConnection, from: Date, to: Date, today: Date) -
     by_deadline(&mut inbox);
     Ok(RangePlan { days: out, inbox, settings, pace: pace(db, today).await?.0 })
 }
+
+// ---------- For notifications ----------
+
+/// One thing on a day's agenda: (start minute, or None for all day; minutes;
+/// title; whether it's a calendar event).
+pub type AgendaEntry = (Option<i32>, i32, String, bool);
+
+/// A day's blocks and calendar events in time order, and its top priorities.
+/// With `lay_out`, routine blocks are laid out first, as opening the day does.
+pub async fn agenda(db: &DatabaseConnection, day: Date, lay_out: bool) -> Result<(Vec<AgendaEntry>, Vec<String>)> {
+    if lay_out {
+        lay_out_routines(db, day).await?;
+    }
+    let day_tasks = tasks().filter(task::Column::Day.eq(day)).all(db).await?;
+    let title_of = |id: &Option<String>| id.as_ref().and_then(|id| day_tasks.iter().find(|t| &t.id == id)).map(|t| t.title.clone());
+    let mut items: Vec<AgendaEntry> = blocks()
+        .filter(block::Column::Day.eq(day))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|b| {
+            let title = title_of(&b.task_id).filter(|t| !t.is_empty()).unwrap_or(b.title);
+            (Some(b.start_minute), b.duration_minutes, title, false)
+        })
+        .collect();
+    items.extend(events_on(db, day).await?.into_iter().map(|e| ((!e.all_day).then_some(e.start_minute), e.duration_minutes, e.title, true)));
+    items.sort_by_key(|(start, ..)| start.unwrap_or(-1));
+    let mut focus: Vec<&task::Model> = day_tasks.iter().filter(|t| t.focus_rank.is_some() && t.done_at.is_none()).collect();
+    focus.sort_by_key(|t| t.focus_rank);
+    Ok((items, focus.into_iter().map(|t| t.title.clone()).collect()))
+}
+
+/// Open tasks due on or before `through`, soonest first: (title, due).
+pub async fn deadline_tasks(db: &DatabaseConnection, through: Date) -> Result<Vec<(String, Date)>> {
+    let mut due: Vec<(String, Date)> = tasks()
+        .filter(task::Column::DoneAt.is_null())
+        .filter(task::Column::DueDate.lte(through))
+        .all(db)
+        .await?
+        .into_iter()
+        .filter_map(|t| Some((t.title, t.due_date?)))
+        .collect();
+    due.sort_by_key(|(_, d)| *d);
+    Ok(due)
+}

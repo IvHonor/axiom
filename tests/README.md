@@ -1,8 +1,38 @@
 # Daily Plan overview checks
 
+## University overview checks
+
+Run `node tests/uni-overview-layout.mjs` against Vite on port 1427 using the same Playwright setup. `uni-overview-preview.html` renders the real overview, display menu, resizing and navigation with in-memory responses; it never reads the desktop database. `UNI_SKIP_MATRIX=1` runs the behavior and boundary checks without the full size sweep; `UNI_ONLY_MATRIX=1` runs just the 660 combinations. `node tests/uni-overview-boundaries.mjs` separately sweeps all twelve views at their minimum widths and the heading/footer height boundaries, with long text across all twenty font/theme variants.
+
+University has twelve fitted views: At a glance, Module strip, Term pulse, Module list, Module cards, Catch up, Coming up, Teaching term, Study progress, Needs attention, Coming week and University dashboard. Auto adapts to measured tile content space. View, density, module order, module filter and detail visibility are saved independently for each grid size. A saved view temporarily falls back when the window narrows and resumes when it fits again.
+
+The suite checks all 165 supported sizes at four window widths (**660 size/window combinations**), exact view minima, every available view at six sizes with comfortable density, and compact/expanded layouts across all twenty theme variants. It also checks actual content/button bounds, pagination, shrinking data, empty terms/modules, long unbroken names, missing lectures, no backlog, dates outside term, filters and sorting, safe weighted progress, caught-up mutations and failures, duplicate-submit protection, deep links, setup actions, keyboard controls, reload persistence, retry, stale responses and corrupt preferences. Screenshots go to ignored `.qa.local`.
+
+Counts and progress follow the selected module filter. Catch-up progress is the sum of caught-up lectures divided by all lectures in those modules. It is separate from teaching weeks elapsed. Behind stays longest overdue first; Coming up covers the next seven days. Lecture rows open their module, and sufficiently wide catch-up lists can mark a lecture caught up. Sidebar/main-view counts remain unfiltered. The summary refreshes after local edits, sync, focus and once a minute.
+
+## Reading overview checks
+
+Run `node tests/reading-overview-layout.mjs` against Vite on port 1427, using the `PLAYWRIGHT_MODULE` setup below. `reading-overview-preview.html` renders the real Reading summary, display menu, resize context and navigation state with in-memory API responses; it never touches the desktop database.
+
+The suite covers all twelve views, all 165 grid sizes at four window widths (**660 size/window combinations**), exact view minima and layout breakpoints, compact and expanded tiles across all twenty theme variants, and every available view at six sizes with comfortable density. It checks actual content and button bounds, pagination, saved preferences per size, narrow-window fallback and restoration, keyboard controls, book/shelf/goal/add navigation, empty and one-book libraries, long unbroken titles, audio and ebook progress, missing covers and totals, unset and exceeded goals, load failures and retry, partial shelves, lazy library/statistics reads, stale responses and corrupt saved preferences. Screenshots go to ignored `.qa.local`.
+
+Auto uses measured content space after the tile header and padding. It chooses a horizontal reading strip for wide shallow tiles, a compact cover shelf for narrow tall tiles, a featured current book for compact tiles, a reading list or cover shelf for medium tiles, and a dashboard for larger tiles. The display menu can select a specific view, list density, reading order and cover visibility independently for each grid size. Views that stop fitting temporarily fall back to Auto and resume when space returns.
+
+## Overview visibility and text hierarchy checks
+
+Run `node tests/overview-visibility.mjs` against Vite on port 1427 with the Playwright setup below. The fixture uses the real shell, installation and visibility hooks with inert summaries. It checks hide/unhide from overview tiles, both left navigation lists and installed extension cards; persistence; preserved installation, tile size and position; accessible hidden areas; restore-all; keyboard navigation and focus; viewport bounds; invalid preferences; and extension text fitting across all theme fonts. Visibility is a local display preference, saved independently of installation.
+
+## Shell motion checks
+
+Run `node tests/shell-motion.mjs` against Vite on port 1427 with the same Playwright setup. It checks actual tile displacement animations, continuity when a collision reverses before settling, immediate movement of the grabbed tile, cleanup and live reduced-motion changes. Sidebar checks cover opening/closing, retained exit content, focus restoration, inert closed content, rapid reversals, panel switches and narrow windows, plus menu motion and reduced-motion behavior. Screenshots go to ignored `.qa.local`.
+
+Motion uses 120ms hover feedback, 160ms menu entrances and 240ms layout transitions. Displaced tiles use translation without scaling their content. The operating system's reduced-motion preference disables these transitions.
+
 ## Overview movement checks
 
 Run `node tests/overview-movement.mjs` against Vite on port 1427 with the Playwright setup below. The isolated fixture renders the real Overview and persistence hooks with inert summaries. Checks cover mouse/touch pointer handling, keyboard movement, saved grid coordinates, displaced tiles, Escape/pointer cancellation, cleanup on unmount, edge scrolling, resize at the grid boundary, preserved summary state, reinstalling areas, narrow windows and invalid saved settings.
+
+Run `node tests/overview-drag-motion.mjs` for continuous pointer tracking, snap-boundary resistance, landing animation, picking up a tile mid-animation, single-frame releases, click tolerance, blur/window/sidebar cancellation, unchanged content dimensions across fifteen size/window combinations, and reduced motion. The dragged tile follows the pointer with frame-batched translation; a dashed outline marks its snapped destination. Nearby tiles gently move out of the way and return when the drag reverses. Previews remain temporary until release, and Escape restores the saved arrangement. Edge scrolling accelerates gradually and uses elapsed time, so its speed is independent of the display refresh rate.
 
 ## Theme extension checks
 
@@ -69,3 +99,5 @@ Settings are independent for each grid size: view, project scope, sort, density,
 Counting rules are intentional: archived cards are excluded; subtasks are excluded by default; progress always includes matching completed cards; attention and label views show open work. Full-column counts drive card-limit warnings even when tile filters hide cards. Labels with the same name across projects share a group, and a card with multiple labels contributes to multiple groups. Estimate totals are sums of included card estimates, not a capacity forecast; including parent and child estimates can count overlapping work. Partial load failures are marked explicitly and can be retried.
 
 The summary reads full active boards, avoiding the old eight-card summary limit. At most four project reads run concurrently. The title and body share one snapshot, activity is loaded only when selected, and board mutations refresh an active overview. The shared `TileDisplayMenu` handles pointer positioning, focus restoration, keyboard navigation and viewport constraints for both areas.
+
+Journal and Notes responsive summaries: run `node tests/writing-overview-layout.mjs` with Vite on port 1427 and the same PLAYWRIGHT_MODULE setup. The isolated writing fixture checks 1,512 tile-size, window-width and content-state combinations, plus pagination and navigation. No desktop data is used.

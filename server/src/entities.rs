@@ -20,18 +20,27 @@ pub mod user {
         pub created_at: DateTimeUtc,
         /// The last sequence number handed to one of this account's records.
         pub sync_seq: i64,
+        /// When an admin let them in. None while on the waiting list.
+        pub approved_at: Option<DateTimeUtc>,
+        /// The name to show; None shows the email instead.
+        pub display_name: Option<String>,
+        /// The profile picture as a `data:image/...;base64,` URL, small and square.
+        pub avatar: Option<String>,
+        /// "member" or "admin". Owners (ADMIN_EMAILS) are admins whatever this says.
+        pub role: String,
+        /// Comma-separated, from `axiom_protocol::permissions::ALL`.
+        pub permissions: String,
+        /// The end-to-end encryption key, wrapped on a device. Opaque here.
+        pub encryption_key: Option<String>,
+        /// `password_hash` is of a login key (`axiom_protocol::LOGIN_KEY_PREFIX`),
+        /// not of the password itself as before them.
+        pub login_key: bool,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
     pub enum Relation {}
 
     impl ActiveModelBehavior for ActiveModel {}
-
-    impl From<Model> for axiom_protocol::User {
-        fn from(user: Model) -> Self {
-            Self { id: user.id, email: user.email, created_at: user.created_at }
-        }
-    }
 }
 
 pub mod sync_record {
@@ -199,6 +208,73 @@ pub mod space_record {
         pub data: String,
         pub field_times: String,
         pub seq: i64,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub mod planned_email {
+    use sea_orm::entity::prelude::*;
+
+    /// A notification email the app planned, sent at `send_at`.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "planned_emails")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub user_id: String,
+        /// Stable per notification, e.g. `uni.today:2026-10-27`.
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub key: String,
+        pub kind: String,
+        pub send_at: DateTimeUtc,
+        /// `axiom_protocol::notify::Digest` as JSON.
+        pub digest: String,
+        /// Set once sent (or skipped), so it's never sent twice.
+        pub sent_at: Option<DateTimeUtc>,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub mod email_opt_out {
+    use sea_orm::entity::prelude::*;
+
+    /// A kind of notification email someone unsubscribed from by link.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "email_opt_outs")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub user_id: String,
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub kind: String,
+        pub at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub mod server_setting {
+    use sea_orm::entity::prelude::*;
+
+    /// The server's settings, changed from the admin panel. One row, id 1.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "server_settings")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: i32,
+        /// None follows WAITLIST from the environment.
+        pub waitlist: Option<bool>,
+        /// Comma-separated.
+        pub default_permissions: String,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

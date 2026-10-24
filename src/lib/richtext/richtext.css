@@ -1,0 +1,232 @@
+/* The rich-text editor shared by the Journal and Notes. Colors, fonts and
+   shapes come from the active theme; --rx-accent picks the area's colour. */
+
+.rx-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rx-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.rx-tool {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+}
+
+.rx-tool:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.rx-tool.is-active {
+  color: var(--rx-accent, var(--accent));
+  background: color-mix(in srgb, var(--rx-accent, var(--accent)) 12%, transparent);
+}
+
+.rx-tool:disabled {
+  opacity: 0.35;
+}
+
+.rx-tool-gap {
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: var(--line);
+}
+
+.rx-prose {
+  min-height: 280px;
+  padding: 6px 0 20px;
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: var(--text);
+  outline: none;
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+
+.rx-prose > * + * {
+  margin-top: 0.7em;
+}
+
+.rx-prose p {
+  margin: 0;
+}
+
+.rx-prose h1,
+.rx-prose h2,
+.rx-prose h3 {
+  margin: 1.1em 0 0.3em;
+  line-height: 1.3;
+}
+
+.rx-prose h1 {
+  font-size: 1.5em;
+}
+
+.rx-prose h2 {
+  font-size: 1.25em;
+}
+
+.rx-prose h3 {
+  font-size: 1.08em;
+}
+
+.rx-prose ul,
+.rx-prose ol {
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.rx-prose li p {
+  margin: 0.15em 0;
+}
+
+.rx-prose blockquote {
+  margin: 0;
+  padding-left: 14px;
+  color: var(--text-dim);
+  border-left: 3px solid var(--line-strong);
+}
+
+.rx-prose code {
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--hover);
+  border-radius: 4px;
+}
+
+.rx-prose pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--hover);
+  border-radius: var(--radius-sm);
+}
+
+.rx-prose pre code {
+  padding: 0;
+  background: none;
+}
+
+.rx-prose a {
+  color: var(--accent);
+}
+
+.rx-prose hr {
+  margin: 1.2em 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.rx-prose ul[data-type="taskList"] {
+  padding-left: 0.2em;
+  list-style: none;
+}
+
+.rx-prose ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.rx-prose ul[data-type="taskList"] li > label {
+  flex: none;
+  margin-top: 0.3em;
+}
+
+.rx-prose ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+.rx-prose ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.rx-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.rx-editor {
+  position: relative;
+}
+
+.rx-save {
+  color: var(--text-faint);
+}
+
+.rx-save.is-failed {
+  color: var(--danger);
+}
+
+/* ---------- [[Links]] ---------- */
+
+.rx-link {
+  color: var(--rx-accent, var(--accent));
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+.rx-prose:has(.rx-link) .rx-link:hover {
+  text-decoration-style: solid;
+}
+
+.rx-suggest {
+  position: absolute;
+  z-index: 20;
+  min-width: 220px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+.rx-suggest button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  overflow: hidden;
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+.rx-suggest button.is-on {
+  background: var(--hover);
+}
+
+.rx-suggest svg {
+  flex: none;
+  color: var(--text-faint);
+}

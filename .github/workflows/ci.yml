@@ -44,6 +44,31 @@ jobs:
       - name: Run Rust tests
         run: cargo test --workspace --locked
 
+  macos:
+    name: Build and test (macOS)
+    # Mac-only code (the menu bar, the Keychain) only compiles here, so problems
+    # show up on push rather than halfway through a release.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - run: npm ci
+
+      # The app embeds dist/ when it compiles.
+      - run: npm run build
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run the app's tests
+        run: cargo test -p axiom --locked
+
   site:
     name: Website
     runs-on: ubuntu-latest

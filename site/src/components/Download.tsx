@@ -1,29 +1,25 @@
 import { Suspense } from "react";
-import { Download } from "lucide-react";
 import { latestRelease, RELEASES_URL } from "@/lib/release";
+import { DownloadLink, type Platform } from "./DownloadLink";
 
-/** "Download for Windows", straight to the newest installer, with its version. */
-export function DownloadButton({ size = "lg", label = "Download for Windows" }: { size?: "lg" | "md"; label?: string }) {
+/**
+ * The download for the visitor's computer: the Mac disk image on a Mac (once a
+ * release has one), otherwise the Windows installer, with its version.
+ * `only` pins it to one platform, for the download page.
+ */
+export function DownloadButton({ size = "lg", only }: { size?: "lg" | "md"; only?: Platform }) {
   return (
-    <Suspense fallback={<Button href={RELEASES_URL} size={size} label={label} />}>
-      <Latest size={size} label={label} />
+    <Suspense fallback={<DownloadLink windows={RELEASES_URL} mac={only === "mac" ? RELEASES_URL : null} size={size} only={only} />}>
+      <Latest size={size} only={only} />
     </Suspense>
   );
 }
 
-async function Latest({ size, label }: { size: "lg" | "md"; label: string }) {
+async function Latest({ size, only }: { size: "lg" | "md"; only?: Platform }) {
   const release = await latestRelease();
-  return <Button href={release?.installer ?? RELEASES_URL} version={release?.version} size={size} label={label} />;
-}
-
-function Button({ href, version, size, label }: { href: string; version?: string; size: "lg" | "md"; label: string }) {
-  return (
-    <a className={`button button-primary button-${size}`} href={href}>
-      <Download size={size === "lg" ? 18 : 16} strokeWidth={2} aria-hidden="true" />
-      <span>{label}</span>
-      {version && <span className="button-note">v{version}</span>}
-    </a>
-  );
+  // No Mac build in this release yet: the Mac button goes to the releases page, without a version to promise.
+  const version = only === "mac" && !release?.mac ? undefined : release?.version;
+  return <DownloadLink windows={release?.installer ?? RELEASES_URL} mac={release?.mac ?? (only === "mac" ? RELEASES_URL : null)} version={version} size={size} only={only} />;
 }
 
 /** "Version 0.5.1 · 24 October 2026", for the download page. */

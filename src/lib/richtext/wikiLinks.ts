@@ -5,6 +5,7 @@ import { Extension } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { shortcut } from "../shortcut";
 
 /** What's typed after an open "[[", and where. */
 export interface LinkQuery {
@@ -38,7 +39,7 @@ function decorate(doc: PmNode): DecorationSet {
     });
     for (const m of text.matchAll(LINK)) {
       const start = pos + 1 + (m.index ?? 0);
-      found.push(Decoration.inline(start, start + m[0].length, { class: "rx-link", "data-title": m[1].trim(), title: "Ctrl+click to open" }));
+      found.push(Decoration.inline(start, start + m[0].length, { class: "rx-link", "data-title": m[1].trim(), title: shortcut("Ctrl+click to open") }));
     }
     return false;
   });

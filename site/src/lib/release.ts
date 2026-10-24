@@ -13,6 +13,8 @@ export interface Release {
   date: string | null;
   /** The Windows installer (the `_x64-setup.exe`). */
   installer: string | null;
+  /** The macOS disk image (the `_universal.dmg`), once a release has a Mac build. */
+  mac: string | null;
 }
 
 interface LatestJson {
@@ -30,8 +32,13 @@ export async function latestRelease(): Promise<Release | null> {
     if (!response.ok) return null;
     const latest = (await response.json()) as LatestJson;
     if (!latest.version) return null;
+    const version = latest.version.replace(/^v/, "");
     const windows = latest.platforms?.["windows-x86_64-nsis"] ?? latest.platforms?.["windows-x86_64"];
-    return { version: latest.version.replace(/^v/, ""), date: latest.pub_date ?? null, installer: windows?.url ?? null };
+    // latest.json lists the Mac update archive, not the disk image people install from;
+    // the image sits beside it under the name Tauri gives it.
+    const hasMac = Object.keys(latest.platforms ?? {}).some((platform) => platform.startsWith("darwin"));
+    const mac = hasMac ? `https://github.com/IvHonor/axiom/releases/download/v${version}/Axiom_${version}_universal.dmg` : null;
+    return { version, date: latest.pub_date ?? null, installer: windows?.url ?? null, mac };
   } catch {
     return null;
   }

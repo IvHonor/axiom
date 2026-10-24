@@ -31,7 +31,7 @@ export default function PrivacyPage() {
           picture you choose (if any), and when you signed up and confirmed your email.
         </li>
         <li>
-          <b>Your devices:</b> each computer&apos;s name (for example &ldquo;DESKTOP-4F2 (Windows)&rdquo;) and when it was last active, so you can sign devices out.
+          <b>Your devices:</b> each computer&apos;s name (for example &ldquo;DESKTOP-4F2 (Windows)&rdquo; or &ldquo;Ada&apos;s MacBook (macOS)&rdquo;) and when it was last active, so you can sign devices out.
         </li>
         <li>
           <b>Synced data:</b> a copy of what you sync, so your other computers can catch up.

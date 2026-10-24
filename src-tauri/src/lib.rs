@@ -42,6 +42,8 @@ pub fn run() {
             rrule::Tz::LOCAL,
         ))
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.set_menu(system::mac_menu(app.handle())?)?;
             #[cfg(target_os = "windows")]
             for window in app.webview_windows().into_values() {
                 window_icons::apply(&window)?;

@@ -1,7 +1,8 @@
 # Publishes a release when a version tag is pushed (npm version <x.y.z>, then
-# git push --follow-tags). Builds the Windows installers, signs them for the
-# updater, and attaches them plus latest.json to a GitHub Release. Installed
-# copies of Axiom find new versions through that latest.json.
+# git push --follow-tags). Builds the Windows installers and a universal macOS
+# app (Apple Silicon and Intel), signs them for the updater, and attaches them
+# plus latest.json to a GitHub Release. Installed copies of Axiom find new
+# versions through that latest.json.
 name: Release
 
 on:
@@ -12,9 +13,24 @@ permissions:
   contents: write
 
 jobs:
-  windows:
-    name: Build and publish (Windows)
-    runs-on: windows-latest
+  publish:
+    name: Build and publish (${{ matrix.name }})
+    strategy:
+      # One at a time, Windows first: each build adds its platform to the
+      # release's latest.json, and two at once could overwrite each other.
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            runner: windows-latest
+            targets: ""
+            args: ""
+          - name: macOS
+            runner: macos-latest
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            args: --target universal-apple-darwin
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -64,6 +80,8 @@ jobs:
         run: npm ci
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
 
       - uses: Swatinem/rust-cache@v2
 
@@ -85,13 +103,15 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Axiom ${{ github.ref_name }}
           releaseBody: |
-            **To install on Windows**, download the file ending in `_x64-setup.exe` below and run it. If you already have Axiom, it offers this update by itself.
+            **Windows:** download the file ending in `_x64-setup.exe` below and run it. "Windows protected your PC"? The installer isn't code-signed yet: choose **More info**, then **Run anyway**.
 
-            **"Windows protected your PC"?** Axiom's installer isn't code-signed yet, so Windows doesn't recognise it. Choose **More info**, then **Run anyway**. After that, updates install from inside Axiom.
+            **macOS** (Apple Silicon and Intel, macOS 11 or later): download the file ending in `_universal.dmg`, open it and drag Axiom into Applications. The first time you open it, macOS says it can't check the developer: open **System Settings → Privacy & Security**, scroll down and choose **Open Anyway**. If it asks to use your keychain after an update, choose **Always Allow**.
+
+            If you already have Axiom, it offers this update by itself.
 
             Found a problem, have a question or an idea? Use the **support button** (the lifebuoy at the top right of Axiom), and we'll reply by email.
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: true
           # Turns on update signing (see src-tauri/tauri.release.conf.json).
-          args: --config src-tauri/tauri.release.conf.json
+          args: ${{ matrix.args }} --config src-tauri/tauri.release.conf.json

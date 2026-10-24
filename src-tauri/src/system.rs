@@ -62,3 +62,50 @@ pub async fn data_export(app: AppHandle, db: State<'_, Db>) -> Result<String, Er
     std::fs::write(&file, text).map_err(|e| Error::Invalid(format!("Couldn't save {}: {e}", file.display())))?;
     Ok(file.to_string_lossy().into_owned())
 }
+
+/// The macOS menu bar: the usual app, edit and window menus, without the
+/// default ⌘W "Close Window", because ⌘W closes a tab in Axiom (see
+/// `src/App.tsx`). The Edit menu is what makes ⌘C, ⌘V and the rest work in
+/// text fields. Built on every platform so it's always type-checked, but only
+/// installed on macOS.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn mac_menu<R: tauri::Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
+    use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
+    let app_menu = Submenu::with_items(
+        app,
+        "Axiom",
+        true,
+        &[
+            &PredefinedMenuItem::about(app, None, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::services(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::hide(app, None)?,
+            &PredefinedMenuItem::hide_others(app, None)?,
+            &PredefinedMenuItem::show_all(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::quit(app, None)?,
+        ],
+    )?;
+    let edit = Submenu::with_items(
+        app,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &PredefinedMenuItem::select_all(app, None)?,
+        ],
+    )?;
+    let window = Submenu::with_items(
+        app,
+        "Window",
+        true,
+        &[&PredefinedMenuItem::minimize(app, None)?, &PredefinedMenuItem::maximize(app, None)?, &PredefinedMenuItem::fullscreen(app, None)?],
+    )?;
+    Menu::with_items(app, &[&app_menu, &edit, &window])
+}

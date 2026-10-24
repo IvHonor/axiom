@@ -10,6 +10,7 @@ import { Bold, FileText, Heading2, Italic, List, ListChecks, ListOrdered, Plus, 
 import type * as Y from "yjs";
 import { REMOTE, Saver } from "./doc";
 import { WikiLinks, type LinkQuery } from "./wikiLinks";
+import { shortcut } from "../shortcut";
 
 /** How long typing pauses before the text is saved. */
 const SAVE_AFTER_MS = 800;
@@ -224,8 +225,8 @@ function Toolbar({ editor }: { editor: Editor }) {
   );
   return (
     <div className="rx-toolbar" role="toolbar" aria-label="Formatting">
-      {button("Bold (Ctrl+B)", Bold, on.bold, () => run().toggleBold().run())}
-      {button("Italic (Ctrl+I)", Italic, on.italic, () => run().toggleItalic().run())}
+      {button(shortcut("Bold (Ctrl+B)"), Bold, on.bold, () => run().toggleBold().run())}
+      {button(shortcut("Italic (Ctrl+I)"), Italic, on.italic, () => run().toggleItalic().run())}
       {button("Strikethrough", Strikethrough, on.strike, () => run().toggleStrike().run())}
       <span className="rx-tool-gap" />
       {button("Heading", Heading2, on.heading, () => run().toggleHeading({ level: 2 }).run())}
@@ -234,8 +235,8 @@ function Toolbar({ editor }: { editor: Editor }) {
       {button("Checklist", ListChecks, on.task, () => run().toggleTaskList().run())}
       {button("Quote", Quote, on.quote, () => run().toggleBlockquote().run())}
       <span className="rx-tool-gap" />
-      {button("Undo (Ctrl+Z)", Undo2, false, () => run().undo().run(), !on.undo)}
-      {button("Redo (Ctrl+Shift+Z)", Redo2, false, () => run().redo().run(), !on.redo)}
+      {button(shortcut("Undo (Ctrl+Z)"), Undo2, false, () => run().undo().run(), !on.undo)}
+      {button(shortcut("Redo (Ctrl+Shift+Z)"), Redo2, false, () => run().redo().run(), !on.redo)}
     </div>
   );
 }

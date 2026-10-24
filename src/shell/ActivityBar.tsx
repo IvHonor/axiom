@@ -10,6 +10,7 @@ import type { ExtensionManifest } from "../extensions/types";
 import { Avatar } from "./ui/Avatar";
 import { ExtensionIcon } from "./ui/ExtensionIcon";
 import { useProfile } from "./useProfile";
+import { shortcut } from "../lib/shortcut";
 
 /** The shell's own panels, or an area's sidebar ("area:<id>"). */
 export type SidePanel = "areas" | "extensions" | "account" | "themes" | `area:${string}`;
@@ -22,13 +23,13 @@ export interface Item {
 }
 
 const TOP: Item[] = [
-  { id: "areas", label: "Areas (Ctrl+B)", icon: Layers },
-  { id: "extensions", label: "Extensions (Ctrl+Shift+X)", icon: Blocks },
+  { id: "areas", label: shortcut("Areas (Ctrl+B)"), icon: Layers },
+  { id: "extensions", label: shortcut("Extensions (Ctrl+Shift+X)"), icon: Blocks },
 ];
 
 const BOTTOM: Item[] = [
   { id: "account", label: "Account", icon: CircleUserRound },
-  { id: "themes", label: "Themes (Ctrl+K Ctrl+T)", icon: Palette },
+  { id: "themes", label: shortcut("Themes (Ctrl+K Ctrl+T)"), icon: Palette },
 ];
 
 interface ActivityBarProps {

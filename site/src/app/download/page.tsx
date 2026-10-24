@@ -6,7 +6,7 @@ import { RELEASES_URL, REPO_URL } from "@/lib/release";
 
 export const metadata: Metadata = {
   title: "Download",
-  description: "Download Axiom for Windows 10 and 11. Free, and it keeps itself up to date.",
+  description: "Download Axiom for Windows and macOS. Free, and it keeps itself up to date.",
 };
 
 export default function DownloadPage() {
@@ -14,22 +14,21 @@ export default function DownloadPage() {
     <article className="page wrap">
       <h1>Download Axiom</h1>
       <p className="page-lede muted">
-        Free for Windows 10 and 11.{" "}
+        Free for Windows and macOS.{" "}
         <Suspense fallback={null}>
           <ReleaseLine />
         </Suspense>
       </p>
-      <p>
-        <DownloadButton />
-      </p>
 
-      <h2>Installing</h2>
+      <h2>Windows</h2>
+      <p>
+        <DownloadButton only="windows" />
+      </p>
       <ol className="steps">
         <li>Download the installer above. It&apos;s the file ending in <b>_x64-setup.exe</b>, about 10 MB.</li>
         <li>Open it and follow the steps. It installs just for you, so it doesn&apos;t need an administrator.</li>
         <li>Open Axiom and pick the areas you want. You can start straight away; an account is only needed to sync.</li>
       </ol>
-
       <div className="note">
         <b>&ldquo;Windows protected your PC&rdquo;?</b>
         <p>
@@ -38,12 +37,29 @@ export default function DownloadPage() {
         </p>
       </div>
 
+      <h2>macOS</h2>
+      <p>
+        <DownloadButton only="mac" />
+      </p>
+      <ol className="steps">
+        <li>Download the disk image above. It&apos;s the file ending in <b>_universal.dmg</b>, and works on Apple Silicon and Intel Macs.</li>
+        <li>Open it and drag <b>Axiom</b> into <b>Applications</b>.</li>
+        <li>Open Axiom from Applications.</li>
+      </ol>
+      <div className="note">
+        <b>&ldquo;Apple could not verify Axiom&rdquo;?</b>
+        <p>
+          Axiom isn&apos;t notarised by Apple yet. Open <b>System Settings → Privacy &amp; Security</b>, scroll down to the message about Axiom and choose <b>Open Anyway</b>. You only
+          need to do this once. If it asks to use your keychain after an update, choose <b>Always Allow</b>: that&apos;s where Axiom keeps your sign-in.
+        </p>
+      </div>
+
       <h2>Updates</h2>
       <p>Axiom checks for new versions by itself and offers them in the app. Updates are signed, so the app only installs ones that really came from Axiom.</p>
 
       <h2>What you need</h2>
       <ul>
-        <li>Windows 10 or 11, 64-bit.</li>
+        <li>Windows 10 or 11 (64-bit), or macOS 11 Big Sur or later.</li>
         <li>About 100 MB of disk space, plus whatever you store in it.</li>
         <li>An internet connection only for syncing, calendars, book search and updates.</li>
       </ul>
@@ -51,13 +67,13 @@ export default function DownloadPage() {
       <h2>Other ways to get it</h2>
       <ul>
         <li>
-          Every version, with release notes, is on <a href={RELEASES_URL}>GitHub</a>. There&apos;s also an <b>.msi</b> installer there for managed computers.
+          Every version, with release notes, is on <a href={RELEASES_URL}>GitHub</a>. There&apos;s also an <b>.msi</b> installer there for managed Windows computers.
         </li>
         <li>
-          Axiom is open source: you can <a href={`${REPO_URL}#run-locally`}>build it yourself</a>.
+          Axiom is open source: you can <a href={`${REPO_URL}#run-locally`}>build it yourself</a>, including on Linux.
         </li>
         <li>
-          macOS and Linux aren&apos;t released yet. <Link href="/#web">Axiom on the web</Link> is coming soon for anyone with an account.
+          <Link href="/web">Axiom on the web</Link> is coming soon for anyone with an account.
         </li>
       </ul>
     </article>

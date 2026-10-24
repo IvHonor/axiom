@@ -20,7 +20,7 @@ export default function Home() {
           <div>
             <p className={styles.lede}>Too many tabs. Too many loose ends. Bring your plans, projects, studies and everyday life into one personal terminal, and find your way forward.</p>
             <div className={styles.actions}><DownloadButton /><Link className={styles.tourLink} href="#tour">SEE INSIDE <ArrowDown size={14} /></Link></div>
-            <p className={styles.meta}><span>FREE & OPEN SOURCE</span><span>WINDOWS 10 & 11</span><span>NO ACCOUNT NEEDED</span></p>
+            <p className={styles.meta}><span>FREE & OPEN SOURCE</span><span>WINDOWS & MACOS</span><span>NO ACCOUNT NEEDED</span></p>
           </div>
         </div>
       </section>
@@ -51,7 +51,7 @@ export default function Home() {
 
       <section className="web-section wrap" id="web" aria-labelledby="web-title"><div className="web-icon"><Globe2 size={38} strokeWidth={1} /></div><div><span className="eyebrow">THE NEXT CHAPTER <span className="soon">COMING SOON</span></span><h2 id="web-title">Your life. Wherever it takes you.</h2><p>Axiom on the web is on its way. Your synced workspace, in your browser, for the moments you&apos;re away from your own computer.</p></div><span className="web-coordinate" aria-hidden="true">DESKTOP → EVERYWHERE</span></section>
 
-      <section className="closing-section wrap" aria-labelledby="closing-title"><div className="closing-top"><span className="eyebrow">YOUR NEXT CHAPTER STARTS HERE</span><span className="closing-asterisk" aria-hidden="true">✳</span></div><h2 id="closing-title">A little more order.<br /><span>A lot more life.</span></h2><div className="closing-bottom"><div><p>You don&apos;t have to have it all figured out.<br />Just give yourself somewhere to start.</p><span className="eyebrow">FREE FOR WINDOWS. YOURS FROM DAY ONE.</span></div><DownloadButton /></div><div className="closing-baseline"><span>YOUR PERSONAL TERMINAL.</span><a href={REPO_URL}>BUILT IN THE OPEN <ArrowUpRight size={13} /></a><span>AXIOM / MAKE ROOM FOR WHAT MATTERS.</span></div></section>
+      <section className="closing-section wrap" aria-labelledby="closing-title"><div className="closing-top"><span className="eyebrow">YOUR NEXT CHAPTER STARTS HERE</span><span className="closing-asterisk" aria-hidden="true">✳</span></div><h2 id="closing-title">A little more order.<br /><span>A lot more life.</span></h2><div className="closing-bottom"><div><p>You don&apos;t have to have it all figured out.<br />Just give yourself somewhere to start.</p><span className="eyebrow">FREE FOR WINDOWS AND MAC. YOURS FROM DAY ONE.</span></div><DownloadButton /></div><div className="closing-baseline"><span>YOUR PERSONAL TERMINAL.</span><a href={REPO_URL}>BUILT IN THE OPEN <ArrowUpRight size={13} /></a><span>AXIOM / MAKE ROOM FOR WHAT MATTERS.</span></div></section>
     </>
   );
 }

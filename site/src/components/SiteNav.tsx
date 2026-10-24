@@ -31,7 +31,7 @@ export function SiteNav() {
         }}>
           {links.map(([href, label]) => <Link key={href} href={href}>{label}{href === "/web" && <span className="soon">SOON</span>}</Link>)}
           <Link href="/account">Your account</Link>
-          <Link href="/download">Get Axiom for Windows ↗</Link>
+          <Link href="/download">Get Axiom ↗</Link>
         </nav>
       </details>
     </>

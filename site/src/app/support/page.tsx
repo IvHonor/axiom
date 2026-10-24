@@ -20,6 +20,13 @@ export default function SupportPage() {
       <h2>Common questions</h2>
       <div className="faq">
         <details>
+          <summary>macOS says it can&apos;t check the developer</summary>
+          <p>
+            Axiom isn&apos;t notarised by Apple yet. Open <b>System Settings → Privacy &amp; Security</b>, scroll down and choose <b>Open Anyway</b>. You only need to do this once. See{" "}
+            <Link href="/download">Download</Link>.
+          </p>
+        </details>
+        <details>
           <summary>Windows says &ldquo;Windows protected your PC&rdquo;</summary>
           <p>
             The installer isn&apos;t code-signed yet. Choose <b>More info</b>, then <b>Run anyway</b>. See <Link href="/download">Download</Link> for more.

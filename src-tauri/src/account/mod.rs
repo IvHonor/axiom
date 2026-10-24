@@ -540,9 +540,20 @@ where
     }
 }
 
+/// The name in System Settings → General → About, e.g. "Ada's MacBook Air".
+/// Apps opened from the Dock don't get HOSTNAME, so ask the system.
+fn mac_computer_name() -> Option<String> {
+    if !cfg!(target_os = "macos") {
+        return None;
+    }
+    let output = std::process::Command::new("/usr/sbin/scutil").args(["--get", "ComputerName"]).output().ok()?;
+    let name = String::from_utf8(output.stdout).ok()?.trim().to_owned();
+    (output.status.success() && !name.is_empty()).then_some(name)
+}
+
 /// Shown in the account's device list, e.g. "DESKTOP-4F2 (Windows)".
 fn device_name() -> String {
-    let host = std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| "Computer".into());
+    let host = std::env::var("COMPUTERNAME").ok().or_else(mac_computer_name).or_else(|| std::env::var("HOSTNAME").ok()).unwrap_or_else(|| "Computer".into());
     let os = match std::env::consts::OS {
         "windows" => "Windows",
         "macos" => "macOS",

@@ -15,6 +15,17 @@ pub struct AppStatus {
     /// releases and the updater go by.
     version: String,
     db: DbStatus,
+    /// The account server's privacy notice and terms; None in a build without a server.
+    #[serde(rename = "privacyUrl")]
+    privacy_url: Option<String>,
+    #[serde(rename = "termsUrl")]
+    terms_url: Option<String>,
+}
+
+/// A page on the account server, if this build has one.
+fn server_page(path: &str) -> Option<String> {
+    let server = crate::account::SERVER_URL.trim_end_matches('/');
+    (!server.is_empty()).then(|| format!("{server}{path}"))
 }
 
 /// Called from React with `invoke("app_status")`.
@@ -23,6 +34,8 @@ pub async fn app_status(app: AppHandle, db: State<'_, Db>) -> Result<AppStatus, 
     Ok(AppStatus {
         version: app.package_info().version.to_string(),
         db: db.status().await,
+        privacy_url: server_page(axiom_protocol::routes::PRIVACY),
+        terms_url: server_page(axiom_protocol::routes::TERMS),
     })
 }
 

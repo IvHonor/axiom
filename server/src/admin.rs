@@ -16,7 +16,7 @@ use sea_orm::sea_query::OnConflict;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, ModelTrait, QueryFilter, Set, TransactionTrait};
 
 use crate::auth::{AuthUser, revoke_sessions};
-use crate::entities::{password_reset, server_setting, session, user};
+use crate::entities::{email_code, password_reset, server_setting, session, user};
 use crate::error::ApiError;
 use crate::{AppState, Shared, mail};
 
@@ -80,7 +80,9 @@ pub async fn accounts(State(s): State<AppState>, _admin: AdminUser) -> Result<Js
         let last = active.entry(sess.user_id).or_insert(sess.last_used_at);
         *last = (*last).max(sess.last_used_at);
     }
-    let mut all: Vec<AdminAccount> = user::Entity::find().all(&s.db).await?.into_iter().map(|u| view(&s, u, &active)).collect();
+    // Sign-ups that never confirmed their address aren't anyone yet.
+    let users = user::Entity::find().filter(user::Column::EmailConfirmedAt.is_not_null()).all(&s.db).await?;
+    let mut all: Vec<AdminAccount> = users.into_iter().map(|u| view(&s, u, &active)).collect();
     all.sort_by(|a, b| match (a.approved_at, b.approved_at) {
         (None, None) => a.created_at.cmp(&b.created_at),
         (None, Some(_)) => std::cmp::Ordering::Less,
@@ -168,6 +170,7 @@ pub async fn decline(State(s): State<AppState>, _admin: AdminUser, Path(id): Pat
     // Waiting accounts never synced or signed in, but may have asked for a reset code.
     let txn = s.db.begin().await?;
     password_reset::Entity::delete_many().filter(password_reset::Column::UserId.eq(&account.id)).exec(&txn).await?;
+    email_code::Entity::delete_many().filter(email_code::Column::UserId.eq(&account.id)).exec(&txn).await?;
     session::Entity::delete_many().filter(session::Column::UserId.eq(&account.id)).exec(&txn).await?;
     account.delete(&txn).await?;
     txn.commit().await?;

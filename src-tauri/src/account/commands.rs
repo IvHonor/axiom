@@ -2,9 +2,10 @@
 
 use tauri::{AppHandle, Emitter, State};
 
-use super::{Account, AccountStatus, AdminAccountView, AdminSettingsView, DeviceView, ProfileView, SignUpOutcome};
+use super::{Account, AccountStatus, AdminAccountView, AdminSettingsView, DeviceView, ProfileView, SignInOutcome, TicketView};
+use crate::app_lock::AppLock;
 use crate::db::Db;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::sync::{self, SyncEngine};
 use crate::vault::Vault;
 
@@ -13,6 +14,7 @@ pub async fn account_status(account: State<'_, Account>) -> Result<AccountStatus
     Ok(account.status().await)
 }
 
+/// Creates an account, once the person has agreed to the terms of use.
 #[tauri::command]
 pub async fn account_sign_up(
     account: State<'_, Account>,
@@ -20,13 +22,14 @@ pub async fn account_sign_up(
     engine: State<'_, SyncEngine>,
     email: String,
     password: String,
-) -> Result<SignUpOutcome> {
-    let status = account.sign_up(&email, &password).await?;
-    if matches!(status, SignUpOutcome::SignedIn { .. }) {
-        vault.after_sign_in(&account, &password).await;
+    accepted_terms: bool,
+) -> Result<SignInOutcome> {
+    if !accepted_terms {
+        return Err(Error::Invalid("Tick the box to agree to the terms of use.".into()));
     }
-    engine.wake();
-    Ok(status)
+    let outcome = account.sign_up(&email, &password).await?;
+    signed_in(&account, &vault, &engine, &outcome, &password).await;
+    Ok(outcome)
 }
 
 #[tauri::command]
@@ -36,11 +39,38 @@ pub async fn account_sign_in(
     engine: State<'_, SyncEngine>,
     email: String,
     password: String,
-) -> Result<AccountStatus> {
-    let status = account.sign_in(&email, &password).await?;
-    vault.after_sign_in(&account, &password).await;
-    engine.wake();
-    Ok(status)
+) -> Result<SignInOutcome> {
+    let outcome = account.sign_in(&email, &password).await?;
+    signed_in(&account, &vault, &engine, &outcome, &password).await;
+    Ok(outcome)
+}
+
+/// Confirms the address with the emailed code, then signs in.
+#[tauri::command]
+pub async fn account_confirm_email(
+    account: State<'_, Account>,
+    vault: State<'_, Vault>,
+    engine: State<'_, SyncEngine>,
+    email: String,
+    code: String,
+    password: String,
+) -> Result<SignInOutcome> {
+    let outcome = account.confirm_email(&email, &code, &password).await?;
+    signed_in(&account, &vault, &engine, &outcome, &password).await;
+    Ok(outcome)
+}
+
+#[tauri::command]
+pub async fn account_send_confirmation(account: State<'_, Account>, email: String) -> Result<()> {
+    account.send_confirmation(&email).await
+}
+
+/// Once there's a session: unlocks encrypted data and starts syncing.
+async fn signed_in(account: &Account, vault: &Vault, engine: &SyncEngine, outcome: &SignInOutcome, password: &str) {
+    if matches!(outcome, SignInOutcome::SignedIn { .. }) {
+        vault.after_sign_in(account, password).await;
+        engine.wake();
+    }
 }
 
 /// Signs out. With `keep_data` false, also deletes the synced data from this
@@ -52,10 +82,13 @@ pub async fn account_sign_out(
     vault: State<'_, Vault>,
     engine: State<'_, SyncEngine>,
     db: State<'_, Db>,
+    lock: State<'_, AppLock>,
     keep_data: bool,
 ) -> Result<AccountStatus> {
     let status = account.sign_out().await;
     vault.forget();
+    // Signed out, a forgotten PIN couldn't be reset by email.
+    lock.forget();
     if !keep_data {
         sync::local::wipe(&db.conn().await?).await?;
         let _ = app.emit(sync::DATA_CHANGED_EVENT, ());
@@ -110,13 +143,34 @@ pub async fn account_delete(
     vault: State<'_, Vault>,
     engine: State<'_, SyncEngine>,
     db: State<'_, Db>,
+    lock: State<'_, AppLock>,
     password: String,
 ) -> Result<AccountStatus> {
     account.delete_account(&password).await?;
     vault.forget();
+    lock.forget();
     sync::local::unlink(&db.conn().await?).await?;
     engine.wake();
     Ok(AccountStatus::SignedOut)
+}
+
+/// Sends a message to support; returns the reference to quote. Signed in,
+/// the reply goes to the account's address; otherwise to `email`.
+#[tauri::command]
+pub async fn support_send(app: AppHandle, account: State<'_, Account>, kind: String, subject: String, message: String, email: Option<String>) -> Result<String> {
+    let version = app.package_info().version.to_string();
+    account.contact_support(&kind, &subject, &message, email, &version).await
+}
+
+/// Support tickets, for an admin: open ones first.
+#[tauri::command]
+pub async fn account_admin_tickets(account: State<'_, Account>) -> Result<Vec<TicketView>> {
+    account.admin_tickets().await
+}
+
+#[tauri::command]
+pub async fn account_admin_ticket_solved(account: State<'_, Account>, id: String, solved: bool) -> Result<TicketView> {
+    account.admin_ticket_solved(&id, solved).await
 }
 
 /// Every account on the server, for an admin: the waiting list, then everyone approved.

@@ -28,6 +28,12 @@ pub struct Config {
     /// Where people reach the server, for links in emails: `PUBLIC_URL`, or
     /// the address Render gives the service (`RENDER_EXTERNAL_URL`).
     pub public_url: String,
+    /// `CONTACT_EMAIL`: where people write about their data, shown in the
+    /// privacy notice.
+    pub contact_email: Option<String>,
+    /// `OPERATOR_NAME`: who runs this server, named in the privacy notice
+    /// and terms as the one responsible for people's data.
+    pub operator_name: Option<String>,
 }
 
 impl Config {
@@ -68,6 +74,25 @@ impl Config {
             .trim_end_matches('/')
             .to_owned();
 
-        Ok(Self { database_url, jwt_secret, port, client_ip_header, resend_api_key, email_from, waitlist, admins, public_url })
+        let contact_email = var("CONTACT_EMAIL").map(|e| normalize_email(&e));
+        if let Some(bad) = contact_email.as_ref().filter(|e| check_email(e).is_err()) {
+            return Err(format!("CONTACT_EMAIL isn't a valid address: {bad}"));
+        }
+
+        let operator_name = var("OPERATOR_NAME").map(|name| name.trim().to_owned());
+
+        Ok(Self {
+            database_url,
+            jwt_secret,
+            port,
+            client_ip_header,
+            resend_api_key,
+            email_from,
+            waitlist,
+            admins,
+            public_url,
+            contact_email,
+            operator_name,
+        })
     }
 }

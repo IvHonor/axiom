@@ -1,13 +1,27 @@
 import { useState, type FormEvent } from "react";
-import { requestReset, resetPassword, signIn, signUp, type AccountStatus } from "../../lib/account";
+import {
+  confirmEmail,
+  requestReset,
+  resetPassword,
+  sendConfirmation,
+  signIn,
+  signUp,
+  type AccountStatus,
+  type SignInOutcome,
+} from "../../lib/account";
 import { ErrorNote, PasswordField, SlowHint, useAction } from "./fields";
+import { PageLink } from "./HelpLinks";
 
-/** Sign in, create an account, or reset a forgotten password (ask for a code, then use it). */
-type Mode = "sign-in" | "sign-up" | "forgot" | "reset" | "waitlisted";
+/**
+ * Sign in, create an account (then confirm its address with an emailed code),
+ * or reset a forgotten password (ask for a code, then use it).
+ */
+type Mode = "sign-in" | "sign-up" | "confirm" | "forgot" | "reset" | "waitlisted";
 
 const INTRO: Record<Mode, string> = {
   "sign-in": "Sign in to sync your boards between your computers.",
   "sign-up": "An account lets Axiom sync your boards between your computers.",
+  confirm: "",
   forgot: "Enter your account's email and we'll send you a code to choose a new password.",
   reset: "",
   waitlisted: "",
@@ -18,6 +32,7 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const { busy, error, setError, run } = useAction();
 
   const switchTo = (next: Mode) => {
@@ -35,16 +50,28 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
       }
       return;
     }
-    if (mode === "sign-up") {
-      const outcome = await run(() => signUp(email, password));
-      if (outcome?.state === "waitlisted") {
-        setPassword("");
-        switchTo("waitlisted");
-      } else if (outcome) onDone(outcome);
+    if (mode === "reset") {
+      const status = await run(() => resetPassword(email, code, password));
+      if (status) onDone(status);
       return;
     }
-    const status = await run(() => (mode === "reset" ? resetPassword(email, code, password) : signIn(email, password)));
-    if (status) onDone(status);
+    const outcome = await run(() =>
+      mode === "sign-up" ? signUp(email, password, agreed) : mode === "confirm" ? confirmEmail(email, code, password) : signIn(email, password),
+    );
+    if (outcome) settle(outcome);
+  }
+
+  /** The password is kept while confirming: signing in comes right after. */
+  function settle(outcome: SignInOutcome) {
+    if (outcome.state === "confirm_email") {
+      setCode("");
+      switchTo("confirm");
+    } else if (outcome.state === "waitlisted") {
+      setPassword("");
+      switchTo("waitlisted");
+    } else {
+      onDone(outcome);
+    }
   }
 
   if (mode === "waitlisted") {
@@ -67,11 +94,13 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
   const submitLabel = {
     "sign-in": busy ? "Signing in…" : "Sign in",
     "sign-up": busy ? "Creating account…" : "Create account",
+    confirm: busy ? "Confirming…" : "Confirm and sign in",
     forgot: busy ? "Sending…" : "Email me a code",
     reset: busy ? "Saving…" : "Set new password and sign in",
     waitlisted: "",
   }[mode];
-  const ready = email && (mode === "forgot" || (password && (mode !== "reset" || code)));
+  const needsCode = mode === "reset" || mode === "confirm";
+  const ready = email && (mode === "forgot" || (password && (!needsCode || code) && (mode !== "sign-up" || agreed)));
 
   return (
     <div className="account">
@@ -79,6 +108,11 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
         <p className="account-intro">
           If <strong>{email}</strong> has an Axiom account, we've emailed it a code. It works for 30 minutes. Check your spam folder if
           it hasn't arrived.
+        </p>
+      ) : mode === "confirm" ? (
+        <p className="account-intro">
+          To check <strong>{email}</strong> is yours, we've emailed it a code. Enter it here to finish. It works for 30 minutes; check your
+          spam folder if it hasn't arrived.
         </p>
       ) : (
         <p className="account-intro">
@@ -88,7 +122,7 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
       )}
 
       <form className="account-form" onSubmit={submit} noValidate>
-        {mode !== "reset" && (
+        {!needsCode && (
           <label className="field">
             <span className="field-label">Email</span>
             <input
@@ -102,7 +136,7 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
             />
           </label>
         )}
-        {mode === "reset" && (
+        {needsCode && (
           <label className="field">
             <span className="field-label">Code</span>
             <input
@@ -118,7 +152,7 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
             />
           </label>
         )}
-        {mode !== "forgot" && (
+        {mode !== "forgot" && mode !== "confirm" && (
           <PasswordField
             label={mode === "reset" ? "New password" : "Password"}
             value={password}
@@ -127,6 +161,15 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
             disabled={busy}
             hint={mode === "sign-in" ? undefined : "At least 8 characters."}
           />
+        )}
+        {mode === "sign-up" && (
+          <label className="agree">
+            <input type="checkbox" checked={agreed} disabled={busy} onChange={(e) => setAgreed(e.currentTarget.checked)} />
+            <span>
+              I'm 13 or older, and I agree to the <PageLink page="terms">terms of use</PageLink> and have read the{" "}
+              <PageLink page="privacy">privacy notice</PageLink>.
+            </span>
+          </label>
         )}
 
         <ErrorNote error={error} />
@@ -158,12 +201,12 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
             </button>
           </p>
         )}
-        {mode === "reset" && (
-          <button className="link" onClick={() => void run(() => requestReset(email))} disabled={busy}>
+        {needsCode && (
+          <button className="link" onClick={() => void run(() => (mode === "reset" ? requestReset(email) : sendConfirmation(email)))} disabled={busy}>
             Send a new code
           </button>
         )}
-        {(mode === "forgot" || mode === "reset") && (
+        {(mode === "forgot" || needsCode) && (
           <button className="link" onClick={() => switchTo("sign-in")} disabled={busy}>
             Back to sign in
           </button>

@@ -35,6 +35,13 @@ pub mod user {
         /// `password_hash` is of a login key (`axiom_protocol::LOGIN_KEY_PREFIX`),
         /// not of the password itself as before them.
         pub login_key: bool,
+        /// When they entered the code emailed at sign-up. None until then:
+        /// the account can't sign in, and someone else may sign up over it.
+        pub email_confirmed_at: Option<DateTimeUtc>,
+        /// The `axiom_protocol::TERMS_VERSION` agreed to at sign-up, and when.
+        /// None for accounts made before there were terms.
+        pub terms_version: Option<String>,
+        pub terms_accepted_at: Option<DateTimeUtc>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -62,6 +69,61 @@ pub mod sync_record {
         pub field_times: String,
         /// Bumped on every push that touches the row.
         pub seq: i64,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub mod support_ticket {
+    use sea_orm::entity::prelude::*;
+
+    /// A message sent to support from the app.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "support_tickets")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        /// Who sent it, if signed in.
+        pub user_id: Option<String>,
+        /// Where to reply.
+        pub email: String,
+        /// One of `axiom_protocol::TICKET_KINDS`.
+        pub kind: String,
+        pub subject: String,
+        #[sea_orm(column_type = "Text")]
+        pub message: String,
+        pub app_version: String,
+        pub created_at: DateTimeUtc,
+        pub solved_at: Option<DateTimeUtc>,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub mod email_code {
+    use sea_orm::entity::prelude::*;
+
+    /// A code emailed to an account, for one purpose (see `crate::codes`).
+    /// One live code per user and purpose.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "email_codes")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        pub user_id: String,
+        pub purpose: String,
+        pub code_hash: String,
+        /// Wrong guesses so far; the code stops working after a few.
+        pub attempts: i32,
+        pub created_at: DateTimeUtc,
+        pub expires_at: DateTimeUtc,
+        pub used_at: Option<DateTimeUtc>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

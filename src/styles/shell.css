@@ -437,7 +437,7 @@
 
 .ext-item {
   position: relative;
-  padding: 10px 12px;
+  padding: 14px 16px;
 }
 
 .ext-item:hover,
@@ -447,13 +447,6 @@
 
 .ext-item.is-selected {
   box-shadow: inset 2px 0 0 var(--accent);
-}
-
-/* Install sits top right, level with the name, so the description gets full width. */
-.ext-item > .btn {
-  position: absolute;
-  top: 9px;
-  right: 12px;
 }
 
 .ext-main {
@@ -510,24 +503,21 @@
 .ext-text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
 .ext-name {
   font-weight: 600;
   font-size: 14px;
-  line-height: 20px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
+  line-height: 21px;
+  overflow-wrap: anywhere;
 }
-
-.ext-item:has(> .btn) .ext-name { padding-right: 68px; }
 
 .ext-desc {
   font-size: 13px;
-  line-height: 18px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
   color: var(--text-dim);
 }
 
@@ -540,7 +530,37 @@
   color: var(--text-dim);
 }
 
-.ext-text > .ext-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; }
+.ext-text > .ext-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 5px;
+  text-transform: none;
+}
+.ext-text > .ext-meta > :not(.publisher) { white-space: nowrap; }
+.ext-text > .ext-meta > .publisher { min-width: 0; overflow-wrap: anywhere; color: inherit; }
+.ext-meta-sep { color: var(--text-faint); }
+.ext-text > .extension-palettes { margin-top: 2px; }
+
+.ext-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 24px;
+  margin: 10px 0 0 50px;
+}
+.ext-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-dim);
+}
+.ext-state > svg { flex: none; }
+.ext-state.is-on > svg { color: var(--success); }
+.ext-footer > :is(.switch, .btn) { flex: none; }
 
 /* ---------- Themes ---------- */
 
@@ -1351,8 +1371,6 @@
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
-.ext-text > .ext-meta > .ext-kind { margin-left: 0; line-height: 14px; }
-
 /* ---------- Account ---------- */
 
 /* Dot on the account icon while signed in. */
@@ -1401,6 +1419,8 @@
 }
 
 .field input,
+.field select,
+.field textarea,
 .field-input {
   height: 30px;
   width: 100%;
@@ -1414,12 +1434,22 @@
 }
 
 .field input:focus,
+.field select:focus,
+.field textarea:focus,
 .field-input:focus-within {
   border-color: var(--accent);
 }
 
 .field input:disabled {
   opacity: 0.6;
+}
+
+.field textarea {
+  height: auto;
+  padding: 8px 10px;
+  line-height: 1.45;
+  resize: vertical;
+  font-family: inherit;
 }
 
 /* An input with an icon button inside its border (show password). */
@@ -1738,6 +1768,39 @@
   align-items: flex-start;
   gap: 8px;
   font-size: 12px;
+}
+
+/* The sign-up form's "I agree to the terms" box. */
+.agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.agree input {
+  flex: none;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.help-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 20px;
+  padding-top: 12px;
+  font-size: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.help-links .link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .code-input {
@@ -2307,6 +2370,67 @@
   color: var(--text);
 }
 
+/* ---------- PIN lock ---------- */
+
+/* Over everything, dialogs included: nothing of the app shows through. */
+.app-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.app-lock-card {
+  width: min(320px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 28px 24px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.app-lock-card > .brand-art {
+  align-self: center;
+}
+
+.app-lock-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.app-lock-pin {
+  height: 38px;
+  padding: 0 12px;
+  font-size: 18px;
+  letter-spacing: 6px;
+  text-align: center;
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.app-lock-pin:focus {
+  border-color: var(--accent);
+}
+
+.app-lock-pin::placeholder {
+  font-size: 13px;
+  letter-spacing: normal;
+}
+
 /* ---------- Modal ---------- */
 
 .modal-backdrop {
@@ -2322,7 +2446,9 @@
 
 .modal {
   width: min(640px, 100%);
-  max-height: 100%;
+  /* The window less the backdrop's padding. (100% would measure the grid
+     row, which grows with the dialog, so a tall one ran off the screen.) */
+  max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -2602,6 +2728,88 @@
   flex: 1;
 }
 
+.admin-filter {
+  display: flex;
+  gap: 2px;
+}
+
+.admin-tickets {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-tickets li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 4px;
+}
+
+.admin-tickets li + li {
+  border-top: 1px solid var(--line);
+}
+
+.ticket-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ticket-subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-kind {
+  flex: none;
+  padding: 1px 7px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--hover);
+  border-radius: 999px;
+}
+
+.ticket-kind.is-bug {
+  color: var(--danger);
+}
+
+.ticket-ref {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.ticket-message {
+  margin: 2px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.support-sent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0 4px;
+  text-align: center;
+  color: var(--text);
+}
+
+.support-sent > svg {
+  color: var(--accent);
+}
+
+.support-sent p {
+  margin: 0;
+}
+
 .admin-empty {
   display: flex;
   flex-direction: column;
@@ -2668,26 +2876,6 @@
 .publisher-tick {
   flex: none;
   color: #1d9bf0;
-}
-
-/* The on/off switch sits top right on a built-in extension's row. */
-.ext-switch {
-  position: absolute;
-  top: 11px;
-  right: 12px;
-}
-
-.ext-item:has(> .ext-switch) .ext-name {
-  padding-right: 44px;
-}
-
-.ext-kind.is-off {
-  color: var(--text-faint);
-  border-style: dashed;
-}
-
-.ext-item:has(.ext-kind.is-off) .ext-main {
-  opacity: 0.6;
 }
 
 .ext-library-note {

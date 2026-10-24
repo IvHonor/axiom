@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use axiom_protocol::{
     AccountChange, AccountRole, AdminAccount, AdminSettings, Adopt, Adopted, ChangePassword, Credentials, DeleteAccount, Device, Invite, Members, MyInvite, NewInvite, PullResponse, PushRequest,
-    PLAIN_PASSWORD, Profile, PushResponse, ResetPassword, Role, Session, Space, check_avatar, check_email, check_password, normalize_email,
+    NewTicket, PLAIN_PASSWORD, Pending, Profile, PushResponse, ResetPassword, Role, Session, Space, Ticket, check_avatar, check_email, check_password, normalize_email,
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -60,13 +60,15 @@ pub enum AccountStatus {
     SignedIn { email: String, admin: bool },
 }
 
-/// What creating an account did. Mirrored by `SignUpOutcome` in `src/lib/account.ts`.
+/// What signing up or in did. Mirrored by `SignInOutcome` in `src/lib/account.ts`.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
-pub enum SignUpOutcome {
+pub enum SignInOutcome {
     SignedIn { email: String, admin: bool },
     /// The account waits for an admin's approval; nothing is saved here.
     Waitlisted { email: String },
+    /// A code was emailed to the address: `confirm_email` with it.
+    ConfirmEmail { email: String },
 }
 
 impl Account {
@@ -80,29 +82,70 @@ impl Account {
         status_of(&*self.state.lock().await)
     }
 
-    /// Creates an account and signs in, or joins the waiting list if the
-    /// server has one.
-    pub async fn sign_up(&self, email: &str, password: &str) -> Result<SignUpOutcome> {
+    /// Creates an account. It signs in once its address is confirmed (and an
+    /// admin approves it, if the server has a waiting list).
+    pub async fn sign_up(&self, email: &str, password: &str) -> Result<SignInOutcome> {
         self.require_server()?;
         let credentials = credentials(email, password)?;
         check_password(password).map_err(Error::Invalid)?;
-        let credentials = Credentials { password: login_key(&credentials.email, password), ..credentials };
-        match self.client.sign_up(&credentials).await.map_err(account_error)? {
-            SignUp::Waitlisted(waiting) => Ok(SignUpOutcome::Waitlisted { email: waiting.email }),
+        // Only called once the person has ticked the box (see `commands::account_sign_up`).
+        let accepted_terms = Some(axiom_protocol::TERMS_VERSION.to_owned());
+        let credentials = Credentials { password: login_key(&credentials.email, password), accepted_terms, ..credentials };
+        let answer = self.client.sign_up(&credentials).await.map_err(account_error)?;
+        self.outcome(answer).await
+    }
+
+    pub async fn sign_in(&self, email: &str, password: &str) -> Result<SignInOutcome> {
+        self.require_server()?;
+        let credentials = credentials(email, password)?;
+        let (client, sent) = (&self.client, &credentials);
+        let sign_in = |password, login_key| async move { client.sign_in(&Credentials { password, login_key, ..sent.clone() }).await };
+        let answer = with_password(&credentials.email, password, sign_in).await.map_err(account_error)?;
+        self.outcome(answer).await
+    }
+
+    async fn outcome(&self, answer: SignUp) -> Result<SignInOutcome> {
+        match answer {
+            SignUp::Pending(Pending { email, confirm_email: true }) => Ok(SignInOutcome::ConfirmEmail { email }),
+            SignUp::Pending(Pending { email, .. }) => Ok(SignInOutcome::Waitlisted { email }),
             SignUp::Session(session) => match self.start(session).await? {
-                AccountStatus::SignedIn { email, admin } => Ok(SignUpOutcome::SignedIn { email, admin }),
+                AccountStatus::SignedIn { email, admin } => Ok(SignInOutcome::SignedIn { email, admin }),
                 AccountStatus::SignedOut => unreachable!("start always signs in"),
             },
         }
     }
 
-    pub async fn sign_in(&self, email: &str, password: &str) -> Result<AccountStatus> {
+    /// Confirms the address with the emailed code, then signs in.
+    pub async fn confirm_email(&self, email: &str, code: &str, password: &str) -> Result<SignInOutcome> {
         self.require_server()?;
-        let credentials = credentials(email, password)?;
-        let (client, sent) = (&self.client, &credentials);
-        let sign_in = |password, login_key| async move { client.sign_in(&Credentials { password, login_key, ..sent.clone() }).await };
-        let session = with_password(&credentials.email, password, sign_in).await.map_err(account_error)?;
-        self.start(session).await
+        if code.trim().is_empty() {
+            return Err(Error::Invalid("Enter the code from the email.".into()));
+        }
+        let body = axiom_protocol::ConfirmEmail { email: normalize_email(email), code: code.into() };
+        self.client.confirm_email(&body).await.map_err(account_error)?;
+        self.sign_in(email, password).await
+    }
+
+    /// Emails a new confirmation code (if the account isn't confirmed yet).
+    pub async fn send_confirmation(&self, email: &str) -> Result<()> {
+        self.require_server()?;
+        self.client.send_confirmation(&normalize_email(email)).await.map_err(account_error)
+    }
+
+    /// Emails a code that turns off the app lock (see `crate::app_lock`).
+    pub async fn send_unlock_code(&self) -> Result<()> {
+        let token = self.access_token().await?;
+        let result = self.client.send_unlock_code(&token).await;
+        Ok(self.after_call(result).await?)
+    }
+
+    pub async fn check_unlock_code(&self, code: &str) -> Result<()> {
+        if code.trim().is_empty() {
+            return Err(Error::Invalid("Enter the code from the email.".into()));
+        }
+        let token = self.access_token().await?;
+        let result = self.client.check_unlock_code(&token, &axiom_protocol::CheckCode { code: code.into() }).await;
+        Ok(self.after_call(result).await?)
     }
 
     /// Asks the server to email a reset code. Succeeds whether or not the
@@ -395,6 +438,30 @@ impl Account {
         Ok(self.after_call(result).await?.into())
     }
 
+    /// Sends a message to support, as the account when signed in (its address
+    /// is used); otherwise from `email`. Returns the reference to quote.
+    pub async fn contact_support(&self, kind: &str, subject: &str, message: &str, email: Option<String>, app_version: &str) -> Result<String> {
+        self.require_server()?;
+        let signed_in = self.state.lock().await.is_some();
+        let token = if signed_in { Some(self.access_token().await?) } else { None };
+        let ticket = NewTicket { kind: kind.into(), subject: subject.into(), message: message.into(), email, app_version: app_version.into() };
+        let result = self.client.support(token.as_deref(), &ticket).await;
+        Ok(self.after_call(result).await?.reference)
+    }
+
+    /// Support tickets, for an admin: open ones first.
+    pub async fn admin_tickets(&self) -> Result<Vec<TicketView>> {
+        let token = self.access_token().await?;
+        let result = self.client.admin_tickets(&token).await;
+        Ok(self.after_call(result).await?.into_iter().map(TicketView::from).collect())
+    }
+
+    pub async fn admin_ticket_solved(&self, id: &str, solved: bool) -> Result<TicketView> {
+        let token = self.access_token().await?;
+        let result = self.client.admin_ticket(&token, id, &axiom_protocol::TicketChange { solved }).await;
+        Ok(self.after_call(result).await?.into())
+    }
+
     pub async fn admin_settings(&self) -> Result<AdminSettingsView> {
         let token = self.access_token().await?;
         let result = self.client.admin_settings(&token).await;
@@ -454,7 +521,7 @@ fn credentials(email: &str, password: &str) -> Result<Credentials> {
     if password.is_empty() {
         return Err(Error::Invalid("Enter your password.".into()));
     }
-    Ok(Credentials { email, password: password.into(), device_name: device_name(), login_key: None })
+    Ok(Credentials { email, password: password.into(), device_name: device_name(), login_key: None, accepted_terms: None })
 }
 
 /// Calls the server with the login key in place of the password, so it never
@@ -547,6 +614,40 @@ impl From<AdminAccount> for AdminAccountView {
             role: a.role,
             permissions: a.permissions,
             last_active_at: a.last_active_at,
+        }
+    }
+}
+
+/// A support ticket, for an admin. Mirrored by `Ticket` in `src/lib/support.ts`.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TicketView {
+    pub id: String,
+    pub reference: String,
+    pub email: String,
+    /// Sent while signed in, so the address is confirmed.
+    pub signed_in: bool,
+    pub kind: String,
+    pub subject: String,
+    pub message: String,
+    pub app_version: String,
+    pub created_at: DateTime<Utc>,
+    pub solved_at: Option<DateTime<Utc>>,
+}
+
+impl From<Ticket> for TicketView {
+    fn from(t: Ticket) -> Self {
+        Self {
+            id: t.id,
+            reference: t.reference,
+            email: t.email,
+            signed_in: t.signed_in,
+            kind: t.kind,
+            subject: t.subject,
+            message: t.message,
+            app_version: t.app_version,
+            created_at: t.created_at,
+            solved_at: t.solved_at,
         }
     }
 }

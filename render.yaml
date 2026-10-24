@@ -17,8 +17,11 @@ services:
       # Render generates a random secret once and keeps it.
       - key: JWT_SECRET
         generateValue: true
+      # The visitor's real IP, for rate limiting. Render sits behind Cloudflare,
+      # which sets this header (and overwrites any a client sends). The last
+      # X-Forwarded-For entry is Cloudflare's own address, a new one each time.
       - key: CLIENT_IP_HEADER
-        value: x-forwarded-for
+        value: cf-connecting-ip
       # From resend.com -> API Keys. Without it, reset codes only go to the log.
       - key: RESEND_API_KEY
         sync: false
@@ -27,6 +30,12 @@ services:
         sync: false
       # Comma-separated emails of the admins who approve the waiting list.
       - key: ADMIN_EMAILS
+        sync: false
+      # Where people write about their data, shown in the privacy notice at /privacy.
+      - key: CONTACT_EMAIL
+        sync: false
+      # Who runs this server, named in the privacy notice and terms.
+      - key: OPERATOR_NAME
         sync: false
       # New accounts wait for approval. Set to "off" to let anyone sign up.
       - key: WAITLIST

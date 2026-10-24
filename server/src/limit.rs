@@ -5,10 +5,14 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use axum::Json;
 use axum::extract::{ConnectInfo, FromRequestParts};
+use axum::http::HeaderMap;
 use axum::http::request::Parts;
+use serde_json::{Map, Value, json};
 
 use crate::AppState;
 use crate::error::ApiError;
@@ -22,6 +26,10 @@ pub struct Limits {
     pub reset_requests: Limiter,
     /// Board invitations per inviting account, so nobody can use Axiom to send spam.
     pub invites: Limiter,
+    /// Emailed codes (confirming an address, unlocking the app) per address or account.
+    pub code_requests: Limiter,
+    /// Support messages per account, or per network without one.
+    pub tickets: Limiter,
 }
 
 impl Default for Limits {
@@ -31,6 +39,8 @@ impl Default for Limits {
             failed_sign_ins: Limiter::new(10, Duration::from_secs(15 * 60)),
             reset_requests: Limiter::new(3, Duration::from_secs(60 * 60)),
             invites: Limiter::new(20, Duration::from_secs(60 * 60)),
+            code_requests: Limiter::new(5, Duration::from_secs(60 * 60)),
+            tickets: Limiter::new(5, Duration::from_secs(60 * 60)),
         }
     }
 }
@@ -102,11 +112,31 @@ impl FromRequestParts<AppState> for ClientIp {
             .and_then(|value| value.rsplit(',').next())
             .map(|ip| ip.trim().to_owned())
             .filter(|ip| !ip.is_empty());
+        if from_header.is_none() && state.client_ip_header.is_some() && !MISSING_TOLD.swap(true, Ordering::Relaxed) {
+            tracing::warn!("CLIENT_IP_HEADER is set, but a request came without it: rate limits fall back to the proxy's address. GET /v1/client-ip shows what arrives.");
+        }
         let ip = from_header
             .or_else(|| parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip().to_string()))
             .unwrap_or_else(|| "unknown".into());
         Ok(ClientIp(ip))
     }
+}
+
+/// Warned once that the configured header was missing.
+static MISSING_TOLD: AtomicBool = AtomicBool::new(false);
+
+/// The headers proxies put a client's address in.
+const ADDRESS_HEADERS: &[&str] = &["cf-connecting-ip", "true-client-ip", "x-forwarded-for", "x-real-ip", "forwarded"];
+
+/// What the server sees of the caller's own address, and which address the
+/// rate limits use, for setting `CLIENT_IP_HEADER` on a new host. Shows
+/// nothing that isn't about the caller's own connection.
+pub async fn client_ip(ip: ClientIp, headers: HeaderMap) -> Json<Value> {
+    let seen: Map<String, Value> = ADDRESS_HEADERS
+        .iter()
+        .filter_map(|name| Some((name.to_string(), Value::String(headers.get(*name)?.to_str().ok()?.to_owned()))))
+        .collect();
+    Json(json!({ "rate_limited_as": ip.0, "headers": seen }))
 }
 
 #[cfg(test)]

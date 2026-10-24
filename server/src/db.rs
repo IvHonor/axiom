@@ -10,6 +10,9 @@ mod m007_notifications;
 mod m008_roles;
 mod m009_encryption;
 mod m010_login_keys;
+mod m011_email_codes;
+mod m012_support_tickets;
+mod m013_terms;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
 use sea_orm_migration::prelude::*;
@@ -30,6 +33,9 @@ impl MigratorTrait for Migrator {
             Box::new(m008_roles::Migration),
             Box::new(m009_encryption::Migration),
             Box::new(m010_login_keys::Migration),
+            Box::new(m011_email_codes::Migration),
+            Box::new(m012_support_tickets::Migration),
+            Box::new(m013_terms::Migration),
         ]
     }
 

@@ -26,8 +26,18 @@ async fn main() {
     let mut shared = Shared::new(db, config.jwt_secret.as_bytes());
     shared.client_ip_header = config.client_ip_header;
     shared.waitlist = config.waitlist;
+    shared.confirm_emails = true;
+    shared.require_terms = true;
     shared.admins = config.admins;
     shared.public_url = config.public_url;
+    if config.contact_email.is_none() {
+        tracing::warn!("CONTACT_EMAIL isn't set: the privacy notice has no address for questions about people's data");
+    }
+    shared.contact_email = config.contact_email;
+    if config.operator_name.is_none() {
+        tracing::warn!("OPERATOR_NAME isn't set: the privacy notice doesn't say who runs Axiom, which UK GDPR asks it to");
+    }
+    shared.operator_name = config.operator_name;
     if shared.waitlist && shared.admins.is_empty() {
         tracing::warn!("The waiting list is on but ADMIN_EMAILS isn't set: nobody can approve new accounts");
     }
@@ -46,6 +56,7 @@ async fn main() {
     }
     let state = AppState::from(shared);
     tokio::spawn(axiom_server::notify::run(state.clone()));
+    tokio::spawn(axiom_server::housekeeping::run(state.clone()));
 
     if let Err(err) = axiom_server::serve(listener, state).await {
         fail(&err.to_string());

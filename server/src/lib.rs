@@ -7,14 +7,18 @@ mod account;
 pub mod admin;
 mod digest_mail;
 pub mod auth;
+mod codes;
 pub mod config;
 pub mod db;
+pub mod housekeeping;
 mod entities;
 mod error;
 mod limit;
 pub mod notify;
 pub mod mail;
+mod privacy;
 mod spaces;
+mod support;
 pub mod sync;
 
 use std::collections::HashSet;
@@ -49,11 +53,21 @@ pub struct Shared {
     /// Off here so tests can sign up freely; `main` turns it on unless
     /// `WAITLIST=off`. The admin panel's setting, once saved, wins.
     pub waitlist: bool,
+    /// New accounts confirm their address with an emailed code before they
+    /// can sign in. Off here so tests can sign up freely; `main` turns it on.
+    pub confirm_emails: bool,
+    /// Sign-ups must agree to the current terms (`axiom_protocol::TERMS_VERSION`).
+    /// Off here so tests can sign up freely; `main` turns it on.
+    pub require_terms: bool,
     /// Emails (normalised) of the owners: admins who can't be demoted from the
     /// app, so the server always has one. They never wait themselves.
     pub admins: HashSet<String>,
     /// Where the server is reached from outside, for links in emails.
     pub public_url: String,
+    /// Where people write about their data, shown in the privacy notice.
+    pub contact_email: Option<String>,
+    /// Who runs this server (a person's or business's name), named in the privacy notice and terms.
+    pub operator_name: Option<String>,
     /// The admin panel's settings, read from the database at startup.
     pub settings: RwLock<admin::Settings>,
 }
@@ -68,8 +82,12 @@ impl Shared {
             reuse_grace: chrono::Duration::seconds(60),
             mailer: mail::Mailer::Log,
             waitlist: false,
+            confirm_emails: false,
+            require_terms: false,
             admins: HashSet::new(),
             public_url: "http://localhost:8787".into(),
+            contact_email: None,
+            operator_name: None,
             settings: RwLock::new(admin::Settings::default()),
         }
     }
@@ -138,6 +156,9 @@ impl std::ops::Deref for AppState {
 pub fn app(state: AppState) -> Router {
     Router::new()
         .route(routes::HEALTH, get(|| async { "ok" }))
+        .route(routes::PRIVACY, get(privacy::page))
+        .route(routes::TERMS, get(privacy::terms))
+        .route(routes::CLIENT_IP, get(limit::client_ip))
         .route(routes::SIGN_UP, post(auth::sign_up))
         .route(routes::SIGN_IN, post(auth::sign_in))
         .route(routes::REFRESH, post(auth::refresh))
@@ -145,6 +166,10 @@ pub fn app(state: AppState) -> Router {
         .route(routes::ME, get(auth::me))
         .route(routes::FORGOT_PASSWORD, post(auth::forgot_password))
         .route(routes::RESET_PASSWORD, post(auth::reset_password))
+        .route(routes::CONFIRM_EMAIL, post(auth::confirm_email))
+        .route(routes::SEND_CONFIRMATION, post(auth::send_confirmation))
+        .route(routes::APP_LOCK_CODE, post(account::app_lock_code))
+        .route(routes::APP_LOCK_CHECK, post(account::app_lock_check))
         .route(routes::ACCOUNT, delete(account::delete_account))
         .route(routes::CHANGE_PASSWORD, post(account::change_password))
         .route(routes::PROFILE, get(account::profile).put(account::update_profile))
@@ -169,6 +194,9 @@ pub fn app(state: AppState) -> Router {
         .route(routes::ADMIN_ACCOUNTS, get(admin::accounts))
         .route(routes::ADMIN_ACCOUNT, delete(admin::decline).patch(admin::update))
         .route(routes::ADMIN_SETTINGS, get(admin::settings).put(admin::save_settings))
+        .route(routes::SUPPORT, post(support::create))
+        .route(routes::ADMIN_TICKETS, get(support::list))
+        .route(routes::ADMIN_TICKET, patch(support::update))
         .route(routes::ADMIN_APPROVE, post(admin::approve))
         .route(routes::ADMIN_REVOKE, post(admin::revoke))
         .route(routes::NOTIFY_EMAILS, put(notify::plan))

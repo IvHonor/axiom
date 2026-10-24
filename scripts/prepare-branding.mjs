@@ -1,5 +1,5 @@
 // Preserve the supplied wordmarks and use vector geometry for the small symbol. Regenerate desktop
-// sizes with: npm run tauri -- icon src-tauri/icons/source/axiom.svg
+// sizes with: node scripts/generate-icons.mjs
 import { readFile, writeFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 
@@ -12,9 +12,9 @@ const mark = `<svg xmlns="http://www.w3.org/2000/svg" width="751" height="772" v
   <style>:root{color:#17191c}@media(prefers-color-scheme:dark){:root{color:#f2f2f4}}</style>
   <g fill="currentColor">${shapes}</g>
 </svg>\n`;
-// The narrow light edge keeps the transparent mark visible on a dark Windows taskbar.
+// A solid slate fill remains visible on light and dark taskbars without a pale halo.
 const icon = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="-45 -34 834 834">
-  <g fill="#17191c" stroke="#f3f4f6" stroke-width="16" stroke-linejoin="round" paint-order="stroke fill">${shapes}</g>
+  <g fill="#66758a">${shapes}</g>
 </svg>\n`;
 await writeFile(new URL("public/branding/mark.svg", root), mark);
 await writeFile(new URL("src-tauri/icons/source/axiom.svg", root), icon);

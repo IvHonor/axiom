@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, HardDriveDownload, KeyRound, LockKeyhole, LogOut, MonitorSmartphone, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Bell, HardDriveDownload, KeyRound, Lock, LockKeyhole, LogOut, MonitorSmartphone, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
 import { signOut, type AccountStatus } from "../lib/account";
 import { getAutoSync, linkData, setAutoSync, syncNow, type LinkChoice, type SyncStatus } from "../lib/sync";
+import { AppLockSettings } from "./account/AppLockSettings";
 import { ChangePassword } from "./account/ChangePassword";
 import { DeleteAccount } from "./account/DeleteAccount";
 import { DeviceList } from "./account/DeviceList";
 import { ExportData } from "./account/ExportData";
+import { HelpLinks } from "./account/HelpLinks";
 import { Encryption } from "./account/Encryption";
 import { ErrorNote } from "./account/fields";
 import { ProfileHeader } from "./account/ProfileHeader";
@@ -42,6 +44,7 @@ export function AccountPanel({ status, sync, onChange, extensions }: AccountPane
             </>
           )
         )}
+        <HelpLinks />
       </div>
     </aside>
   );
@@ -132,6 +135,10 @@ function SignedIn({ email, admin, sync, onChange, extensions }: { email: string;
 
       <Card icon={LockKeyhole} title="Encryption">
         <Encryption />
+      </Card>
+
+      <Card icon={Lock} title="PIN lock">
+        <AppLockSettings />
       </Card>
 
       <Card icon={MonitorSmartphone} title="Devices">

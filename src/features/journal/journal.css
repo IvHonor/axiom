@@ -603,8 +603,12 @@
   box-shadow: 0 0 0 1px var(--line);
 }
 
+/* Room for the picked day's outline, which sits 3px outside its square:
+   the scroll box clips anything past its edges. */
 .jr-heat-scroll {
   overflow-x: auto;
+  padding: 3px;
+  margin: -3px;
 }
 
 .jr-heat {

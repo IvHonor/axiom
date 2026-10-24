@@ -1,4 +1,5 @@
 mod account;
+mod app_lock;
 mod db;
 mod error;
 mod features;
@@ -31,7 +32,8 @@ pub fn run() {
         .manage(account::Account::new(account::SERVER_URL, Box::new(account::Keychain)))
         .manage(sync::SyncEngine::default())
         .manage(notifications::runner::Notifier::default())
-        .manage(vault::Vault::new(Box::new(vault::Keychain)))
+        .manage(vault::Vault::new(Box::new(vault::Keychain::VAULT)))
+        .manage(app_lock::AppLock::new(Box::new(vault::Keychain::APP_LOCK)))
         .manage(features::finance::rates::Rates::new(None))
         .manage(features::daily_plan::calendars::accounts::CalendarHub::new(
             Box::new(features::daily_plan::calendars::secrets::Keychain),
@@ -76,6 +78,8 @@ pub fn run() {
             acct::account_status,
             acct::account_sign_up,
             acct::account_sign_in,
+            acct::account_confirm_email,
+            acct::account_send_confirmation,
             acct::account_sign_out,
             acct::account_request_reset,
             acct::account_reset_password,
@@ -84,6 +88,9 @@ pub fn run() {
             acct::account_sign_out_device,
             acct::account_delete,
             acct::account_admin_accounts,
+            acct::account_admin_tickets,
+            acct::account_admin_ticket_solved,
+            acct::support_send,
             acct::account_admin_approve,
             acct::account_admin_decline,
             acct::account_admin_revoke,
@@ -109,6 +116,13 @@ pub fn run() {
             vault::commands::vault_recover,
             vault::commands::vault_start_over,
             vault::commands::vault_recovery_code,
+            app_lock::commands::app_lock_status,
+            app_lock::commands::app_lock_set,
+            app_lock::commands::app_lock_turn_off,
+            app_lock::commands::app_lock_unlock,
+            app_lock::commands::app_lock_lock,
+            app_lock::commands::app_lock_send_code,
+            app_lock::commands::app_lock_reset,
             fin::finance_state,
             fin::finance_setup,
             fin::finance_set_home_currency,

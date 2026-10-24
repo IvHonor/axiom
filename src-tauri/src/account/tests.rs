@@ -84,7 +84,7 @@ async fn an_account_from_before_login_keys_switches_over_on_sign_in() {
 
     let account = Account::new(&server, Box::new(Memory::default()));
     assert_eq!(account.sign_in("ada@example.com", "wrong horse").await.unwrap_err().to_string(), "Email or password is incorrect.");
-    assert_eq!(account.sign_in("ada@example.com", "correct horse").await.unwrap(), signed_in("ada@example.com"));
+    assert_eq!(account.sign_in("ada@example.com", "correct horse").await.unwrap(), now_signed_in("ada@example.com"));
     assert!(!password_itself_signs_in(&server, "ada@example.com", "correct horse").await, "the server has the login key now");
     account.sign_out().await;
     assert!(account.sign_in("ada@example.com", "correct horse").await.is_ok());
@@ -169,6 +169,64 @@ fn signed_in(email: &str) -> AccountStatus {
     AccountStatus::SignedIn { email: email.into(), admin: false }
 }
 
+fn now_signed_in(email: &str) -> SignInOutcome {
+    SignInOutcome::SignedIn { email: email.into(), admin: false }
+}
+
+#[tokio::test]
+async fn a_new_account_confirms_its_email_then_signs_in() {
+    let db = axiom_server::db::connect("sqlite::memory:").await.unwrap();
+    let outbox = Outbox::default();
+    let mut shared = Shared::new(db, b"test-secret-that-is-at-least-32-bytes");
+    shared.mailer = axiom_server::mail::Mailer::Memory(outbox.clone());
+    shared.confirm_emails = true;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let server = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(axiom_server::serve(listener, AppState::from(shared)));
+
+    let account = Account::new(&server, Box::new(Memory::default()));
+    let waiting = SignInOutcome::ConfirmEmail { email: "ada@example.com".into() };
+    assert_eq!(account.sign_up("Ada@example.com", "correct horse").await.unwrap(), waiting);
+    assert_eq!(account.status().await, AccountStatus::SignedOut);
+    let code = emailed_code(&outbox).await;
+
+    let err = account.confirm_email("ada@example.com", "WRONG-CODE", "correct horse").await.unwrap_err();
+    assert!(err.to_string().contains("isn't right"), "{err}");
+    assert_eq!(account.confirm_email("ada@example.com", &code, "correct horse").await.unwrap(), now_signed_in("ada@example.com"));
+    assert_eq!(account.status().await, signed_in("ada@example.com"));
+}
+
+#[tokio::test]
+async fn support_messages_go_out_signed_in_or_not() {
+    let (server, outbox) = start_server_with_mail().await;
+    let account = Account::new(&server, Box::new(Memory::default()));
+    let err = account.contact_support("bug", "Stuck", "It's stuck.", None, "0.5.1").await.unwrap_err();
+    assert!(err.to_string().contains("email address"), "{err}");
+    assert_eq!(account.contact_support("bug", "Stuck", "It's stuck.", Some("bob@example.com".into()), "0.5.1").await.unwrap().len(), 8);
+
+    account.sign_up("ada@example.com", "correct horse").await.unwrap();
+    let reference = account.contact_support("question", "Hi", "A question.", None, "0.5.1").await.unwrap();
+    for _ in 0..100 {
+        if outbox.lock().unwrap().iter().any(|e| e.to == "ada@example.com") {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let receipt = outbox.lock().unwrap().iter().find(|e| e.to == "ada@example.com").cloned().expect("a receipt");
+    assert!(receipt.text.contains(&reference));
+}
+
+#[tokio::test]
+async fn an_unlock_code_is_emailed_to_the_account() {
+    let (server, outbox) = start_server_with_mail().await;
+    let account = Account::new(&server, Box::new(Memory::default()));
+    account.sign_up("ada@example.com", "correct horse").await.unwrap();
+    account.send_unlock_code().await.unwrap();
+    let code = emailed_code(&outbox).await;
+    assert!(account.check_unlock_code("AAAA-AAAA").await.is_err());
+    account.check_unlock_code(&code).await.unwrap();
+}
+
 #[tokio::test]
 async fn sign_up_is_remembered_across_launches_until_sign_out() {
     let server = start_server().await;
@@ -178,7 +236,7 @@ async fn sign_up_is_remembered_across_launches_until_sign_out() {
     assert_eq!(account.status().await, AccountStatus::SignedOut);
     assert_eq!(
         account.sign_up(" Ada@Example.com", "correct horse").await.unwrap(),
-        SignUpOutcome::SignedIn { email: "ada@example.com".into(), admin: false }
+        SignInOutcome::SignedIn { email: "ada@example.com".into(), admin: false }
     );
 
     // Next launch: still signed in, with no network needed to know it.
@@ -203,7 +261,7 @@ async fn sign_in_shows_the_servers_reason_when_it_fails() {
     assert_eq!(err.to_string(), "Email or password is incorrect.");
     assert_eq!(account.status().await, AccountStatus::SignedOut);
 
-    assert_eq!(account.sign_in("ada@example.com", "correct horse").await.unwrap(), signed_in("ada@example.com"));
+    assert_eq!(account.sign_in("ada@example.com", "correct horse").await.unwrap(), now_signed_in("ada@example.com"));
 }
 
 #[tokio::test]
@@ -261,11 +319,11 @@ async fn the_waiting_list_from_the_app() {
 
     let admin = Account::new(&server, Box::new(Memory::default()));
     let outcome = admin.sign_up("boss@example.com", "correct horse").await.unwrap();
-    assert_eq!(outcome, SignUpOutcome::SignedIn { email: "boss@example.com".into(), admin: true });
+    assert_eq!(outcome, SignInOutcome::SignedIn { email: "boss@example.com".into(), admin: true });
     assert_eq!(admin.status().await, AccountStatus::SignedIn { email: "boss@example.com".into(), admin: true });
 
     let ada = Account::new(&server, Box::new(Memory::default()));
-    assert_eq!(ada.sign_up("ada@example.com", "correct horse").await.unwrap(), SignUpOutcome::Waitlisted { email: "ada@example.com".into() });
+    assert_eq!(ada.sign_up("ada@example.com", "correct horse").await.unwrap(), SignInOutcome::Waitlisted { email: "ada@example.com".into() });
     assert_eq!(ada.status().await, AccountStatus::SignedOut, "nothing to remember while waiting");
     assert!(ada.sign_in("ada@example.com", "correct horse").await.unwrap_err().to_string().contains("waiting list"));
     assert!(ada.admin_accounts().await.is_err());
@@ -273,7 +331,7 @@ async fn the_waiting_list_from_the_app() {
     let waiting = admin.admin_accounts().await.unwrap();
     assert_eq!((waiting[0].email.as_str(), waiting[0].approved_at), ("ada@example.com", None));
     admin.approve(&waiting[0].id).await.unwrap();
-    assert_eq!(ada.sign_in("ada@example.com", "correct horse").await.unwrap(), signed_in("ada@example.com"));
+    assert_eq!(ada.sign_in("ada@example.com", "correct horse").await.unwrap(), now_signed_in("ada@example.com"));
 }
 
 #[tokio::test]

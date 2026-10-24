@@ -56,6 +56,10 @@ jobs:
           releaseName: Axiom ${{ github.ref_name }}
           releaseBody: |
             **To install on Windows**, download the file ending in `_x64-setup.exe` below and run it. If you already have Axiom, it offers this update by itself.
+
+            **"Windows protected your PC"?** Axiom's installer isn't code-signed yet, so Windows doesn't recognise it. Choose **More info**, then **Run anyway**. After that, updates install from inside Axiom.
+
+            Found a problem, have a question or an idea? Use the **support button** (the lifebuoy at the top right of Axiom), and we'll reply by email.
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: true

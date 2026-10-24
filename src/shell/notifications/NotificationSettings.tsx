@@ -39,6 +39,9 @@ export function NotificationSettings({ extensions, signedIn, compact, quiet }: {
           </div>
         ))}
       {!signedIn && shown.some((k) => k.email) && <p className="field-hint notify-note">Sign in to your Axiom account to get emails.</p>}
+      {signedIn && shown.some((k) => k.email) && (
+        <p className="field-hint notify-note">Emails are written by the Axiom server, so what's in them isn't end-to-end encrypted.</p>
+      )}
       {error && <p className="account-error">{error}</p>}
     </div>
   );

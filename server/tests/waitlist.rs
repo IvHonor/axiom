@@ -57,7 +57,7 @@ async fn signing_up_joins_the_waiting_list_until_an_admin_approves() {
 
     let (status, body) = post(&app, routes::SIGN_UP, credentials("ada@example.com", "correct horse")).await;
     assert_eq!(status, StatusCode::ACCEPTED);
-    assert_eq!(body, json!({ "email": "ada@example.com" }), "no session while waiting");
+    assert_eq!(body, json!({ "email": "ada@example.com", "confirm_email": false }), "no session while waiting");
     let told = wait_for_email(&outbox, ADMIN).await;
     assert!(told.subject.contains("ada@example.com"), "the admin hears about it");
 

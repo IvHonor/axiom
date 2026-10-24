@@ -6,7 +6,7 @@ use axiom_protocol::{
     AccountChange, AdminAccount, AdminSettings, Adopt, Adopted, ApiError, ChangePassword, ChangeRole, ConfirmPassword, CreateSpace, Credentials, DeleteAccount, Device,
     EncryptionKey, ForgotPassword,
     Invite, Members, MyInvite, NewInvite, Profile, PullResponse, PushRequest, PushResponse, RefreshRequest, ResetPassword, Role, Session, Space,
-    Waitlisted, route, routes,
+    CheckCode, ConfirmEmail, NewTicket, Pending, Ticket, TicketChange, TicketSent, route, routes,
 };
 use axiom_protocol::notify::{PlanEmails, PlanResult};
 use serde::Serialize;
@@ -20,11 +20,12 @@ pub struct Client {
     http: reqwest::Client,
 }
 
-/// What signing up gets you.
+/// What signing up or in gets you.
 pub enum SignUp {
     Session(Session),
-    /// The account exists but waits for an admin's approval.
-    Waitlisted(Waitlisted),
+    /// The account exists but can't sign in yet: its address isn't confirmed,
+    /// or it waits for an admin's approval.
+    Pending(Pending),
 }
 
 #[derive(Debug)]
@@ -71,19 +72,40 @@ impl Client {
         !self.base.is_empty()
     }
 
-    /// A session, or (status 202) a place on the waiting list.
+    /// A session, or (status 202) not yet.
     pub async fn sign_up(&self, credentials: &Credentials) -> Result<SignUp, ClientError> {
-        let sent = self.http.post(self.url(routes::SIGN_UP)).json(credentials).send().await;
+        self.session_or_pending(routes::SIGN_UP, credentials).await
+    }
+
+    pub async fn sign_in(&self, credentials: &Credentials) -> Result<SignUp, ClientError> {
+        self.session_or_pending(routes::SIGN_IN, credentials).await
+    }
+
+    async fn session_or_pending(&self, path: &str, credentials: &Credentials) -> Result<SignUp, ClientError> {
+        let sent = self.http.post(self.url(path)).json(credentials).send().await;
         let response = check(sent.map_err(|_| ClientError::Offline)?).await?;
         if response.status() == reqwest::StatusCode::ACCEPTED {
-            parse(response).await.map(SignUp::Waitlisted)
+            parse(response).await.map(SignUp::Pending)
         } else {
             parse(response).await.map(SignUp::Session)
         }
     }
 
-    pub async fn sign_in(&self, credentials: &Credentials) -> Result<Session, ClientError> {
-        self.post(routes::SIGN_IN, credentials).await
+    pub async fn confirm_email(&self, body: &ConfirmEmail) -> Result<(), ClientError> {
+        empty(self.http.post(self.url(routes::CONFIRM_EMAIL)).json(body).send().await).await
+    }
+
+    pub async fn send_confirmation(&self, email: &str) -> Result<(), ClientError> {
+        let body = ForgotPassword { email: email.into() };
+        empty(self.http.post(self.url(routes::SEND_CONFIRMATION)).json(&body).send().await).await
+    }
+
+    pub async fn send_unlock_code(&self, token: &str) -> Result<(), ClientError> {
+        empty(self.http.post(self.url(routes::APP_LOCK_CODE)).bearer_auth(token).send().await).await
+    }
+
+    pub async fn check_unlock_code(&self, token: &str, body: &CheckCode) -> Result<(), ClientError> {
+        empty(self.http.post(self.url(routes::APP_LOCK_CHECK)).bearer_auth(token).json(body).send().await).await
     }
 
     pub async fn refresh(&self, refresh_token: &str) -> Result<Session, ClientError> {
@@ -244,6 +266,23 @@ impl Client {
 
     pub async fn admin_update(&self, token: &str, id: &str, change: &AccountChange) -> Result<AdminAccount, ClientError> {
         read(self.http.patch(self.url(&route(routes::ADMIN_ACCOUNT, &[("id", id)]))).bearer_auth(token).json(change).send().await).await
+    }
+
+    /// A message to support, as the account when `token` is given.
+    pub async fn support(&self, token: Option<&str>, ticket: &NewTicket) -> Result<TicketSent, ClientError> {
+        let mut request = self.http.post(self.url(routes::SUPPORT)).json(ticket);
+        if let Some(token) = token {
+            request = request.bearer_auth(token);
+        }
+        read(request.send().await).await
+    }
+
+    pub async fn admin_tickets(&self, token: &str) -> Result<Vec<Ticket>, ClientError> {
+        read(self.http.get(self.url(routes::ADMIN_TICKETS)).bearer_auth(token).send().await).await
+    }
+
+    pub async fn admin_ticket(&self, token: &str, id: &str, change: &TicketChange) -> Result<Ticket, ClientError> {
+        read(self.http.patch(self.url(&route(routes::ADMIN_TICKET, &[("id", id)]))).bearer_auth(token).json(change).send().await).await
     }
 
     pub async fn admin_settings(&self, token: &str) -> Result<AdminSettings, ClientError> {

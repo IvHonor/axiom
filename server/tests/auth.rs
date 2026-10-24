@@ -56,6 +56,23 @@ async fn wrong_password_and_unknown_email_look_the_same() {
 }
 
 #[tokio::test]
+async fn signing_up_needs_the_current_terms_agreed_to() {
+    let app = server_with(|s| s.require_terms = true).await;
+    let with = |terms: Option<&str>| {
+        let mut body = credentials("ada@example.com", "correct horse");
+        if let Some(terms) = terms {
+            body["accepted_terms"] = json!(terms);
+        }
+        body
+    };
+    let (status, body) = post(&app, routes::SIGN_UP, with(None)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["message"].as_str().unwrap().contains("update Axiom"), "older apps are told why");
+    assert_eq!(post(&app, routes::SIGN_UP, with(Some("2001-01-01"))).await.0, StatusCode::BAD_REQUEST, "an old version doesn't count");
+    assert_eq!(post(&app, routes::SIGN_UP, with(Some(axiom_protocol::TERMS_VERSION))).await.0, StatusCode::OK);
+}
+
+#[tokio::test]
 async fn a_password_from_before_login_keys_is_swapped_for_one() {
     let app = server().await;
     let key = |c: &str| format!("{}{}", axiom_protocol::LOGIN_KEY_PREFIX, c.repeat(43));

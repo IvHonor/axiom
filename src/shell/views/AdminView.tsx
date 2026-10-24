@@ -13,7 +13,9 @@ import {
   type AdminSettings,
   type Permission,
 } from "../../lib/account";
+import { adminTickets, type Ticket } from "../../lib/support";
 import { ErrorNote, useAction } from "../account/fields";
+import { AdminSupport } from "./AdminSupport";
 import { ago } from "../format";
 import { Avatar } from "../ui/Avatar";
 import { ConfirmButton } from "../ui/ConfirmButton";
@@ -21,21 +23,23 @@ import { Panel } from "../ui/Panel";
 import { Switch } from "../ui/Switch";
 import { useNow } from "../useSync";
 
-type Tab = "people" | "waiting" | "settings";
+type Tab = "people" | "waiting" | "support" | "settings";
 
 /** The admin panel: everyone with an account, their roles and permissions,
- * who's waiting to be let in, and the server's settings. */
+ * who's waiting to be let in, messages to support, and the server's settings. */
 export function AdminView({ email, admin }: { email: string | null; admin: boolean }) {
   const [tab, setTab] = useState<Tab>("people");
   const [accounts, setAccounts] = useState<AdminAccount[] | null>(null);
   const [settings, setSettings] = useState<AdminSettings | null>(null);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const { busy, error, run } = useAction();
 
   const load = useCallback(() => {
     void run(async () => {
-      const [list, saved] = await Promise.all([adminAccounts(), adminSettings()]);
+      const [list, saved, support] = await Promise.all([adminAccounts(), adminSettings(), adminTickets()]);
       setAccounts(list);
       setSettings(saved);
+      setTickets(support);
     });
     // `run` is recreated each render; loading once is enough.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,6 +61,7 @@ export function AdminView({ email, admin }: { email: string | null; admin: boole
   const waiting = accounts?.filter((a) => !a.approvedAt) ?? [];
   const people = accounts?.filter((a) => a.approvedAt) ?? [];
   const admins = people.filter((a) => a.role !== "member").length;
+  const openTickets = tickets.filter((t) => !t.solvedAt).length;
   /** Runs a change, then puts the changed account in the list. */
   const change = (work: () => Promise<AdminAccount | void>) =>
     run(async () => {
@@ -89,12 +94,14 @@ export function AdminView({ email, admin }: { email: string | null; admin: boole
           [
             ["people", "People"],
             ["waiting", "Waiting list"],
+            ["support", "Support"],
             ["settings", "Settings"],
           ] as const
         ).map(([id, label]) => (
           <button key={id} className={`pb-tab${tab === id ? " is-active" : ""}`} onClick={() => setTab(id)}>
             {label}
             {id === "waiting" && waiting.length > 0 && <span className="admin-count">{waiting.length}</span>}
+            {id === "support" && openTickets > 0 && <span className="admin-count">{openTickets}</span>}
           </button>
         ))}
       </nav>
@@ -106,6 +113,17 @@ export function AdminView({ email, admin }: { email: string | null; admin: boole
         <People people={people} me={email} busy={busy} onChange={change} />
       ) : tab === "waiting" ? (
         <Waiting waiting={waiting} waitlist={settings.waitlist} busy={busy} onChange={change} onSettings={() => setTab("settings")} />
+      ) : tab === "support" ? (
+        <AdminSupport
+          tickets={tickets}
+          busy={busy}
+          onChange={(work) =>
+            void run(async () => {
+              const changed = await work();
+              setTickets((all) => all.map((t) => (t.id === changed.id ? changed : t)));
+            })
+          }
+        />
       ) : (
         <ServerSettings settings={settings} busy={busy} onSave={(next) => run(async () => setSettings(await saveAdminSettings(next)))} />
       )}

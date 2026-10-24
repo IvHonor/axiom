@@ -5,12 +5,25 @@ import { invoke } from "@tauri-apps/api/core";
 /** Mirrors `AccountStatus` in src-tauri/src/account/mod.rs. `admin`: runs the server's waiting list. */
 export type AccountStatus = { state: "signed_out" } | { state: "signed_in"; email: string; admin: boolean };
 
-/** Mirrors `SignUpOutcome`: signed in, or waiting for an admin to approve the account. */
-export type SignUpOutcome = Extract<AccountStatus, { state: "signed_in" }> | { state: "waitlisted"; email: string };
+/**
+ * Mirrors `SignInOutcome`: signed in, waiting for an admin to approve the account,
+ * or waiting for the code emailed to confirm the address.
+ */
+export type SignInOutcome =
+  | Extract<AccountStatus, { state: "signed_in" }>
+  | { state: "waitlisted"; email: string }
+  | { state: "confirm_email"; email: string };
 
 export const getAccountStatus = () => invoke<AccountStatus>("account_status");
-export const signUp = (email: string, password: string) => invoke<SignUpOutcome>("account_sign_up", { email, password });
-export const signIn = (email: string, password: string) => invoke<AccountStatus>("account_sign_in", { email, password });
+/** `acceptedTerms`: they ticked the box agreeing to the terms of use. */
+export const signUp = (email: string, password: string, acceptedTerms: boolean) =>
+  invoke<SignInOutcome>("account_sign_up", { email, password, acceptedTerms });
+export const signIn = (email: string, password: string) => invoke<SignInOutcome>("account_sign_in", { email, password });
+/** Confirms the address with the emailed code, then signs in with the password. */
+export const confirmEmail = (email: string, code: string, password: string) =>
+  invoke<SignInOutcome>("account_confirm_email", { email, code, password });
+/** Emails a new confirmation code. */
+export const sendConfirmation = (email: string) => invoke<void>("account_send_confirmation", { email });
 /** Mirrors `DeviceView` in src-tauri/src/account/mod.rs. Times are ISO strings. */
 export interface Device {
   id: string;

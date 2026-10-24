@@ -1,0 +1,58 @@
+# Backs up the account database every night, kept for 30 days as an
+# encrypted workflow artifact. Needs two repository secrets:
+#   BACKUP_DATABASE_URL  Neon's connection string (the one Render uses).
+#   BACKUP_PASSPHRASE    A long random passphrase. The repository is public,
+#                        so anyone signed in to GitHub can download its
+#                        artifacts: the dump is encrypted with this first.
+#                        Keep a copy somewhere safe; without it a backup
+#                        can't be opened.
+#
+# To restore, download the artifact (Actions -> Back up the database -> a run),
+# unzip it, then:
+#   openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in axiom-db.dump.enc -out axiom-db.dump -pass pass:'YOUR PASSPHRASE'
+#   pg_restore --clean --if-exists --no-owner -d "postgresql://..." axiom-db.dump
+name: Back up the database
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check the secrets are set
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Set the BACKUP_DATABASE_URL and BACKUP_PASSPHRASE repository secrets (see the top of this file)."
+            exit 1
+          fi
+
+      # The newest pg_dump reads every older server version, so Neon
+      # upgrading Postgres doesn't break this.
+      - name: Dump and encrypt
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          docker run --rm -e DATABASE_URL postgres:18 sh -c 'pg_dump --format=custom --no-owner "$DATABASE_URL"' > axiom-db.dump
+          test -s axiom-db.dump
+          openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -in axiom-db.dump -out axiom-db.dump.enc -pass env:BACKUP_PASSPHRASE
+          rm axiom-db.dump
+          echo "Backed up $(du -h axiom-db.dump.enc | cut -f1)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: axiom-db-${{ github.run_number }}
+          path: axiom-db.dump.enc
+          retention-days: 30
+          if-no-files-found: error

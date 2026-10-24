@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Check, Search } from "lucide-react";
 import { EXTENSIONS, isComingSoon } from "../extensions";
 import type { ExtensionManifest } from "../extensions/types";
 import { useLabels } from "./theme/ThemeProvider";
@@ -70,13 +70,14 @@ export function ExtensionsPanel({
   const available = matches.filter((ext) => !ext.builtIn && !isComingSoon(ext) && !installedIds.includes(ext.id));
   const comingSoon = matches.filter(isComingSoon);
 
-  const meta = (ext: ExtensionManifest) => {
-    const parts = isComingSoon(ext) ? [] : [`v${ext.version}`];
-    if (ext.themes) parts.push(label(`${ext.themes.length} themes`));
-    return parts.join(` ${sep} `);
-  };
-
-  const card = (ext: ExtensionManifest, canInstall: boolean) => (
+  const card = (ext: ExtensionManifest, canInstall: boolean) => {
+    const soon = isComingSoon(ext);
+    const on = isOn(ext);
+    const installed = ext.builtIn || installedIds.includes(ext.id);
+    const state = soon ? "Coming soon" : ext.builtIn
+      ? `Built in ${sep} ${ext.required ? "Always on" : on ? "On" : "Off"}`
+      : installed ? `Installed${on ? "" : ` ${sep} Off`}` : "Available";
+    return (
     <li key={ext.id} className={ext.id === selectedId ? "ext-item is-selected" : "ext-item"}>
       <button
         className="ext-main"
@@ -93,32 +94,36 @@ export function ExtensionsPanel({
           <span className="ext-name">{ext.name}</span>
           <span className="ext-desc">{ext.description}</span>
           <span className="ext-meta">
-            <span className={`ext-kind is-${kindOf(ext)}`}>{kindOf(ext) === "theme" ? "Theme" : "Area"}</span>
-            {isComingSoon(ext) && <span className="ext-kind is-soon">Coming soon</span>}
-            {ext.builtIn && !isOn(ext) && <span className="ext-kind is-off">Off</span>}
             <Publisher name={ext.publisher} short />
-            {meta(ext) && <span>{meta(ext)}</span>}
+            {!soon && <><span className="ext-meta-sep" aria-hidden="true">{sep}</span><span>v{ext.version}</span></>}
+            <span className="ext-meta-sep" aria-hidden="true">{sep}</span>
+            <span>{ext.themes ? label(`${ext.themes.length} ${ext.themes.length === 1 ? "theme" : "themes"}`) : label("Area")}</span>
           </span>
           <ExtensionPalette ext={ext} />
         </span>
       </button>
+      <div className="ext-footer">
+        <span className={`ext-state${installed && on && !soon ? " is-on" : ""}`}>
+          {installed && on && !soon && <Check size={12} strokeWidth={1.75} aria-hidden="true" />}
+          {state}
+        </span>
       {canInstall && (
         <button className="btn btn-sm" onClick={() => onInstall(ext.id)}>
           Install
         </button>
       )}
       {ext.builtIn && !ext.required && (
-        <span className="ext-switch">
           <Switch
-            on={isOn(ext)}
-            label={`${ext.name}: ${isOn(ext) ? "on" : "off"}`}
-            title={isOn(ext) ? `Switch ${ext.name} off` : `Switch ${ext.name} on`}
+            on={on}
+            label={`${ext.name}: ${on ? "on" : "off"}`}
+            title={on ? `Switch ${ext.name} off` : `Switch ${ext.name} on`}
             onChange={(on) => onEnabledChange(ext.id, on)}
           />
-        </span>
       )}
+      </div>
     </li>
-  );
+    );
+  };
 
   const empty = (text: string) => <p className="sidebar-empty">{q || kind !== "all" ? "No matches." : text}</p>;
 

@@ -12,6 +12,12 @@ use serde::{Deserialize, Serialize};
 /// older versions of the app keep working.
 pub mod routes {
     pub const HEALTH: &str = "/health";
+    /// The privacy notice, a web page.
+    pub const PRIVACY: &str = "/privacy";
+    /// The terms of use, a web page.
+    pub const TERMS: &str = "/terms";
+    /// `GET` what the server sees of your address (for setting up rate limits behind a proxy).
+    pub const CLIENT_IP: &str = "/v1/client-ip";
     pub const SIGN_UP: &str = "/v1/auth/sign-up";
     pub const SIGN_IN: &str = "/v1/auth/sign-in";
     pub const REFRESH: &str = "/v1/auth/refresh";
@@ -19,6 +25,14 @@ pub mod routes {
     pub const ME: &str = "/v1/me";
     pub const FORGOT_PASSWORD: &str = "/v1/auth/forgot-password";
     pub const RESET_PASSWORD: &str = "/v1/auth/reset-password";
+    /// `POST` confirms the address with the code emailed at sign-up (`ConfirmEmail`).
+    pub const CONFIRM_EMAIL: &str = "/v1/auth/confirm-email";
+    /// `POST` emails a new confirmation code (`ForgotPassword`'s body).
+    pub const SEND_CONFIRMATION: &str = "/v1/auth/confirm-email/send";
+    /// `POST` emails a code that turns off the app lock, for a forgotten PIN.
+    pub const APP_LOCK_CODE: &str = "/v1/account/app-lock/code";
+    /// `POST` checks that code (`CheckCode`).
+    pub const APP_LOCK_CHECK: &str = "/v1/account/app-lock/check";
     /// `DELETE` deletes the account and everything synced to it.
     pub const ACCOUNT: &str = "/v1/account";
     pub const CHANGE_PASSWORD: &str = "/v1/account/password";
@@ -70,6 +84,12 @@ pub mod routes {
     pub const ADMIN_REVOKE: &str = "/v1/admin/accounts/{id}/revoke";
     /// `GET` and `PUT` the server's settings (`AdminSettings`).
     pub const ADMIN_SETTINGS: &str = "/v1/admin/settings";
+    /// `POST` a message to support (`NewTicket`). Signing in is optional.
+    pub const SUPPORT: &str = "/v1/support";
+    /// `GET` support tickets, for admins: open ones first.
+    pub const ADMIN_TICKETS: &str = "/v1/admin/tickets";
+    /// `PATCH` marks a ticket solved, or open again (`TicketChange`).
+    pub const ADMIN_TICKET: &str = "/v1/admin/tickets/{id}";
 
     /// `PUT` replaces the emails planned for this account (see `notify`).
     pub const NOTIFY_EMAILS: &str = "/v1/notifications/emails";
@@ -302,7 +322,14 @@ pub struct Credentials {
     /// See `PLAIN_PASSWORD`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub login_key: Option<String>,
+    /// `SIGN_UP` only: the `TERMS_VERSION` the person agreed to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accepted_terms: Option<String>,
 }
+
+/// The current version of the terms of use and privacy notice. Sign-up
+/// sends it to say the person agreed; change it when they change materially.
+pub const TERMS_VERSION: &str = "2026-10-24";
 
 /// Body of `REFRESH` and `SIGN_OUT`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -333,11 +360,28 @@ pub struct User {
     pub admin: bool,
 }
 
-/// What `SIGN_UP` returns, with status 202, while sign-ups go through the
-/// waiting list: the account exists but can't sign in until an admin approves it.
+/// What `SIGN_UP` and `SIGN_IN` return, with status 202, for an account that
+/// can't sign in yet: its address isn't confirmed (a code was just emailed,
+/// for `CONFIRM_EMAIL`), or it waits for an admin to approve it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Waitlisted {
+pub struct Pending {
     pub email: String,
+    #[serde(default)]
+    pub confirm_email: bool,
+}
+
+/// Body of `CONFIRM_EMAIL`. Confirming doesn't sign in: sign in after it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfirmEmail {
+    pub email: String,
+    /// As emailed, e.g. `K7Q2-M9XD`. Case, spaces and dashes don't matter.
+    pub code: String,
+}
+
+/// Body of `APP_LOCK_CHECK`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckCode {
+    pub code: String,
 }
 
 /// What an account is to the server.
@@ -395,7 +439,8 @@ pub struct AdminSettings {
     pub default_permissions: Vec<String>,
 }
 
-/// Body of `FORGOT_PASSWORD`. The server emails a code if the account exists.
+/// Body of `FORGOT_PASSWORD` and `SEND_CONFIRMATION`. The server emails a
+/// code if the account exists (and, for a confirmation, isn't confirmed yet).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgotPassword {
     pub email: String,
@@ -515,6 +560,60 @@ pub fn check_email(email: &str) -> Result<(), &'static str> {
         && matches!(email.split_once('@'), Some((user, domain))
             if !user.is_empty() && domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.') && !domain.contains('@'));
     if ok { Ok(()) } else { Err("Enter a valid email address.") }
+}
+
+/// What a support message is about: (id, label).
+pub const TICKET_KINDS: &[(&str, &str)] =
+    &[("question", "A question"), ("bug", "Something's broken"), ("idea", "An idea"), ("account", "My account"), ("other", "Something else")];
+pub const MAX_TICKET_SUBJECT: usize = 120;
+pub const MAX_TICKET_MESSAGE: usize = 5000;
+
+/// Body of `SUPPORT`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewTicket {
+    /// One of `TICKET_KINDS`.
+    pub kind: String,
+    pub subject: String,
+    pub message: String,
+    /// Where to reply. Ignored when signed in: the account's address is used.
+    #[serde(default)]
+    pub email: Option<String>,
+    pub app_version: String,
+}
+
+/// What `SUPPORT` returns: the reference to quote, e.g. `A1B2C3D4`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TicketSent {
+    pub reference: String,
+}
+
+/// A support ticket, for admins.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Ticket {
+    pub id: String,
+    pub reference: String,
+    pub email: String,
+    /// Sent while signed in to that account (so the address is confirmed).
+    pub signed_in: bool,
+    pub kind: String,
+    pub subject: String,
+    pub message: String,
+    pub app_version: String,
+    pub created_at: DateTime<Utc>,
+    /// None while open.
+    pub solved_at: Option<DateTime<Utc>>,
+}
+
+/// Body of `PATCH ADMIN_TICKET`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TicketChange {
+    pub solved: bool,
+}
+
+/// The short reference people quote for a ticket.
+pub fn ticket_reference(id: &str) -> String {
+    let hex: String = id.chars().filter(char::is_ascii_hexdigit).collect();
+    hex[hex.len().saturating_sub(8)..].to_uppercase()
 }
 
 /// Returns the message to show if the password is too short or too long.

@@ -1,6 +1,6 @@
 //! Managing a signed-in account: its devices, its password, and deleting it.
 
-use axiom_protocol::{ChangePassword, DeleteAccount, Device, EncryptionKey, MAX_DISPLAY_NAME_LEN, MAX_WRAPPED_KEY_LEN, Profile, check_avatar, check_password, is_login_key};
+use axiom_protocol::{ChangePassword, CheckCode, DeleteAccount, Device, EncryptionKey, MAX_DISPLAY_NAME_LEN, MAX_WRAPPED_KEY_LEN, Profile, check_avatar, check_password, is_login_key};
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -9,7 +9,8 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, ModelTrait, QueryFilte
 
 use crate::AppState;
 use crate::auth::{AuthUser, confirm_password, password, revoke_sessions};
-use crate::entities::{password_reset, session, sync_record, user};
+use crate::codes::{self, Purpose};
+use crate::entities::{email_code, password_reset, session, sync_record, user};
 use crate::error::ApiError;
 
 /// Every device signed in to the account, most recently active first.
@@ -90,6 +91,7 @@ pub async fn delete_account(State(s): State<AppState>, auth: AuthUser, Json(body
     crate::notify::forget_user(&txn, &account.id).await?;
     sync_record::Entity::delete_many().filter(sync_record::Column::UserId.eq(&account.id)).exec(&txn).await?;
     password_reset::Entity::delete_many().filter(password_reset::Column::UserId.eq(&account.id)).exec(&txn).await?;
+    email_code::Entity::delete_many().filter(email_code::Column::UserId.eq(&account.id)).exec(&txn).await?;
     session::Entity::delete_many().filter(session::Column::UserId.eq(&account.id)).exec(&txn).await?;
     account.delete(&txn).await?;
     txn.commit().await?;
@@ -138,6 +140,22 @@ pub async fn set_encryption_key(State(s): State<AppState>, auth: AuthUser, Json(
     let mut active: user::ActiveModel = current_user(&s, &auth).await?.into();
     active.encryption_key = Set(body.wrapped);
     active.update(&s.db).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Emails a code that turns off the app lock on a device, for a forgotten PIN.
+pub async fn app_lock_code(State(s): State<AppState>, auth: AuthUser) -> Result<StatusCode, ApiError> {
+    let account = current_user(&s, &auth).await?;
+    if !s.limits.code_requests.hit(&format!("unlock:{}", account.id)) {
+        return Err(ApiError::too_many("You've asked for several codes already. Check your inbox and spam folder, or try again in an hour."));
+    }
+    codes::send(&s, &account, Purpose::UnlockApp).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Checks (and uses up) that code.
+pub async fn app_lock_check(State(s): State<AppState>, auth: AuthUser, Json(body): Json<CheckCode>) -> Result<StatusCode, ApiError> {
+    codes::check(&s, &auth.user_id, Purpose::UnlockApp, &body.code).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

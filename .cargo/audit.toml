@@ -5,4 +5,8 @@ ignore = [
     # jsonwebtoken's crypto backend, but Axiom only signs tokens with HMAC
     # (HS256) and never runs RSA code. No fixed version exists upstream.
     "RUSTSEC-2023-0071",
+    # Timing variability in crypto-bigint 0.5, under jsonwebtoken's elliptic
+    # curve backends (p256, p384). Same story: HS256 never runs that code, and
+    # jsonwebtoken's crypto backend can't be had without them.
+    "RUSTSEC-2026-0387",
 ]

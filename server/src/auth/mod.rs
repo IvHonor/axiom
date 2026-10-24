@@ -4,20 +4,21 @@ pub mod password;
 pub mod tokens;
 
 use axiom_protocol::{
-    Credentials, ForgotPassword, PLAIN_PASSWORD, RefreshRequest, ResetPassword, Session, User, Waitlisted, check_email, check_password,
-    is_login_key, normalize_code, normalize_email,
+    ConfirmEmail, Credentials, ForgotPassword, Pending, PLAIN_PASSWORD, RefreshRequest, ResetPassword, Session, User, check_email, check_password,
+    TERMS_VERSION, is_login_key, normalize_code, normalize_email,
 };
 use axum::Json;
 use axum::extract::{FromRequestParts, State};
 use axum::http::header::AUTHORIZATION;
 use axum::http::request::Parts;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 use sea_orm::sea_query::{Condition, Expr};
 use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set, SqlErr, TransactionTrait};
 
 use crate::AppState;
+use crate::codes::{self, Purpose};
 use crate::entities::{new_id, password_reset, session, user};
 use crate::error::ApiError;
 use crate::limit::ClientIp;
@@ -29,27 +30,46 @@ const SIGNED_OUT: &str = "You've been signed out. Sign in again to continue.";
 pub(crate) const WAITING: &str =
     "Your account is on the waiting list. We'll email you as soon as it's approved, and then you can sign in.";
 
-/// Creates an account. With the waiting list on, it can't sign in until an
-/// admin approves it: the answer is then 202 with `Waitlisted` rather than a
-/// session, and the admins are emailed.
+/// Creates an account. It can't sign in until its address is confirmed with
+/// an emailed code (202 with `Pending`), and, with the waiting list on, until
+/// an admin approves it (202 too, and the admins are emailed).
 pub async fn sign_up(State(s): State<AppState>, ip: ClientIp, Json(body): Json<Credentials>) -> Result<Response, ApiError> {
     s.limits.check_ip(&ip)?;
     let email = normalize_email(&body.email);
     check_email(&email).map_err(ApiError::bad_request)?;
     check_password(&body.password).map_err(ApiError::bad_request)?;
+    // Older versions of Axiom don't ask, so they're told to update.
+    let accepted = body.accepted_terms.as_deref() == Some(TERMS_VERSION);
+    if s.require_terms && !accepted {
+        return Err(ApiError::bad_request("Agree to the terms of use to create an account. If there's no box to tick, update Axiom first."));
+    }
 
     let taken = || ApiError::new(StatusCode::CONFLICT, "An account with this email already exists. Sign in instead.");
+    let now = Utc::now();
+    let login_key = is_login_key(&body.password);
+    let terms = accepted.then(|| TERMS_VERSION.to_owned());
     if let Some(existing) = find_user(&s, &email).await? {
+        // Never confirmed: whoever reads the address can sign up over it, so
+        // nobody can hold someone else's email hostage.
+        if s.confirm_emails && existing.email_confirmed_at.is_none() {
+            let mut active: user::ActiveModel = existing.into();
+            active.password_hash = Set(password::hash(body.password).await?);
+            active.login_key = Set(login_key);
+            active.created_at = Set(now);
+            active.terms_version = Set(terms);
+            active.terms_accepted_at = Set(accepted.then_some(now));
+            let user = active.update(&s.db).await?;
+            send_confirmation_code(&s, &user).await?;
+            return Ok(pending(user.email, true));
+        }
         if !s.is_approved(&existing) {
             return Err(ApiError::new(StatusCode::CONFLICT, WAITING));
         }
         return Err(taken());
     }
 
-    let now = Utc::now();
     let approved = !s.waitlist_on() || s.is_owner(&email);
     let defaults = s.settings.read().unwrap().default_permissions.join(",");
-    let login_key = is_login_key(&body.password);
     let user = user::ActiveModel {
         id: Set(new_id()),
         email: Set(email),
@@ -63,6 +83,9 @@ pub async fn sign_up(State(s): State<AppState>, ip: ClientIp, Json(body): Json<C
         permissions: Set(defaults),
         encryption_key: Set(None),
         login_key: Set(login_key),
+        email_confirmed_at: Set((!s.confirm_emails).then_some(now)),
+        terms_version: Set(terms),
+        terms_accepted_at: Set(accepted.then_some(now)),
     }
     .insert(&s.db)
     .await
@@ -72,12 +95,34 @@ pub async fn sign_up(State(s): State<AppState>, ip: ClientIp, Json(body): Json<C
         _ => err.into(),
     })?;
 
+    if s.confirm_emails {
+        send_confirmation_code(&s, &user).await?;
+        return Ok(pending(user.email, true));
+    }
     if approved {
         return Ok(start_session(&s, user, &body.device_name).await?.into_response());
     }
+    tell_admins(&s, &user.email);
+    Ok(pending(user.email, false))
+}
+
+fn pending(email: String, confirm_email: bool) -> Response {
+    (StatusCode::ACCEPTED, Json(Pending { email, confirm_email })).into_response()
+}
+
+/// A few confirmation emails per address an hour, however they're asked for.
+async fn send_confirmation_code(s: &AppState, user: &user::Model) -> Result<(), ApiError> {
+    if !s.limits.code_requests.hit(&user.email) {
+        return Err(ApiError::too_many("You've asked for several codes already. Check your inbox and spam folder, or try again in an hour."));
+    }
+    codes::send(s, user, Purpose::ConfirmEmail).await
+}
+
+/// Emails the admins about an account that's joined the waiting list.
+fn tell_admins(s: &AppState, email: &str) {
     tracing::info!("A new account joined the waiting list");
     let state = s.clone();
-    let email = user.email.clone();
+    let email = email.to_owned();
     tokio::spawn(async move {
         for admin in &state.admins {
             if let Err(err) = state.mailer.send(mail::waitlist_request(admin, &email)).await {
@@ -85,10 +130,47 @@ pub async fn sign_up(State(s): State<AppState>, ip: ClientIp, Json(body): Json<C
             }
         }
     });
-    Ok((StatusCode::ACCEPTED, Json(Waitlisted { email: user.email })).into_response())
 }
 
-pub async fn sign_in(State(s): State<AppState>, ip: ClientIp, Json(body): Json<Credentials>) -> Result<Json<Session>, ApiError> {
+/// Confirms an account's address with the code emailed at sign-up. Doesn't
+/// sign in: the app signs in with the password next.
+pub async fn confirm_email(State(s): State<AppState>, ip: ClientIp, Json(body): Json<ConfirmEmail>) -> Result<StatusCode, ApiError> {
+    s.limits.check_ip(&ip)?;
+    let email = normalize_email(&body.email);
+    // An account that's already confirmed answers like a wrong code, so this
+    // can't be used to find out who has one.
+    let user = find_user(&s, &email)
+        .await?
+        .filter(|u| u.email_confirmed_at.is_none())
+        .ok_or_else(|| ApiError::bad_request(WRONG_CODE))?;
+    codes::check(&s, &user.id, Purpose::ConfirmEmail, &body.code).await?;
+    let mut active: user::ActiveModel = user.into();
+    active.email_confirmed_at = Set(Some(Utc::now()));
+    let user = active.update(&s.db).await?;
+    if !s.is_approved(&user) {
+        tell_admins(&s, &user.email);
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Emails a new confirmation code to an account that isn't confirmed yet.
+/// Always answers the same way, like `forgot_password`.
+pub async fn send_confirmation(State(s): State<AppState>, ip: ClientIp, Json(body): Json<ForgotPassword>) -> Result<StatusCode, ApiError> {
+    s.limits.check_ip(&ip)?;
+    let email = normalize_email(&body.email);
+    check_email(&email).map_err(ApiError::bad_request)?;
+    match find_user(&s, &email).await? {
+        Some(user) if user.email_confirmed_at.is_none() => send_confirmation_code(&s, &user).await?,
+        // The same limit either way, so it answers alike.
+        _ if !s.limits.code_requests.hit(&email) => {
+            return Err(ApiError::too_many("You've asked for several codes already. Check your inbox and spam folder, or try again in an hour."));
+        }
+        _ => {}
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn sign_in(State(s): State<AppState>, ip: ClientIp, Json(body): Json<Credentials>) -> Result<Response, ApiError> {
     s.limits.check_ip(&ip)?;
     let email = normalize_email(&body.email);
     if s.limits.failed_sign_ins.is_blocked(&email) {
@@ -112,11 +194,19 @@ pub async fn sign_in(State(s): State<AppState>, ip: ClientIp, Json(body): Json<C
 
     s.limits.failed_sign_ins.clear(&email);
     let user = upgrade(&s, user, body.login_key).await?;
+    // The address isn't confirmed: send a fresh code (unless several went
+    // out lately) and ask for it.
+    if s.confirm_emails && user.email_confirmed_at.is_none() {
+        if s.limits.code_requests.hit(&user.email) {
+            codes::send(&s, &user, Purpose::ConfirmEmail).await?;
+        }
+        return Ok(pending(user.email, true));
+    }
     // Only someone with the right password learns they're still waiting.
     if !s.is_approved(&user) {
         return Err(ApiError::new(StatusCode::FORBIDDEN, WAITING));
     }
-    start_session(&s, user, &body.device_name).await
+    Ok(start_session(&s, user, &body.device_name).await?.into_response())
 }
 
 /// Swaps a refresh token for a new pair. The old token stops working.
@@ -191,7 +281,7 @@ pub async fn sign_out(State(s): State<AppState>, Json(body): Json<RefreshRequest
 /// How long an emailed reset code works, and how many wrong tries it allows.
 const RESET_CODE_MINUTES: i64 = 30;
 const RESET_CODE_ATTEMPTS: i32 = 5;
-const WRONG_CODE: &str = "That code isn't right or has expired. Check the email, or ask for a new code.";
+pub(crate) const WRONG_CODE: &str = "That code isn't right or has expired. Check the email, or ask for a new code.";
 
 /// Emails a reset code if there's an account for the address. Always answers
 /// the same way, so it can't be used to find out who has an account.
@@ -266,9 +356,12 @@ pub async fn reset_password(State(s): State<AppState>, ip: ClientIp, Json(body):
     let mut reset: password_reset::ActiveModel = reset.into();
     reset.used_at = Set(Some(now));
     reset.update(&txn).await?;
+    // The emailed code proves they read the address, so it's confirmed too.
+    let confirmed = user.email_confirmed_at.or(Some(now));
     let mut active: user::ActiveModel = user.into();
     active.password_hash = Set(password_hash);
     active.login_key = Set(login_key);
+    active.email_confirmed_at = Set(confirmed);
     let user = active.update(&txn).await?;
     revoke_sessions(&txn, &user.id, None).await?;
     txn.commit().await?;
@@ -341,7 +434,7 @@ pub(crate) async fn revoke_sessions(db: &impl ConnectionTrait, user_id: &str, ke
 /// 8 characters from an alphabet without look-alikes (no 0/O, 1/I).
 /// 32 characters divide 256 evenly, so every character is equally likely,
 /// giving 32^8 (about 10^12) possible codes.
-fn new_reset_code() -> String {
+pub(crate) fn new_reset_code() -> String {
     const ALPHABET: &[u8; 32] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let mut bytes = [0u8; 8];
     rand::fill(&mut bytes);
@@ -367,25 +460,31 @@ impl FromRequestParts<AppState> for AuthUser {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, s: &AppState) -> Result<Self, ApiError> {
-        let token = parts
-            .headers
-            .get(AUTHORIZATION)
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.strip_prefix("Bearer "))
-            .ok_or_else(|| ApiError::unauthorized("Sign in to continue."))?;
-        let claims = s.keys.verify(token).ok_or_else(|| ApiError::unauthorized("Your session has expired."))?;
-
-        // The token is genuine, but the device may have been signed out since.
-        let live = session::Entity::find_by_id(&claims.sid)
-            .filter(session::Column::RevokedAt.is_null())
-            .one(&s.db)
-            .await?
-            .is_some();
-        if !live {
-            return Err(ApiError::unauthorized(SIGNED_OUT));
-        }
-        Ok(AuthUser { user_id: claims.sub, session_id: claims.sid })
+        signed_in(s, &parts.headers).await?.ok_or_else(|| ApiError::unauthorized("Sign in to continue."))
     }
+}
+
+/// The signed-in user, for a route where signing in is optional: None
+/// without an `Authorization` header, an error if the one sent is no good.
+pub(crate) async fn signed_in(s: &AppState, headers: &HeaderMap) -> Result<Option<AuthUser>, ApiError> {
+    let Some(value) = headers.get(AUTHORIZATION) else { return Ok(None) };
+    let token = value
+        .to_str()
+        .ok()
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .ok_or_else(|| ApiError::unauthorized("Sign in to continue."))?;
+    let claims = s.keys.verify(token).ok_or_else(|| ApiError::unauthorized("Your session has expired."))?;
+
+    // The token is genuine, but the device may have been signed out since.
+    let live = session::Entity::find_by_id(&claims.sid)
+        .filter(session::Column::RevokedAt.is_null())
+        .one(&s.db)
+        .await?
+        .is_some();
+    if !live {
+        return Err(ApiError::unauthorized(SIGNED_OUT));
+    }
+    Ok(Some(AuthUser { user_id: claims.sub, session_id: claims.sid }))
 }
 
 async fn find_user(s: &AppState, email: &str) -> Result<Option<user::Model>, ApiError> {

@@ -109,7 +109,7 @@ pub fn render(to: &str, digest: &Digest, unsubscribe: &str) -> Email {
          You get this because {} emails are on for {} in Axiom. Unsubscribe: {unsubscribe}",
         look.what, look.extension
     );
-    Email { to: to.into(), subject, text, html, unsubscribe: Some(unsubscribe.into()) }
+    Email { to: to.into(), subject, text, html, unsubscribe: Some(unsubscribe.into()), reply_to: None }
 }
 
 // ---------- Layout ----------

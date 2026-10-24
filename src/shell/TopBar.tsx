@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Blocks, LayoutDashboard, ShieldCheck, X, type LucideIcon } from "lucide-react";
 import { findExtension } from "../extensions";
 import { NotificationBell } from "./notifications/NotificationBell";
+import { SupportButton } from "./support/Support";
 import { ExtensionIcon } from "./ui/ExtensionIcon";
 import { formatTime } from "./format";
 import { useTheme } from "./theme/ThemeProvider";
@@ -78,6 +79,7 @@ export function TopBar({ tabs, active, previewKey, onSelect, onPin, onClose }: T
         })}
       </div>
 
+      <SupportButton />
       <NotificationBell onOpen={(id) => onSelect({ kind: "extension", id })} />
       <div className="box box-hatch" aria-hidden="true" />
       {showClock && <Clock />}

@@ -12,6 +12,9 @@ export type DbStatus =
 export interface AppStatus {
   version: string;
   db: DbStatus;
+  /** The account server's privacy notice and terms; null in a build without a server. */
+  privacyUrl: string | null;
+  termsUrl: string | null;
 }
 
 export const getAppStatus = () => invoke<AppStatus>("app_status");

@@ -34,6 +34,8 @@ use crate::sync::{MAX_RECORD_BYTES, MAX_RECORDS_PER_ACCOUNT, PullQuery, merge, p
 const INVITE_DAYS: i64 = 14;
 /// Most members (and pending invitations) one board can have.
 const MAX_MEMBERS: u64 = 50;
+/// Boards one account may share.
+const MAX_OWNED: u64 = 100;
 
 const NOT_SHARED: &str = "That board isn't shared with you, or it's no longer shared.";
 
@@ -95,6 +97,11 @@ pub async fn create(State(s): State<AppState>, auth: AuthUser, Json(body): Json<
     let txn = s.db.begin().await?;
     if space::Entity::find_by_id(&body.id).one(&txn).await?.is_some() {
         return Err(ApiError::new(StatusCode::CONFLICT, "That board is already shared."));
+    }
+    // Each board has its own storage limit, so without this one account
+    // could share board after board to get round its own.
+    if space::Entity::find().filter(space::Column::OwnerId.eq(&auth.user_id)).count(&txn).await? >= MAX_OWNED {
+        return Err(ApiError::bad_request(format!("You can share up to {MAX_OWNED} boards. Stop sharing one you no longer need first.")));
     }
     let now = Utc::now();
     space::ActiveModel { id: Set(body.id.clone()), owner_id: Set(auth.user_id.clone()), seq: Set(0), created_at: Set(now) }.insert(&txn).await?;

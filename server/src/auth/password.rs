@@ -8,12 +8,29 @@ use argon2::Argon2;
 use argon2::password_hash::phc::PasswordHash;
 use argon2::password_hash::{PasswordHasher, PasswordVerifier};
 
+use tokio::sync::{Semaphore, SemaphorePermit};
+
 use crate::error::ApiError;
 
+/// Each hash takes 19 MiB. A burst of sign-ins hashing all at once could run
+/// the server out of memory (512 MB on Render's free plan), so a few run at
+/// a time and the rest wait their turn.
+static HASHING: Semaphore = Semaphore::const_new(4);
+
+async fn turn() -> SemaphorePermit<'static> {
+    HASHING.acquire().await.expect("never closed")
+}
+
 pub async fn hash(password: String) -> Result<String, ApiError> {
-    tokio::task::spawn_blocking(move || hash_now(&password))
-        .await
-        .map_err(ApiError::internal)?
+    let turn = turn().await;
+    // The permit goes with the work: it's held until hashing ends, even if
+    // the request is dropped first.
+    tokio::task::spawn_blocking(move || {
+        let _turn = turn;
+        hash_now(&password)
+    })
+    .await
+    .map_err(ApiError::internal)?
 }
 
 fn hash_now(password: &str) -> Result<String, ApiError> {
@@ -25,7 +42,9 @@ fn hash_now(password: &str) -> Result<String, ApiError> {
 /// account), checks against a dummy one, so the answer takes just as long
 /// and timing can't reveal which emails have accounts.
 pub async fn verify(password: String, stored: Option<String>) -> bool {
+    let turn = turn().await;
     tokio::task::spawn_blocking(move || {
+        let _turn = turn;
         let hash = stored.as_deref().unwrap_or_else(|| dummy_hash());
         let ok = PasswordHash::new(hash).is_ok_and(|parsed| Argon2::default().verify_password(password.as_bytes(), &parsed).is_ok());
         ok && stored.is_some()

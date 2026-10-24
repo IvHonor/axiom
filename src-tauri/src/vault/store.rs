@@ -8,31 +8,35 @@ pub trait KeyStore: Send + Sync {
 }
 
 const SERVICE: &str = "app.axiom.desktop";
-/// Development builds talk to a local server, so they keep their own key.
-const ENTRY: &str = if cfg!(debug_assertions) { "vault-dev" } else { "vault" };
 
-pub struct Keychain;
+/// One entry in the system's credential store.
+pub struct Keychain(&'static str);
 
 impl Keychain {
-    fn entry() -> Option<keyring::Entry> {
-        keyring::Entry::new(SERVICE, ENTRY).ok()
+    /// The data key. Development builds talk to a local server, so they keep their own.
+    pub const VAULT: Keychain = Keychain(if cfg!(debug_assertions) { "vault-dev" } else { "vault" });
+    /// The app lock's PIN (see `crate::app_lock`).
+    pub const APP_LOCK: Keychain = Keychain(if cfg!(debug_assertions) { "app-lock-dev" } else { "app-lock" });
+
+    fn entry(&self) -> Option<keyring::Entry> {
+        keyring::Entry::new(SERVICE, self.0).ok()
     }
 }
 
 impl KeyStore for Keychain {
     fn load(&self) -> Option<String> {
-        Self::entry()?.get_password().ok()
+        self.entry()?.get_password().ok()
     }
 
     fn save(&self, key: &str) -> Result<(), String> {
-        Self::entry()
+        self.entry()
             .ok_or("This computer's credential store isn't available.")?
             .set_password(key)
-            .map_err(|e| format!("Couldn't save the encryption key: {e}"))
+            .map_err(|e| format!("Couldn't save to this computer's credential store: {e}"))
     }
 
     fn clear(&self) {
-        if let Some(entry) = Self::entry() {
+        if let Some(entry) = self.entry() {
             let _ = entry.delete_credential();
         }
     }

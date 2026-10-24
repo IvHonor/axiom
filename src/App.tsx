@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { EXTENSIONS, findExtension } from "./extensions";
 import type { ExtensionManifest } from "./extensions/types";
 import { AccountPanel } from "./shell/AccountPanel";
+import { AppLockScreen } from "./shell/AppLockScreen";
 import { ActivityBar, type SidePanel } from "./shell/ActivityBar";
 import { AreasPanel } from "./shell/AreasPanel";
 import { ExtensionsPanel, type ExtensionKind } from "./shell/ExtensionsPanel";
@@ -196,6 +197,7 @@ export default function App() {
           <main className="main">{main}</main>
         </div>
         {updater.offered && <UpdatePrompt status={updater.status} onInstall={updater.install} onLater={updater.later} />}
+        <AppLockScreen accountState={account?.state} />
         <StatusBar
           status={status}
           sync={sync}

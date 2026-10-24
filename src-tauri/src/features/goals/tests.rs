@@ -208,6 +208,41 @@ async fn goals_follow_the_other_extensions() {
 }
 
 #[tokio::test]
+async fn goals_follow_learning_chapters_and_hours() {
+    use crate::features::learning::service as learning;
+    use crate::features::learning::types::{Draft, SessionFields, SkillFields, SourceFields};
+    let db = setup().await;
+    let today = day(7, 2);
+    let skill = learning::add_skill(&db, SkillFields { name: "Rust".into(), icon: "🦀".into(), color: "orange".into(), why: String::new(), archived: false }).await.unwrap();
+    let fields = SourceFields {
+        skill_id: skill.id,
+        kind: "book".into(),
+        title: "The Rust Book".into(),
+        author: String::new(),
+        link: None,
+        cover_url: None,
+        unit_name: String::new(),
+        finish_by: None,
+        notes: String::new(),
+    };
+    let book = learning::add_source(&db, fields).await.unwrap();
+    let chapters = (1..=4).map(|n| Draft { title: format!("Chapter {n}"), level: 0, minutes: None, page: None }).collect();
+    let units = learning::add_units(&db, &book.id, chapters, false, today).await.unwrap();
+    learning::set_done(&db, &units[0].id, true, today).await.unwrap();
+    for (d, minutes) in [(day(6, 30), 90), (day(7, 1), 30)] {
+        learning::add_session(&db, SessionFields { source_id: book.id.clone(), day: d, minutes, note: String::new() }).await.unwrap();
+    }
+
+    let finish = create(&db, GoalFields { source: "learning_source".into(), source_id: book.id.clone(), ..steps("Finish the Rust book") }, today).await.unwrap();
+    assert_eq!((finish.current, finish.target, finish.source_name.as_deref()), (1.0, 4.0, Some("The Rust Book")));
+    assert_eq!(progress_text(&finish), "1 of 4 done");
+
+    let hours = create(&db, GoalFields { source: "learning_hours".into(), start_date: day(7, 1), ..target("Study 100 hours", 0.0, 100.0, "hours", "total") }, today).await.unwrap();
+    assert_eq!(hours.current, 0.5, "only from the start date on");
+    assert_eq!(sources(&db, today).await.unwrap().learning.len(), 1);
+}
+
+#[tokio::test]
 async fn goals_keep_your_order_and_go_with_their_check_ins() {
     let db = setup().await;
     let a = create(&db, target("A", 0.0, 1.0, "", "total"), day(7, 2)).await.unwrap();

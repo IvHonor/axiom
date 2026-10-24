@@ -49,12 +49,12 @@ export function GoalDialog({ goal, preset }: { goal: Goal | null; preset?: Parti
   const close = () => setGoalsUi({ dialog: null });
 
   useEffect(() => {
-    api.sources(today()).then(setSources, () => setSources({ accounts: [], projects: [], modules: [] }));
+    api.sources(today()).then(setSources, () => setSources({ accounts: [], projects: [], modules: [], learning: [] }));
   }, []);
 
   const pickSource = (source: Source) => {
-    const units: Partial<Record<Source, string>> = { reading_books: "books", reading_pages: "pages", journal_entries: "days" };
-    const first = source === "finance_account" ? sources?.accounts[0] : source === "project" ? sources?.projects[0] : source === "uni_module" ? sources?.modules[0] : undefined;
+    const units: Partial<Record<Source, string>> = { reading_books: "books", reading_pages: "pages", journal_entries: "days", learning_hours: "hours" };
+    const first = source === "finance_account" ? sources?.accounts[0] : source === "project" ? sources?.projects[0] : source === "uni_module" ? sources?.modules[0] : source === "learning_source" ? sources?.learning[0] : undefined;
     set({ source, sourceId: first?.id ?? "", unit: source === "finance_account" ? (first?.unit ?? "") : (units[source] ?? (fields.source === "manual" ? fields.unit : "")) });
   };
 
@@ -79,14 +79,16 @@ export function GoalDialog({ goal, preset }: { goal: Goal | null; preset?: Parti
     { id: "reading_books", label: "Books I finish (Reading)", show: true },
     { id: "reading_pages", label: "Pages I read (Reading)", show: true },
     { id: "journal_entries", label: "Days I write (Journal)", show: true },
+    { id: "learning_hours", label: "Hours I study (Learning)", show: true },
   ];
   const milestoneSources: { id: Source; label: string; show: boolean }[] = [
     { id: "manual", label: "Milestones I list", show: true },
     { id: "project", label: "A Project Board project's cards", show: !!sources?.projects.length },
     { id: "uni_module", label: "A module's lectures (University)", show: !!sources?.modules.length },
+    { id: "learning_source", label: "A book or course's chapters (Learning)", show: !!sources?.learning.length },
   ];
   const options = fields.kind === "target" ? targetSources : fields.kind === "milestones" ? milestoneSources : [];
-  const picks = fields.source === "finance_account" ? sources?.accounts : fields.source === "project" ? sources?.projects : fields.source === "uni_module" ? sources?.modules : undefined;
+  const picks = fields.source === "finance_account" ? sources?.accounts : fields.source === "project" ? sources?.projects : fields.source === "uni_module" ? sources?.modules : fields.source === "learning_source" ? sources?.learning : undefined;
   const span = (d: string | null) => fields.dueDate === d;
 
   return (

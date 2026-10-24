@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">Axiom — Make room for what matters.</title>
+  <desc id="desc">A desktop home for your plans, projects, reading, studies and everyday life.</desc>
+  <rect width="1200" height="300" rx="24" fill="#151b26"/>
+  <g transform="translate(74 77) scale(.18)" fill="#e5eaf3">
+    <path d="M372 0 623 168 372 339 120 168Z"/>
+    <path d="M0 464 274 292V598L0 766Z"/>
+    <path d="M470 292 744 464V766L470 598Z"/>
+  </g>
+  <g font-family="Segoe UI, Inter, Arial, sans-serif">
+    <text x="254" y="111" font-size="24" letter-spacing="8" fill="#98abc6">AXIOM</text>
+    <text x="250" y="172" font-size="44" font-weight="600" fill="#f3f5f9">Make room for what matters.</text>
+    <text x="253" y="216" font-size="20" fill="#b1bdd0">Your plans, projects and everyday life. Together, on your desktop.</text>
+  </g>
+  <g transform="translate(254 249)">
+    <rect width="70" height="4" rx="2" fill="#dfac56"/>
+    <rect x="82" width="70" height="4" rx="2" fill="#709fee"/>
+    <rect x="164" width="70" height="4" rx="2" fill="#60b7b0"/>
+    <rect x="246" width="70" height="4" rx="2" fill="#a18add"/>
+    <rect x="328" width="70" height="4" rx="2" fill="#dc8ba8"/>
+  </g>
+</svg>

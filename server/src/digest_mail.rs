@@ -101,7 +101,9 @@ pub fn render(to: &str, digest: &Digest, unsubscribe: &str) -> Email {
             reading_weekly(&look, *day, *pages, *minutes, *reading_days, *streak, finished, books, goal.as_ref())
         }
         // Not emailed (see EMAIL_KINDS); kept so a bad plan can't crash the sender.
-        Digest::ReadingStreak { .. } | Digest::FinanceBills { .. } | Digest::FinanceMonth { .. } => (paragraph(&escape(&preview)), preview.clone()),
+        Digest::ReadingStreak { .. } | Digest::FinanceBills { .. } | Digest::FinanceMonth { .. } | Digest::LearningReview { .. } | Digest::LearningWeekly { .. } => {
+            (paragraph(&escape(&preview)), preview.clone())
+        }
     };
     let html = layout(&look, &subject, &preview, &body, unsubscribe);
     let text = format!(

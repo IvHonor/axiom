@@ -7,7 +7,7 @@ use chrono::{Days, NaiveDate};
 use sea_orm::DatabaseConnection;
 
 use crate::error::Result;
-use crate::features::{birthdays, daily_plan, finance, goals, journal, project_board, reading, uni};
+use crate::features::{birthdays, daily_plan, finance, goals, journal, learning, project_board, reading, uni};
 
 /// The notification of `kind` for `day`. `lay_out` lets the Daily Plan lay
 /// out routine blocks first (only for today and tomorrow; see `runner`).
@@ -165,6 +165,15 @@ pub async fn digest(db: &DatabaseConnection, kind: &str, day: NaiveDate, lay_out
             let item = |p: birthdays::types::PersonView| BirthdayItem { name: p.name, occasion: p.occasion, date: p.next, turning: p.turning, days: p.days, ideas: p.ideas };
             let (today, soon): (Vec<BirthdayItem>, Vec<BirthdayItem>) = (on.into_iter().map(item).collect(), ahead.into_iter().map(item).collect());
             (!today.is_empty() || !soon.is_empty()).then_some(Digest::Birthdays { day, today, soon })
+        }
+        "learning.review" => {
+            let summary = learning::service::summary(db, day).await?;
+            let units: Vec<String> = summary.reviews.iter().take(MAX_DIGEST_ITEMS).map(|r| r.unit.title.clone()).collect();
+            (!units.is_empty()).then_some(Digest::LearningReview { day, units, total: summary.reviews.len() as u32 })
+        }
+        "learning.weekly" => {
+            let summary = learning::service::summary(db, day).await?;
+            (summary.week_minutes > 0 || summary.week_units > 0).then_some(Digest::LearningWeekly { day, minutes: summary.week_minutes, units: summary.week_units, streak: summary.streak })
         }
         _ => None,
     })

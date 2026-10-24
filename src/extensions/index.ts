@@ -3,6 +3,7 @@ import { dailyPlan } from "../features/daily_plan";
 import { finance } from "../features/finance";
 import { goals } from "../features/goals";
 import { journal } from "../features/journal";
+import { learning } from "../features/learning";
 import { notes } from "../features/notes";
 import { projectBoard } from "../features/project_board";
 import { reading } from "../features/reading";
@@ -32,6 +33,7 @@ export const EXTENSIONS: ExtensionManifest[] = [
   finance,
   goals,
   journal,
+  learning,
   notes,
   projectBoard,
   reading,

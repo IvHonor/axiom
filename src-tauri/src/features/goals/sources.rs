@@ -7,14 +7,14 @@ use sea_orm::prelude::Date;
 use super::entities::goal;
 use super::types::{SourceOption, Sources};
 use crate::error::Result;
-use crate::features::{finance, journal, project_board, reading, uni};
+use crate::features::{finance, journal, learning, project_board, reading, uni};
 
 /// What a target can follow.
-pub const FOR_TARGETS: &[&str] = &["manual", "finance_account", "reading_books", "reading_pages", "journal_entries"];
+pub const FOR_TARGETS: &[&str] = &["manual", "finance_account", "reading_books", "reading_pages", "journal_entries", "learning_hours"];
 /// What milestones can follow, instead of being listed by hand.
-pub const FOR_MILESTONES: &[&str] = &["manual", "project", "uni_module"];
+pub const FOR_MILESTONES: &[&str] = &["manual", "project", "uni_module", "learning_source"];
 /// Sources that follow one thing (an account, a project, a module).
-pub const NEED_ID: &[&str] = &["finance_account", "project", "uni_module"];
+pub const NEED_ID: &[&str] = &["finance_account", "project", "uni_module", "learning_source"];
 
 /// A source's reading: where it is, out of what (for projects and modules,
 /// whose size changes), and what it's called.
@@ -52,6 +52,14 @@ pub async fn read(db: &DatabaseConnection, g: &goal::Model, today: Date) -> Resu
             Ok(m) => Some(Reading { current: f64::from(m.card.caught_up), out_of: Some(f64::from(m.card.lectures)), name: format!("{} {}", m.card.module.code, m.card.module.name).trim().to_owned() }),
             Err(_) => None,
         },
+        "learning_source" => match learning::service::progress(db, &g.source_id, today).await {
+            Ok((done, all, name)) => Some(Reading { current: f64::from(done), out_of: Some(f64::from(all)), name }),
+            Err(_) => None,
+        },
+        "learning_hours" => {
+            let minutes = learning::service::minutes_since(db, g.start_date).await?;
+            Some(Reading { current: g.start_value + f64::from(minutes) / 60.0, out_of: None, name: "Hours studied".into() })
+        }
         _ => None,
     })
 }
@@ -71,5 +79,6 @@ pub async fn options(db: &DatabaseConnection, today: Date) -> Result<Sources> {
         .into_iter()
         .map(|m| SourceOption { name: format!("{} {}", m.module.code, m.module.name).trim().to_owned(), id: m.module.id, unit: String::new() })
         .collect();
-    Ok(Sources { accounts, projects, modules })
+    let learning = learning::service::source_options(db).await?.into_iter().map(|(id, name)| SourceOption { id, name, unit: String::new() }).collect();
+    Ok(Sources { accounts, projects, modules, learning })
 }

@@ -1,5 +1,9 @@
 # Daily Plan overview checks
 
+## Activity bar ordering
+
+Run `node tests/activity-order.mjs` against Vite on port 1427 with the Playwright setup below. Checks cover pointer and keyboard sorting, local persistence, Escape cancellation, normal clicks and context menus, disabled/re-enabled extensions, corrupt preferences, and fixed shell/required icons. Only switchable area icons can move. Order is stored locally under `axiom.activityOrder.v1`; it does not change overview tile positions or the extension registry.
+
 ## University overview checks
 
 Run `node tests/uni-overview-layout.mjs` against Vite on port 1427 using the same Playwright setup. `uni-overview-preview.html` renders the real overview, display menu, resizing and navigation with in-memory responses; it never reads the desktop database. `UNI_SKIP_MATRIX=1` runs the behavior and boundary checks without the full size sweep; `UNI_ONLY_MATRIX=1` runs just the 660 combinations. `node tests/uni-overview-boundaries.mjs` separately sweeps all twelve views at their minimum widths and the heading/footer height boundaries, with long text across all twenty font/theme variants.

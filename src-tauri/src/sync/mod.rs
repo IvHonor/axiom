@@ -59,6 +59,7 @@ pub static TABLES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         crate::features::notes::SYNCED_TABLES,
         crate::features::birthdays::SYNCED_TABLES,
         crate::features::goals::SYNCED_TABLES,
+        crate::features::learning::SYNCED_TABLES,
     ]
     .concat()
 });

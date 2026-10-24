@@ -51,6 +51,8 @@ jobs:
           AXIOM_GOOGLE_CLIENT_ID: ${{ secrets.AXIOM_GOOGLE_CLIENT_ID }}
           AXIOM_GOOGLE_CLIENT_SECRET: ${{ secrets.AXIOM_GOOGLE_CLIENT_SECRET }}
           AXIOM_MICROSOFT_CLIENT_ID: ${{ secrets.AXIOM_MICROSOFT_CLIENT_ID }}
+          # Learning's YouTube playlist import. Empty hides it.
+          AXIOM_YOUTUBE_API_KEY: ${{ secrets.AXIOM_YOUTUBE_API_KEY }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Axiom ${{ github.ref_name }}

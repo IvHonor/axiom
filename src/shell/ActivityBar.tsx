@@ -1,5 +1,9 @@
 import { Blocks, CircleUserRound, EyeOff, Layers, Palette, ShieldCheck, type LucideIcon } from "lucide-react";
 import { useState } from "react";
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { usePersistentState } from "./usePersistentState";
 import { AreaContextMenu } from "./ui/AreaContextMenu";
 import type { MenuPosition } from "./ui/ContextMenu";
 import type { ExtensionManifest } from "../extensions/types";
@@ -44,15 +48,40 @@ interface ActivityBarProps {
 export function ActivityBar({ active, areas, onToggle, accountEmail, admin, hiddenIds = [], onVisibilityChange }: ActivityBarProps) {
   const profile = useProfile(accountEmail);
   const [menu, setMenu] = useState<{ item: Item; at: MenuPosition } | null>(null);
-  const button = ({ id, label, icon: Icon, extension }: Item) => {
+  const [order, setOrder] = usePersistentState<string[]>("axiom.activityOrder.v1", saved =>
+    Array.isArray(saved) ? [...new Set(saved.filter((id): id is string => typeof id === "string" && id.startsWith("area:")))] : []);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const movable = (item: Item) => !!item.extension && !item.extension.required;
+  const fullOrder = [...order, ...areas.filter(item => movable(item) && !order.includes(item.id)).map(item => item.id)];
+  const sorted = areas.filter(movable).sort((a, b) => fullOrder.indexOf(a.id) - fullOrder.indexOf(b.id));
+  let slot = 0;
+  const ordered = areas.map(item => movable(item) ? sorted[slot++] : item);
+  function onDragEnd({ active: dragged, over }: DragEndEvent) {
+    if (!over || dragged.id === over.id) return;
+    const ids = sorted.map(item => item.id);
+    const from = ids.indexOf(dragged.id as SidePanel), to = ids.indexOf(over.id as SidePanel);
+    if (from < 0 || to < 0) return;
+    const next = arrayMove(ids, from, to);
+    let index = 0;
+    // Disabled extensions retain their slots, ready for when they're switched on again.
+    setOrder(fullOrder.map(id => ids.includes(id as SidePanel) ? next[index++] : id));
+  }
+  const button = ({ id, label, icon: Icon, extension }: Item, sortable?: ReturnType<typeof useSortable>) => {
     const title = id === "account" && accountEmail ? `${label} (${accountEmail})` : label;
     const hidden = !!extension && hiddenIds.includes(extension.id);
     return (
       <button
         key={id}
-        className={id === active ? "activity is-active" : "activity"}
+        ref={sortable?.setNodeRef}
+        {...sortable?.attributes}
+        {...sortable?.listeners}
+        style={sortable ? { transform: CSS.Transform.toString(sortable.transform ? { ...sortable.transform, x: 0 } : null), transition: sortable.transition } : undefined}
+        className={`activity${id === active ? " is-active" : ""}${sortable ? " activity-sortable" : ""}${sortable?.isDragging ? " is-dragging" : ""}`}
         onClick={() => onToggle(id)}
-        title={hidden ? `${title} · hidden on overview (right-click to unhide)` : title}
+        title={`${hidden ? `${title} · hidden on overview (right-click to unhide)` : title}${sortable ? " · Drag to reorder, or press Space then use arrow keys" : ""}`}
         aria-label={title}
         aria-pressed={id === active}
         onContextMenu={extension && onVisibilityChange ? (event) => {
@@ -75,9 +104,15 @@ export function ActivityBar({ active, areas, onToggle, accountEmail, admin, hidd
 
   return (
     <nav className="activitybar">
-      {TOP.map(button)}
+      {TOP.map(item => button(item))}
       {areas.length > 0 && <div className="activitybar-divider" />}
-      {areas.map(button)}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={sorted.map(item => item.id)} strategy={verticalListSortingStrategy}>
+          {ordered.map(item => movable(item)
+            ? <SortableActivity key={item.id} item={item} render={button} />
+            : button(item))}
+        </SortableContext>
+      </DndContext>
       {admin && (
         <>
           <div className="activitybar-divider" />
@@ -93,10 +128,18 @@ export function ActivityBar({ active, areas, onToggle, accountEmail, admin, hidd
         </>
       )}
       <div className="activitybar-fill" />
-      {BOTTOM.map(button)}
+      {BOTTOM.map(item => button(item))}
       {menu?.item.extension && onVisibilityChange && <AreaContextMenu ext={menu.item.extension} at={menu.at}
         hidden={hiddenIds.includes(menu.item.extension.id)} onOpen={() => { if (active !== menu.item.id) onToggle(menu.item.id); }}
         onClose={() => setMenu(null)} onVisibilityChange={onVisibilityChange} />}
     </nav>
   );
+}
+
+function SortableActivity({ item, render }: {
+  item: Item;
+  render: (item: Item, sortable: ReturnType<typeof useSortable>) => React.ReactNode;
+}) {
+  const sortable = useSortable({ id: item.id, transition: { duration: 180, easing: "cubic-bezier(.22, 1, .36, 1)" } });
+  return render(item, sortable);
 }

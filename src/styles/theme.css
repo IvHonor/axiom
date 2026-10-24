@@ -11,6 +11,7 @@
   --area-notes: light-dark(#b0581c, #efa56f);
   --area-birthdays: light-dark(#a8479a, #e19ad6);
   --area-goals: light-dark(#2f6fa8, #7fb3e6);
+  --area-learning: light-dark(#66791a, #bcd36e);
   --success: light-dark(#357b50, #83bf96);
   --warning: light-dark(#956515, #dcb567);
   font-family: var(--font-ui);

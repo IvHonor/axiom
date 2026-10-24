@@ -33,6 +33,7 @@ function Fixture() {
       </div>
       <div className="workbench">
         <ActivityBar active={panel} areas={areas.map(ext => ({id: `area:${ext.id}` as const, label: ext.name, icon: ext.icon, extension: ext}))}
+          admin={{open: opened === "admin", onOpen: () => setOpened("admin")}}
           onToggle={next => setPanel(previous => previous === next ? null : next)} hiddenIds={hiddenIds} onVisibilityChange={setHidden} />
         <SidebarFrame open={panel !== null}>
         {panel === "extensions" ? <ExtensionsPanel query={query} onQueryChange={setQuery} kind={kind} onKindChange={setKind}

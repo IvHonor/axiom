@@ -126,6 +126,22 @@ pub const KINDS: &[Kind] = &[
         email: true,
         when: When::Weekly(Weekday::Sun, 17),
     },
+    Kind {
+        id: "learning.review",
+        extension: "learning",
+        label: "Due for review",
+        description: "Chapters and lessons that are due for another look today. Every morning at 9.",
+        email: false,
+        when: When::Daily(9),
+    },
+    Kind {
+        id: "learning.weekly",
+        extension: "learning",
+        label: "Weekly summary",
+        description: "Time studied, chapters and lessons done, and your streak. Sundays at 6pm.",
+        email: false,
+        when: When::Weekly(Weekday::Sun, 18),
+    },
 ];
 
 pub fn find(id: &str) -> Option<&'static Kind> {

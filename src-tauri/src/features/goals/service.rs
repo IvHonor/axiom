@@ -462,6 +462,7 @@ pub fn progress_text(g: &GoalView) -> String {
             let what = match g.goal.source.as_str() {
                 "project" => "cards",
                 "uni_module" => "lectures",
+                "learning_source" => "done",
                 _ => "milestones",
             };
             format!("{} of {} {what}", g.current as i64, g.target as i64)

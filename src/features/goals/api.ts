@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type Area = "health" | "career" | "money" | "learning" | "relationships" | "personal" | "home" | "fun";
 export type Kind = "target" | "milestones" | "once";
-export type Source = "manual" | "finance_account" | "reading_books" | "reading_pages" | "journal_entries" | "project" | "uni_module";
+export type Source = "manual" | "finance_account" | "reading_books" | "reading_pages" | "journal_entries" | "project" | "uni_module" | "learning_source" | "learning_hours";
 export type Status = "active" | "paused" | "done" | "dropped";
 export type Pace = "ahead" | "on_track" | "behind";
 
@@ -95,6 +95,8 @@ export interface Sources {
   accounts: SourceOption[];
   projects: SourceOption[];
   modules: SourceOption[];
+  /** Learning sources, "Skill · Title". */
+  learning: SourceOption[];
 }
 
 export interface GoalsSummary {
@@ -162,7 +164,7 @@ export function amount(value: number, unit: string): string {
 export function progressText(g: Goal): string {
   if (g.kind === "once") return g.status === "done" ? "Done" : "To do";
   if (g.kind === "milestones") {
-    const what = g.source === "project" ? "cards" : g.source === "uni_module" ? "lectures" : "milestones";
+    const what = g.source === "project" ? "cards" : g.source === "uni_module" ? "lectures" : g.source === "learning_source" ? "done" : "milestones";
     return `${g.current} of ${g.target} ${what}`;
   }
   return `${amount(g.current, g.unit)} of ${amount(g.target, g.unit)}`;
@@ -190,6 +192,8 @@ export function sourceText(g: Goal): string | null {
     journal_entries: "From Journal · days written",
     project: `From Project Board · ${g.sourceName}`,
     uni_module: `From University · ${g.sourceName}`,
+    learning_source: `From Learning · ${g.sourceName}`,
+    learning_hours: "From Learning · hours studied",
   };
   return what[g.source];
 }

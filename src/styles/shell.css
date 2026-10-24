@@ -261,6 +261,17 @@
   color: var(--text);
 }
 
+.activity-sortable { touch-action: none; }
+.activity-sortable.is-dragging {
+  z-index: 10;
+  cursor: grabbing;
+  background: var(--surface);
+  box-shadow: 0 3px 12px #0003;
+}
+@media (prefers-reduced-motion: reduce) {
+  .activity-sortable { transition: none !important; }
+}
+
 .activity.is-active {
   color: var(--text);
   border-color: var(--line-strong);

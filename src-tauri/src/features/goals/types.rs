@@ -99,6 +99,8 @@ pub struct Sources {
     pub accounts: Vec<SourceOption>,
     pub projects: Vec<SourceOption>,
     pub modules: Vec<SourceOption>,
+    /// Learning sources, "Skill · Title".
+    pub learning: Vec<SourceOption>,
 }
 
 #[derive(Debug, Serialize)]

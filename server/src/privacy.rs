@@ -65,7 +65,7 @@ pub async fn page(State(s): State<AppState>) -> Html<String> {
 <li><b>Synced data:</b> a copy of what you sync, so your other computers can catch up.
   <ul>
   <li><b>End-to-end encrypted:</b> Finance, Journal, Notes, Birthdays and Goals are encrypted on your computer before they're sent. The server stores them but can't read them. It only sees which kind of record it is, its ID, and when it changed.</li>
-  <li><b>Not end-to-end encrypted:</b> Project Board, Daily Plan, Reading, Uni and your settings are stored as they are. They're protected in transit and by access controls, and could be read by whoever runs the server.</li>
+  <li><b>Not end-to-end encrypted:</b> Project Board, Daily Plan, Reading, University, Learning and your settings are stored as they are. They're protected in transit and by access controls, and could be read by whoever runs the server.</li>
   </ul></li>
 <li><b>Shared boards:</b> boards you share are visible to the people on them. Invitations keep the invited email address until they're accepted, declined or withdrawn.</li>
 <li><b>Notification emails:</b> if you switch on emails, the server keeps each planned email's contents until it's sent. Emails aren't end-to-end encrypted. Finance amounts are never emailed.</li>
@@ -94,7 +94,8 @@ pub async fn page(State(s): State<AppState>) -> Html<String> {
 <h2>Services the app contacts directly</h2>
 <p>These go straight from your computer, never through the Axiom server, and only when you use the feature:</p>
 <ul>
-<li><b>Open Library</b> (openlibrary.org), to search for books and show covers in Reading.</li>
+<li><b>Open Library</b> (openlibrary.org), to search for books and show covers in Reading and Learning.</li>
+<li><b>YouTube</b> (Google), to read a playlist's videos when you import one into Learning. Only the playlist link is sent.</li>
 <li><b>Frankfurter</b> (frankfurter.dev), for currency exchange rates in Finance. Only currency codes and dates are sent.</li>
 <li><b>Google, Microsoft, iCloud or Fastmail</b>, if you connect a calendar to Daily Plan. Your calendar events stay on your computer: they aren't synced or sent to the Axiom server. Sign-in tokens are kept in your computer's credential store. Axiom's use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</li>
 <li><b>GitHub</b>, to check for and download Axiom updates.</li>

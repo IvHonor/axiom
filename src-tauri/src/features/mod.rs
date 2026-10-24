@@ -10,6 +10,7 @@ pub(crate) mod doc_edits;
 pub mod finance;
 pub mod goals;
 pub mod journal;
+pub mod learning;
 pub mod notes;
 pub mod project_board;
 pub mod reading;

@@ -20,6 +20,7 @@ use features::goals::commands as goals;
 use features::project_board::commands as board;
 use features::reading::commands as reading;
 use features::uni::commands as uni;
+use features::learning::commands as learning;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -320,6 +321,25 @@ pub fn run() {
             uni::uni_update_lecture,
             uni::uni_set_stage,
             uni::uni_delete_lecture,
+            learning::learning_summary,
+            learning::learning_source,
+            learning::learning_add_skill,
+            learning::learning_update_skill,
+            learning::learning_delete_skill,
+            learning::learning_add_source,
+            learning::learning_update_source,
+            learning::learning_delete_source,
+            learning::learning_add_units,
+            learning::learning_update_unit,
+            learning::learning_delete_unit,
+            learning::learning_set_done,
+            learning::learning_review,
+            learning::learning_add_session,
+            learning::learning_delete_session,
+            learning::learning_parse_text,
+            learning::learning_read_book,
+            learning::learning_youtube_available,
+            learning::learning_youtube,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

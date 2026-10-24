@@ -247,6 +247,7 @@ fn show_on_desktop(app: &AppHandle, note: &note::Model) {
         Some("journal") => format!("Journal · {}", note.title),
         Some("birthdays") => format!("Birthdays · {}", note.title),
         Some("goals") => format!("Goals · {}", note.title),
+        Some("learning") => format!("Learning · {}", note.title),
         _ => note.title.clone(),
     };
     if let Err(e) = app.notification().builder().title(title).body(&note.body).show() {

@@ -50,6 +50,12 @@ pub enum Digest {
     /// The week's check-in on goals: how each is going against its pace.
     #[serde(rename = "goals.weekly")]
     GoalsWeekly { day: NaiveDate, goals: Vec<GoalItem> },
+    /// Chapters and lectures due for review today. App only.
+    #[serde(rename = "learning.review")]
+    LearningReview { day: NaiveDate, units: Vec<String>, total: u32 },
+    /// The week's study: time, units done and the streak. App only.
+    #[serde(rename = "learning.weekly")]
+    LearningWeekly { day: NaiveDate, minutes: i32, units: u32, streak: u32 },
     /// The week's reading.
     #[serde(rename = "reading.weekly")]
     ReadingWeekly {
@@ -80,6 +86,8 @@ impl Digest {
             Digest::FinanceMonth { .. } => "finance.month",
             Digest::Birthdays { .. } => "birthdays.upcoming",
             Digest::GoalsWeekly { .. } => "goals.weekly",
+            Digest::LearningReview { .. } => "learning.review",
+            Digest::LearningWeekly { .. } => "learning.weekly",
         }
     }
 
@@ -97,7 +105,9 @@ impl Digest {
             | Digest::FinanceBills { day, .. }
             | Digest::FinanceMonth { day, .. }
             | Digest::Birthdays { day, .. }
-            | Digest::GoalsWeekly { day, .. } => *day,
+            | Digest::GoalsWeekly { day, .. }
+            | Digest::LearningReview { day, .. }
+            | Digest::LearningWeekly { day, .. } => *day,
         }
     }
 }
@@ -350,6 +360,26 @@ impl Digest {
                     parts.push(format!("finished {}", list(finished.iter().map(String::as_str))));
                 }
                 (format!("Your reading week: {pages} {}", plural(*pages as usize, "page", "pages")), parts.join(" · "))
+            }
+            Digest::LearningReview { units, total, .. } => {
+                let more = *total as usize - units.len().min(*total as usize);
+                let mut body = list(units.iter().map(String::as_str));
+                if more > 0 {
+                    body.push_str(&format!(" and {more} more"));
+                }
+                (format!("{total} {} to review today", plural(*total as usize, "thing", "things")), body)
+            }
+            Digest::LearningWeekly { minutes, units, streak, .. } => {
+                let time = match (minutes / 60, minutes % 60) {
+                    (0, m) => format!("{m} min"),
+                    (h, 0) => format!("{h}h"),
+                    (h, m) => format!("{h}h {m}m"),
+                };
+                let mut parts = vec![format!("{units} {} done", plural(*units as usize, "chapter or lesson", "chapters and lessons"))];
+                if *streak > 1 {
+                    parts.push(format!("{streak}-day streak"));
+                }
+                (format!("Your study week: {time}"), parts.join(" · "))
             }
         }
     }

@@ -445,24 +445,30 @@ async fn board_actions_are_instant_on_local_storage() {
         add_checklist_item(&db, &t.id, "step").await.unwrap();
     }
 
+    // Each action is timed over several tries and judged by its median, so one
+    // slow disk write on a busy CI machine doesn't fail it. The regression this
+    // guards against took 1-3.5 s per action, far over the budget.
+    const TRIES: usize = 7;
     let budget = std::time::Duration::from_millis(50);
-    let time = |label: &'static str, started: std::time::Instant| {
-        let took = started.elapsed();
-        assert!(took < budget, "{label} took {took:?}, budget {budget:?}");
-    };
-    for _ in 0..5 {
+    let mut timings: std::collections::BTreeMap<&str, Vec<std::time::Duration>> = Default::default();
+    for _ in 0..TRIES {
         let t = std::time::Instant::now();
         let task = create_task(&db, &todo, "probe").await.unwrap().task;
-        time("create_task", t);
+        timings.entry("create_task").or_default().push(t.elapsed());
         let t = std::time::Instant::now();
         move_task(&db, &task.id, &doing, None).await.unwrap();
-        time("move_task", t);
+        timings.entry("move_task").or_default().push(t.elapsed());
         let t = std::time::Instant::now();
         update_task(&db, &task.id, fields("probe 2")).await.unwrap();
-        time("update_task", t);
+        timings.entry("update_task").or_default().push(t.elapsed());
         let t = std::time::Instant::now();
         get_board(&db, &project).await.unwrap();
-        time("get_board", t);
+        timings.entry("get_board").or_default().push(t.elapsed());
+    }
+    for (label, mut took) in timings {
+        took.sort();
+        let median = took[TRIES / 2];
+        assert!(median < budget, "{label} took {median:?} (median of {TRIES}), budget {budget:?}; all: {took:?}");
     }
     drop(db);
     let _ = std::fs::remove_dir_all(folder);

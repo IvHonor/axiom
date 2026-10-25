@@ -23,6 +23,9 @@ interface ThemePrefs {
   fixed: string;
 }
 
+/** The window has been shown (once per launch; StrictMode runs effects twice). */
+let shown = false;
+
 const DEFAULT_PREFS: ThemePrefs = {
   followSystem: true,
   dark: DEFAULT_THEMES.dark,
@@ -112,6 +115,20 @@ export function ThemeProvider({ installed, children }: ThemeProviderProps) {
       // Not running inside Tauri (e.g. a plain browser tab).
     }
   }, [theme, prefs.followSystem]);
+
+  // The window starts hidden (tauri.conf.json): show it once the themed first
+  // screen has painted, so it never flashes another colour.
+  useEffect(() => {
+    if (shown) return;
+    shown = true;
+    requestAnimationFrame(() => {
+      try {
+        getCurrentWindow().show().catch(() => {});
+      } catch {
+        // Not running inside Tauri.
+      }
+    });
+  }, []);
 
   return (
     <ThemeContext.Provider

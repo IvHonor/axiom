@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Users, X } from "lucide-react";
+import { Users } from "lucide-react";
 import { useAccount } from "../../shell/useAccount";
 import { ConfirmButton } from "../../shell/ui/ConfirmButton";
+import { Modal } from "../../shell/ui/Modal";
 import { errorMessage } from "./api";
 import { atLeast, ROLES, roleLabel, sharing, sharingChanged, type Members, type Role, type SharedBoard } from "./sharing";
 
@@ -61,125 +62,116 @@ export function ShareDialog({ projectId, projectName, onClose, onChanged }: Shar
   const admin = !!role && atLeast(role, "admin");
 
   return (
-    <div className="pb-dialog-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <section className="pb-dialog" role="dialog" aria-label={`Share ${projectName}`}>
-        <header className="pb-dialog-head">
-          <Users size={16} strokeWidth={1.75} />
-          <h2>Share “{projectName}”</h2>
-          <button className="icon-btn" aria-label="Close" onClick={onClose}>
-            <X size={16} strokeWidth={1.75} />
-          </button>
-        </header>
-        <div className="pb-dialog-body">
-          {error && <p className="pb-dialog-error">{error}</p>}
+    <Modal title={`Share “${projectName}”`} icon={<Users size={16} strokeWidth={1.75} />} onClose={onClose} width={560} className="pb-dialog" bare>
+      <div className="pb-dialog-body">
+        {error && <p className="pb-dialog-error">{error}</p>}
 
-          {!signedIn ? (
-            <p className="dim">
-              Sign in to share boards: open the Account panel (the person icon at the bottom left) and sign in, or create an account. Then the
-              people you invite can work on this board with you.
+        {!signedIn ? (
+          <p className="dim">
+            Sign in to share boards: open the Account panel (the person icon at the bottom left) and sign in, or create an account. Then the
+            people you invite can work on this board with you.
+          </p>
+        ) : board === undefined ? (
+          <p className="dim">Loading…</p>
+        ) : board === null ? (
+          <>
+            <p>Invite people to work on this board with you. You choose what each person can do:</p>
+            <RoleList />
+            <p className="dim">The board moves to your shared space, so everyone on it sees changes as they happen. Your other projects stay private.</p>
+            <button className="btn" disabled={busy} onClick={() => run(() => sharing.share(projectId))}>
+              {busy ? "Sharing…" : "Share this board"}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="dim pb-share-who">
+              {role === "owner" ? "You shared this board." : `Shared by ${board.ownerEmail}.`} You're {role === "admin" || role === "owner" ? "an" : "a"}{" "}
+              <b>{roleLabel(role!)}</b>: {ROLES.find((r) => r.id === role)?.can.toLowerCase()}
             </p>
-          ) : board === undefined ? (
-            <p className="dim">Loading…</p>
-          ) : board === null ? (
-            <>
-              <p>Invite people to work on this board with you. You choose what each person can do:</p>
-              <RoleList />
-              <p className="dim">The board moves to your shared space, so everyone on it sees changes as they happen. Your other projects stay private.</p>
-              <button className="btn" disabled={busy} onClick={() => run(() => sharing.share(projectId))}>
-                {busy ? "Sharing…" : "Share this board"}
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="dim pb-share-who">
-                {role === "owner" ? "You shared this board." : `Shared by ${board.ownerEmail}.`} You're {role === "admin" || role === "owner" ? "an" : "a"}{" "}
-                <b>{roleLabel(role!)}</b>: {ROLES.find((r) => r.id === role)?.can.toLowerCase()}
-              </p>
 
-              {admin && <InviteForm owner={role === "owner"} busy={busy} onInvite={(email, r) => run(() => sharing.invite(projectId, email, r))} />}
+            {admin && <InviteForm owner={role === "owner"} busy={busy} onInvite={(email, r) => run(() => sharing.invite(projectId, email, r))} />}
 
-              <h3 className="pb-dialog-heading">People</h3>
-              <ul className="pb-people">
-                {people?.members.map((m) => {
-                  const canManage = !m.you && m.role !== "owner" && (role === "owner" || (role === "admin" && m.role !== "admin"));
-                  return (
-                    <li key={m.userId}>
+            <h3 className="pb-dialog-heading">People</h3>
+            <ul className="pb-people">
+              {people?.members.map((m) => {
+                const canManage = !m.you && m.role !== "owner" && (role === "owner" || (role === "admin" && m.role !== "admin"));
+                return (
+                  <li key={m.userId}>
+                    <span className="pb-person">
+                      {m.email}
+                      {m.you && <span className="dim"> (you)</span>}
+                    </span>
+                    {canManage ? (
+                      <>
+                        <select
+                          aria-label={`${m.email}'s role`}
+                          value={m.role}
+                          disabled={busy}
+                          onChange={(e) => run(() => sharing.setRole(projectId, m.userId, e.currentTarget.value as Role))}
+                        >
+                          {ROLES.filter((r) => r.id !== "owner" && (r.id !== "admin" || role === "owner")).map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ConfirmButton className="btn btn-sm btn-ghost is-danger" confirmText="Remove?" onConfirm={() => run(() => sharing.remove(projectId, m.userId))}>
+                          Remove
+                        </ConfirmButton>
+                      </>
+                    ) : (
+                      <span className="pb-role">{roleLabel(m.role)}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+
+            {admin && !!people?.invites.length && (
+              <>
+                <h3 className="pb-dialog-heading">Invited</h3>
+                <ul className="pb-people">
+                  {people.invites.map((i) => (
+                    <li key={i.id}>
                       <span className="pb-person">
-                        {m.email}
-                        {m.you && <span className="dim"> (you)</span>}
+                        {i.email}
+                        <span className="dim"> · waiting · expires {new Date(i.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
                       </span>
-                      {canManage ? (
-                        <>
-                          <select
-                            aria-label={`${m.email}'s role`}
-                            value={m.role}
-                            disabled={busy}
-                            onChange={(e) => run(() => sharing.setRole(projectId, m.userId, e.currentTarget.value as Role))}
-                          >
-                            {ROLES.filter((r) => r.id !== "owner" && (r.id !== "admin" || role === "owner")).map((r) => (
-                              <option key={r.id} value={r.id}>
-                                {r.label}
-                              </option>
-                            ))}
-                          </select>
-                          <ConfirmButton className="btn btn-sm btn-ghost is-danger" confirmText="Remove?" onConfirm={() => run(() => sharing.remove(projectId, m.userId))}>
-                            Remove
-                          </ConfirmButton>
-                        </>
-                      ) : (
-                        <span className="pb-role">{roleLabel(m.role)}</span>
-                      )}
+                      <span className="pb-role">{roleLabel(i.role)}</span>
+                      <button className="btn btn-sm btn-ghost" disabled={busy} onClick={() => run(() => sharing.withdraw(projectId, i.id))}>
+                        Withdraw
+                      </button>
                     </li>
-                  );
-                })}
-              </ul>
+                  ))}
+                </ul>
+              </>
+            )}
 
-              {admin && !!people?.invites.length && (
-                <>
-                  <h3 className="pb-dialog-heading">Invited</h3>
-                  <ul className="pb-people">
-                    {people.invites.map((i) => (
-                      <li key={i.id}>
-                        <span className="pb-person">
-                          {i.email}
-                          <span className="dim"> · waiting · expires {new Date(i.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
-                        </span>
-                        <span className="pb-role">{roleLabel(i.role)}</span>
-                        <button className="btn btn-sm btn-ghost" disabled={busy} onClick={() => run(() => sharing.withdraw(projectId, i.id))}>
-                          Withdraw
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </>
+            <footer className="pb-dialog-foot">
+              {role === "owner" ? (
+                <ConfirmButton
+                  className="btn btn-sm btn-ghost is-danger"
+                  confirmText="Everyone else loses it. Click again"
+                  onConfirm={() => run(() => sharing.stopSharing(projectId), onChanged)}
+                >
+                  Stop sharing
+                </ConfirmButton>
+              ) : (
+                <ConfirmButton
+                  className="btn btn-sm btn-ghost is-danger"
+                  confirmText="It leaves this computer. Click again"
+                  onConfirm={async () => {
+                    if (await run(() => sharing.leave(projectId), onChanged)) onClose();
+                  }}
+                >
+                  Leave board
+                </ConfirmButton>
               )}
-
-              <footer className="pb-dialog-foot">
-                {role === "owner" ? (
-                  <ConfirmButton
-                    className="btn btn-sm btn-ghost is-danger"
-                    confirmText="Everyone else loses it. Click again"
-                    onConfirm={() => run(() => sharing.stopSharing(projectId), onChanged)}
-                  >
-                    Stop sharing
-                  </ConfirmButton>
-                ) : (
-                  <ConfirmButton
-                    className="btn btn-sm btn-ghost is-danger"
-                    confirmText="It leaves this computer. Click again"
-                    onConfirm={async () => {
-                      if (await run(() => sharing.leave(projectId), onChanged)) onClose();
-                    }}
-                  >
-                    Leave board
-                  </ConfirmButton>
-                )}
-              </footer>
-            </>
-          )}
-        </div>
-      </section>
-    </div>
+            </footer>
+          </>
+        )}
+      </div>
+    </Modal>
   );
 }
 

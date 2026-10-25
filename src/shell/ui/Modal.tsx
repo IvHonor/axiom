@@ -2,8 +2,24 @@ import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
-/** A centred dialog over the whole app. Closes on Escape or a click outside. */
-export function Modal({ title, icon, onClose, children }: { title: string; icon?: ReactNode; onClose: () => void; children: ReactNode }) {
+/**
+ * A centred dialog over the whole app. Closes on Escape or a click outside,
+ * and never grows past the window: its body scrolls instead.
+ *
+ * `width` is the most it takes, in pixels (640 by default). `className` goes
+ * on the dialog, e.g. for an area's field styles. `bare` leaves the body to
+ * the children: they lay out (and scroll) their own, e.g. a search field
+ * that stays put above its results.
+ */
+export function Modal({ title, icon, onClose, children, width, className, bare }: {
+  title: string;
+  icon?: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+  width?: number;
+  className?: string;
+  bare?: boolean;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -11,7 +27,8 @@ export function Modal({ title, icon, onClose, children }: { title: string; icon?
   }, [onClose]);
   return createPortal(
     <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <section className="modal" role="dialog" aria-label={title}>
+      <section className={className ? `modal ${className}` : "modal"} role="dialog" aria-label={title}
+        style={width ? { width: `min(${width}px, 100%)` } : undefined}>
         <header className="modal-head">
           {icon}
           <h2>{title}</h2>
@@ -19,7 +36,7 @@ export function Modal({ title, icon, onClose, children }: { title: string; icon?
             <X size={16} strokeWidth={1.75} />
           </button>
         </header>
-        <div className="modal-body">{children}</div>
+        {bare ? children : <div className="modal-body">{children}</div>}
       </section>
     </div>, document.body,
   );

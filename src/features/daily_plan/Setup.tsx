@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { CalendarDays, Pencil, RefreshCw, Repeat, X } from "lucide-react";
+import { CalendarDays, Pencil, RefreshCw, Repeat } from "lucide-react";
 import { ConfirmButton } from "../../shell/ui/ConfirmButton";
+import { Modal } from "../../shell/ui/Modal";
 import { api, errorMessage, type Calendar, type CalendarAccount, type CalendarSetup, type Routine, type RoutineFields } from "./api";
 import { BLOCK_COLORS, colorOf } from "./palette";
 import { clock, duration, parseClock, parseDuration, today as todayNow } from "./time";
@@ -17,27 +18,12 @@ export function weekdayText(mask: number): string {
   return WEEKDAYS.filter((_, i) => mask & (1 << i)).join(", ");
 }
 
-/** A centred dialog over the planner. */
+/** The app's dialog, with the planner's body layout. */
 function Dialog({ icon, title, onClose, children }: { icon: ReactNode; title: string; onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   return (
-    <div className="dp-ritual-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dp-ritual dp-dialog" role="dialog" aria-label={title}>
-        <header className="dp-ritual-head">
-          <span className="dp-ritual-icon">{icon}</span>
-          <span className="dp-ritual-name">{title}</span>
-          <button className="icon-btn" aria-label="Close" onClick={onClose}>
-            <X size={16} strokeWidth={1.75} />
-          </button>
-        </header>
-        <div className="dp-dialog-body">{children}</div>
-      </div>
-    </div>
+    <Modal title={title} icon={icon} onClose={onClose} width={560} bare>
+      <div className="dp-dialog-body">{children}</div>
+    </Modal>
   );
 }
 

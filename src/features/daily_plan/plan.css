@@ -1384,15 +1384,7 @@
   color: var(--text-dim);
 }
 
-/* Dialogs for routines and calendars, framed like the rituals. */
-.dp-dialog {
-  width: min(560px, 100%);
-}
-
-.dp-dialog .dp-ritual-name {
-  flex: 1;
-}
-
+/* The body of the routines and calendars dialogs. */
 .dp-dialog-body {
   min-height: 0;
   display: flex;

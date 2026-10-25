@@ -97,6 +97,15 @@
   border-radius: var(--radius-sm);
 }
 
+/* Text boxes take their height from `rows`, and keep it in a dialog's scrolling body. */
+.rd-view textarea,
+.rd-dialog textarea {
+  flex: none;
+  height: auto;
+  padding: 6px 8px;
+  resize: vertical;
+}
+
 .rd-view input:focus,
 .rd-view textarea:focus,
 .rd-dialog input:focus,
@@ -635,50 +644,6 @@ input.rd-num {
 }
 
 /* ---------- Dialogs ---------- */
-
-.rd-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
-  backdrop-filter: blur(2px);
-}
-
-.rd-dialog {
-  width: min(520px, 100%);
-  max-height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  box-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
-}
-
-.rd-dialog.is-wide {
-  width: min(640px, 100%);
-}
-
-.rd-dialog-head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px 12px 18px;
-  color: var(--accent);
-  border-bottom: 1px solid var(--line);
-}
-
-.rd-dialog-head h2 {
-  flex: 1;
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-}
 
 .rd-dialog-body {
   min-height: 0;

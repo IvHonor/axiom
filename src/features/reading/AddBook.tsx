@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowLeft, BookPlus, Loader2, Search, X } from "lucide-react";
+import { ArrowLeft, BookPlus, Loader2, Search } from "lucide-react";
+import { Modal } from "../../shell/ui/Modal";
 import { today } from "../daily_plan/time";
 import { api, errorMessage, FORMATS, type Edition, type Format, type Found, type Status } from "./api";
 import { Cover } from "./Cover";
@@ -14,26 +15,15 @@ const SHELVES: { id: Status; label: string }[] = [
   { id: "finished", label: "Finished" },
 ];
 
-/** A centred dialog over the Reading Tracker. */
+/**
+ * The app's dialog with the Reading Tracker's field styles, shared by
+ * Learning and University. Children lay out their own `rd-dialog-body`.
+ */
 export function Dialog({ title, icon, onClose, children, wide }: { title: string; icon: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
   return (
-    <div className="rd-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <section className={`rd-dialog${wide ? " is-wide" : ""}`} role="dialog" aria-label={title}>
-        <header className="rd-dialog-head">
-          {icon}
-          <h2>{title}</h2>
-          <button className="icon-btn" aria-label="Close" onClick={onClose}>
-            <X size={16} strokeWidth={1.75} />
-          </button>
-        </header>
-        {children}
-      </section>
-    </div>
+    <Modal title={title} icon={icon} onClose={onClose} width={wide ? 640 : 520} className="rd-dialog" bare>
+      {children}
+    </Modal>
   );
 }
 

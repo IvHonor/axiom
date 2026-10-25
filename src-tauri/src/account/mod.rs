@@ -82,6 +82,12 @@ impl Account {
         status_of(&*self.state.lock().await)
     }
 
+    /// The status without waiting, or `None` while another action holds the
+    /// account (a token refresh can wait a minute for a sleeping server).
+    pub fn status_now(&self) -> Option<AccountStatus> {
+        self.state.try_lock().ok().map(|state| status_of(&state))
+    }
+
     /// Creates an account. It signs in once its address is confirmed (and an
     /// admin approves it, if the server has a waiting list).
     pub async fn sign_up(&self, email: &str, password: &str) -> Result<SignInOutcome> {
@@ -134,18 +140,16 @@ impl Account {
 
     /// Emails a code that turns off the app lock (see `crate::app_lock`).
     pub async fn send_unlock_code(&self) -> Result<()> {
-        let token = self.access_token().await?;
-        let result = self.client.send_unlock_code(&token).await;
-        Ok(self.after_call(result).await?)
+        let result = self.authed(|token| async move { self.client.send_unlock_code(&token).await }).await;
+        Ok(result?)
     }
 
     pub async fn check_unlock_code(&self, code: &str) -> Result<()> {
         if code.trim().is_empty() {
             return Err(Error::Invalid("Enter the code from the email.".into()));
         }
-        let token = self.access_token().await?;
-        let result = self.client.check_unlock_code(&token, &axiom_protocol::CheckCode { code: code.into() }).await;
-        Ok(self.after_call(result).await?)
+        let result = self.authed(|token| async move { self.client.check_unlock_code(&token, &axiom_protocol::CheckCode { code: code.into() }).await }).await;
+        Ok(result?)
     }
 
     /// Asks the server to email a reset code. Succeeds whether or not the
@@ -176,51 +180,59 @@ impl Account {
         check_password(new).map_err(Error::Invalid)?;
         let email = self.email().await?;
         let new_password = login_key(&email, new);
-        let token = self.access_token().await?;
-        let (client, token, new_password, encryption_key) = (&self.client, &token, &new_password, &encryption_key);
-        let change = |current_password, _| async move {
-            let request = ChangePassword { current_password, new_password: new_password.clone(), encryption_key: encryption_key.clone() };
-            client.change_password(token, &request).await
-        };
-        let result = with_password(&email, current, change).await;
-        Ok(self.after_call(result).await?)
+        let (client, email, new_password, encryption_key) = (&self.client, &email, &new_password, &encryption_key);
+        let result = self
+            .authed(|token| async move {
+                let token = &token;
+                let change = |current_password, _| async move {
+                    let request = ChangePassword { current_password, new_password: new_password.clone(), encryption_key: encryption_key.clone() };
+                    client.change_password(token, &request).await
+                };
+                with_password(email, current, change).await
+            })
+            .await;
+        Ok(result?)
     }
 
     /// The end-to-end encryption key, wrapped (see `crate::vault`).
     pub async fn encryption_key(&self) -> std::result::Result<Option<String>, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.encryption_key(&token).await;
-        Ok(self.after_call(result).await?.wrapped)
+        let result = self.authed(|token| async move { self.client.encryption_key(&token).await }).await;
+        Ok(result?.wrapped)
     }
 
     pub async fn set_encryption_key(&self, wrapped: Option<String>) -> std::result::Result<(), ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.set_encryption_key(&token, &axiom_protocol::EncryptionKey { wrapped }).await;
-        self.after_call(result).await
+        let body = &axiom_protocol::EncryptionKey { wrapped };
+        self.authed(|token| async move { self.client.set_encryption_key(&token, body).await }).await
     }
 
     /// Checks the password with the server.
     pub async fn verify_password(&self, password: &str) -> Result<()> {
         let email = self.email().await?;
-        let token = self.access_token().await?;
-        let (client, token) = (&self.client, &token);
-        let verify = |password, login_key| async move { client.verify_password(token, &axiom_protocol::ConfirmPassword { password, login_key }).await };
-        let result = with_password(&email, password, verify).await;
-        Ok(self.after_call(result).await?)
+        let (client, email) = (&self.client, &email);
+        let result = self
+            .authed(|token| async move {
+                let token = &token;
+                let verify = |password, login_key| async move { client.verify_password(token, &axiom_protocol::ConfirmPassword { password, login_key }).await };
+                with_password(email, password, verify).await
+            })
+            .await;
+        Ok(result?)
     }
 
     /// Replaces the notification emails the server will send (see `crate::notifications`).
     pub async fn plan_emails(&self, plan: &axiom_protocol::notify::PlanEmails) -> std::result::Result<axiom_protocol::notify::PlanResult, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.plan_emails(&token, plan).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.plan_emails(&token, plan).await }).await
+    }
+
+    /// The assistant, on Axiom's AI keys (see `crate::ai`).
+    pub async fn ai_chat(&self, request: &axiom_protocol::ai::ChatRequest) -> std::result::Result<axiom_protocol::ai::ChatReply, ServerError> {
+        self.authed(|token| async move { self.client.ai_chat(&token, request).await }).await
     }
 
     /// The name and picture the account shows.
     pub async fn profile(&self) -> Result<ProfileView> {
-        let token = self.access_token().await?;
-        let result = self.client.profile(&token).await;
-        Ok(self.after_call(result).await?.into())
+        let result = self.authed(|token| async move { self.client.profile(&token).await }).await;
+        Ok(result?.into())
     }
 
     /// Replaces the name and picture. The picture is a small `data:image/...` URL.
@@ -228,32 +240,32 @@ impl Account {
         if let Some(avatar) = &avatar {
             check_avatar(avatar).map_err(|message| Error::Invalid(message.into()))?;
         }
-        let token = self.access_token().await?;
-        let result = self.client.update_profile(&token, &Profile { display_name, avatar }).await;
-        Ok(self.after_call(result).await?.into())
+        let body = &Profile { display_name, avatar };
+        let result = self.authed(|token| async move { self.client.update_profile(&token, body).await }).await;
+        Ok(result?.into())
     }
 
     /// Every device signed in to the account.
     pub async fn devices(&self) -> Result<Vec<DeviceView>> {
-        let token = self.access_token().await?;
-        let result = self.client.devices(&token).await;
-        Ok(self.after_call(result).await?.into_iter().map(DeviceView::from).collect())
+        let result = self.authed(|token| async move { self.client.devices(&token).await }).await;
+        Ok(result?.into_iter().map(DeviceView::from).collect())
     }
 
     pub async fn sign_out_device(&self, id: &str) -> Result<()> {
-        let token = self.access_token().await?;
-        let result = self.client.sign_out_device(&token, id).await;
-        Ok(self.after_call(result).await?)
+        let result = self.authed(|token| async move { self.client.sign_out_device(&token, id).await }).await;
+        Ok(result?)
     }
 
     /// Deletes the account on the server, then signs out here.
     pub async fn delete_account(&self, password: &str) -> Result<()> {
         let email = self.email().await?;
-        let token = self.access_token().await?;
-        let (client, token) = (&self.client, &token);
-        let delete = |password, _| async move { client.delete_account(token, &DeleteAccount { password }).await };
-        let result = with_password(&email, password, delete).await;
-        self.after_call(result).await?;
+        let (client, email) = (&self.client, &email);
+        self.authed(|token| async move {
+            let token = &token;
+            let delete = |password, _| async move { client.delete_account(token, &DeleteAccount { password }).await };
+            with_password(email, password, delete).await
+        })
+        .await?;
         *self.state.lock().await = None;
         self.store.clear();
         Ok(())
@@ -307,135 +319,98 @@ impl Account {
     }
 
     pub async fn push(&self, request: &PushRequest) -> std::result::Result<PushResponse, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.push(&token, request).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.push(&token, request).await }).await
     }
 
     pub async fn pull(&self, since: i64) -> std::result::Result<PullResponse, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.pull(&token, since).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.pull(&token, since).await }).await
     }
 
     // ---------- Shared boards ----------
-    // Each takes a fresh token and signs out here if the server ended the session.
 
     pub async fn spaces(&self) -> std::result::Result<Vec<Space>, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.spaces(&token).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.spaces(&token).await }).await
     }
 
     pub async fn create_space(&self, id: &str) -> std::result::Result<Space, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.create_space(&token, id).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.create_space(&token, id).await }).await
     }
 
     pub async fn adopt(&self, id: &str, request: &Adopt) -> std::result::Result<Adopted, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.adopt(&token, id, request).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.adopt(&token, id, request).await }).await
     }
 
     pub async fn delete_space(&self, id: &str) -> std::result::Result<(), ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.delete_space(&token, id).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.delete_space(&token, id).await }).await
     }
 
     pub async fn space_push(&self, id: &str, request: &PushRequest) -> std::result::Result<PushResponse, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.space_push(&token, id, request).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.space_push(&token, id, request).await }).await
     }
 
     pub async fn space_pull(&self, id: &str, since: i64) -> std::result::Result<PullResponse, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.space_pull(&token, id, since).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.space_pull(&token, id, since).await }).await
     }
 
     pub async fn members(&self, id: &str) -> std::result::Result<Members, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.members(&token, id).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.members(&token, id).await }).await
     }
 
     pub async fn invite(&self, id: &str, request: &NewInvite) -> std::result::Result<Invite, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.invite(&token, id, request).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.invite(&token, id, request).await }).await
     }
 
     pub async fn withdraw_invite(&self, id: &str, invite_id: &str) -> std::result::Result<(), ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.withdraw_invite(&token, id, invite_id).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.withdraw_invite(&token, id, invite_id).await }).await
     }
 
     pub async fn change_role(&self, id: &str, user_id: &str, role: Role) -> std::result::Result<(), ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.change_role(&token, id, user_id, role).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.change_role(&token, id, user_id, role).await }).await
     }
 
     pub async fn remove_member(&self, id: &str, user_id: &str) -> std::result::Result<(), ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.remove_member(&token, id, user_id).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.remove_member(&token, id, user_id).await }).await
     }
 
     pub async fn my_invites(&self) -> std::result::Result<Vec<MyInvite>, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.my_invites(&token).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.my_invites(&token).await }).await
     }
 
     pub async fn accept_invite(&self, id: &str) -> std::result::Result<Space, ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.accept_invite(&token, id).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.accept_invite(&token, id).await }).await
     }
 
     pub async fn decline_invite(&self, id: &str) -> std::result::Result<(), ServerError> {
-        let token = self.access_token().await?;
-        let result = self.client.decline_invite(&token, id).await;
-        self.after_call(result).await
+        self.authed(|token| async move { self.client.decline_invite(&token, id).await }).await
     }
 
     // ---------- Waiting list (admins only) ----------
 
     pub async fn admin_accounts(&self) -> Result<Vec<AdminAccountView>> {
-        let token = self.access_token().await?;
-        let result = self.client.admin_accounts(&token).await;
-        Ok(self.after_call(result).await?.into_iter().map(AdminAccountView::from).collect())
+        let result = self.authed(|token| async move { self.client.admin_accounts(&token).await }).await;
+        Ok(result?.into_iter().map(AdminAccountView::from).collect())
     }
 
     pub async fn approve(&self, id: &str) -> Result<()> {
-        let token = self.access_token().await?;
-        let result = self.client.approve(&token, id).await;
-        Ok(self.after_call(result).await?)
+        let result = self.authed(|token| async move { self.client.approve(&token, id).await }).await;
+        Ok(result?)
     }
 
     pub async fn decline(&self, id: &str) -> Result<()> {
-        let token = self.access_token().await?;
-        let result = self.client.decline(&token, id).await;
-        Ok(self.after_call(result).await?)
+        let result = self.authed(|token| async move { self.client.decline(&token, id).await }).await;
+        Ok(result?)
     }
 
     pub async fn revoke(&self, id: &str) -> Result<()> {
-        let token = self.access_token().await?;
-        let result = self.client.revoke(&token, id).await;
-        Ok(self.after_call(result).await?)
+        let result = self.authed(|token| async move { self.client.revoke(&token, id).await }).await;
+        Ok(result?)
     }
 
     /// Changes an account's role or permissions.
     pub async fn admin_update(&self, id: &str, role: Option<AccountRole>, permissions: Option<Vec<String>>) -> Result<AdminAccountView> {
-        let token = self.access_token().await?;
-        let result = self.client.admin_update(&token, id, &AccountChange { role, permissions }).await;
-        Ok(self.after_call(result).await?.into())
+        let body = &AccountChange { role, permissions };
+        let result = self.authed(|token| async move { self.client.admin_update(&token, id, body).await }).await;
+        Ok(result?.into())
     }
 
     /// Sends a message to support, as the account when signed in (its address
@@ -443,38 +418,56 @@ impl Account {
     pub async fn contact_support(&self, kind: &str, subject: &str, message: &str, email: Option<String>, app_version: &str) -> Result<String> {
         self.require_server()?;
         let signed_in = self.state.lock().await.is_some();
-        let token = if signed_in { Some(self.access_token().await?) } else { None };
-        let ticket = NewTicket { kind: kind.into(), subject: subject.into(), message: message.into(), email, app_version: app_version.into() };
-        let result = self.client.support(token.as_deref(), &ticket).await;
-        Ok(self.after_call(result).await?.reference)
+        let ticket = &NewTicket { kind: kind.into(), subject: subject.into(), message: message.into(), email, app_version: app_version.into() };
+        let result = if signed_in {
+            self.authed(|token| async move { self.client.support(Some(&token), ticket).await }).await
+        } else {
+            self.after_call(self.client.support(None, ticket).await).await
+        };
+        Ok(result?.reference)
     }
 
     /// Support tickets, for an admin: open ones first.
     pub async fn admin_tickets(&self) -> Result<Vec<TicketView>> {
-        let token = self.access_token().await?;
-        let result = self.client.admin_tickets(&token).await;
-        Ok(self.after_call(result).await?.into_iter().map(TicketView::from).collect())
+        let result = self.authed(|token| async move { self.client.admin_tickets(&token).await }).await;
+        Ok(result?.into_iter().map(TicketView::from).collect())
     }
 
     pub async fn admin_ticket_solved(&self, id: &str, solved: bool) -> Result<TicketView> {
-        let token = self.access_token().await?;
-        let result = self.client.admin_ticket(&token, id, &axiom_protocol::TicketChange { solved }).await;
-        Ok(self.after_call(result).await?.into())
+        let result = self.authed(|token| async move { self.client.admin_ticket(&token, id, &axiom_protocol::TicketChange { solved }).await }).await;
+        Ok(result?.into())
     }
 
     pub async fn admin_settings(&self) -> Result<AdminSettingsView> {
-        let token = self.access_token().await?;
-        let result = self.client.admin_settings(&token).await;
-        let s = self.after_call(result).await?;
+        let result = self.authed(|token| async move { self.client.admin_settings(&token).await }).await;
+        let s = result?;
         Ok(AdminSettingsView { waitlist: s.waitlist, default_permissions: s.default_permissions })
     }
 
     pub async fn save_admin_settings(&self, settings: AdminSettingsView) -> Result<AdminSettingsView> {
-        let token = self.access_token().await?;
-        let body = AdminSettings { waitlist: settings.waitlist, default_permissions: settings.default_permissions };
-        let result = self.client.save_admin_settings(&token, &body).await;
-        let s = self.after_call(result).await?;
+        let body = &AdminSettings { waitlist: settings.waitlist, default_permissions: settings.default_permissions };
+        let s = self.authed(|token| async move { self.client.save_admin_settings(&token, body).await }).await?;
         Ok(AdminSettingsView { waitlist: s.waitlist, default_permissions: s.default_permissions })
+    }
+
+    /// Calls the server with an access token. A refused token is first
+    /// swapped for a fresh one and tried again: the one held here can be
+    /// stale (the computer slept past its expiry) without the session being
+    /// over. Refused again, or refused a fresh one, signs out here.
+    async fn authed<T, F, Fut>(&self, call: F) -> std::result::Result<T, ServerError>
+    where
+        F: Fn(String) -> Fut,
+        Fut: Future<Output = std::result::Result<T, ClientError>>,
+    {
+        let result = call(self.access_token().await?).await;
+        if !matches!(&result, Err(err) if err.is_unauthorized()) {
+            return self.after_call(result).await;
+        }
+        if let Some(signed_in) = self.state.lock().await.as_mut() {
+            signed_in.access = None;
+        }
+        let result = call(self.access_token().await?).await;
+        self.after_call(result).await
     }
 
     /// A refused token means the session was ended elsewhere: sign out here.

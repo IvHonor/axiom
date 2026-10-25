@@ -177,6 +177,9 @@ pub mod session {
         /// Pushed forward on every refresh, so a device used weekly stays signed in.
         pub expires_at: DateTimeUtc,
         pub revoked_at: Option<DateTimeUtc>,
+        /// The device has used the access token from its last refresh, so it
+        /// has the new tokens. Until then, the replaced token may retry.
+        pub confirmed: bool,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

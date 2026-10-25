@@ -39,6 +39,11 @@ async fn main() {
         tracing::warn!("OPERATOR_NAME isn't set: the privacy notice doesn't say who runs Axiom, which UK GDPR asks it to");
     }
     shared.operator_name = config.operator_name;
+    if !config.ai_keys.any() {
+        tracing::warn!("GEMINI_API_KEY and GROQ_API_KEY aren't set: the assistant works only for people with their own key");
+    }
+    shared.ai = axiom_ai::Ai::new(config.ai_models);
+    shared.ai_keys = config.ai_keys;
     if shared.waitlist && shared.admins.is_empty() {
         tracing::warn!("The waiting list is on but ADMIN_EMAILS isn't set: nobody can approve new accounts");
     }

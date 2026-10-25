@@ -281,6 +281,21 @@ async fn offline_says_so() {
 }
 
 #[tokio::test]
+async fn a_stale_access_token_refreshes_instead_of_signing_out() {
+    let server = start_server().await;
+    let store = Memory::default();
+    let account = Account::new(&server, Box::new(store.clone()));
+    account.sign_up("ada@example.com", "correct horse").await.unwrap();
+
+    // The app thinks its token still works, but the server refuses it (as
+    // after the computer sleeps past its expiry).
+    account.state.lock().await.as_mut().unwrap().access = Some(("expired".into(), Instant::now() + Duration::from_secs(600)));
+    assert!(account.profile().await.is_ok());
+    assert_eq!(account.status().await, signed_in("ada@example.com"));
+    assert!(store.load().is_some());
+}
+
+#[tokio::test]
 async fn a_session_ended_elsewhere_signs_out_here() {
     let server = start_server().await;
     let store = Memory::default();

@@ -2495,10 +2495,14 @@
 
 .modal-head h2 {
   flex: 1;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .modal-body {
@@ -2981,4 +2985,80 @@
   background: none;
   border: 0;
   outline: none;
+}
+
+/* ---------- Assistant panel ---------- */
+
+.assistant-intro {
+  margin: 0;
+  padding: 4px 16px 10px;
+  line-height: 1.45;
+}
+
+.assistant-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 16px 14px;
+}
+
+.assistant-group .field-hint {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.assistant-areas {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assistant-areas li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 30px;
+  font-size: 13px;
+}
+
+.assistant-key {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assistant-key .row {
+  align-items: center;
+}
+
+.assistant-saved {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.assistant-get-key {
+  align-self: flex-start;
+  font-size: 12px;
+}
+
+.assistant-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.assistant-reply p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }

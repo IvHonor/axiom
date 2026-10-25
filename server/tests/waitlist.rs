@@ -210,7 +210,7 @@ async fn new_accounts_get_the_default_permissions_and_the_waiting_list_can_be_sw
     let (app, _) = server_with_waitlist().await;
     let owner = admin_token(&app).await;
     let (status, settings) = call(&app, Method::GET, routes::ADMIN_SETTINGS, Some(&owner), None).await;
-    assert_eq!((status, settings), (StatusCode::OK, json!({ "waitlist": true, "default_permissions": ["sync", "share", "email"] })));
+    assert_eq!((status, settings), (StatusCode::OK, json!({ "waitlist": true, "default_permissions": ["sync", "share", "email", "ai"] })));
 
     let saved = json!({ "waitlist": false, "default_permissions": ["sync"] });
     assert_eq!(call(&app, Method::PUT, routes::ADMIN_SETTINGS, Some(&owner), Some(saved.clone())).await.1, saved);

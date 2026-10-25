@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use axiom_protocol::{PullResponse, PushRequest, PushResponse, Record, SYNC_BATCH, is_plain_name};
+use axiom_protocol::{PullResponse, PushRequest, PushResponse, Record, SYNC_BATCH, is_plain_name, is_record_id};
 use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
@@ -36,7 +36,7 @@ pub async fn push(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Pu
     if body.changes.len() > SYNC_BATCH {
         return Err(ApiError::bad_request(format!("Send at most {SYNC_BATCH} changes at a time.")));
     }
-    if let Some(bad) = body.changes.iter().find(|c| !is_plain_name(&c.table) || !is_plain_name(&c.id) || !c.id_matches()) {
+    if let Some(bad) = body.changes.iter().find(|c| !is_plain_name(&c.table) || !is_record_id(&c.id) || !c.id_matches()) {
         return Err(ApiError::bad_request(format!("Invalid table or id: {}/{}", bad.table, bad.id)));
     }
     if body.changes.iter().any(|c| Value::Object(c.fields.clone()).to_string().len() > MAX_RECORD_BYTES) {

@@ -7,10 +7,11 @@ use crate::account::{Account, AccountStatus};
 use crate::error::{Error, Result};
 
 /// The lock as it stands. Signed out, it's off: a forgotten PIN couldn't be
-/// reset by email any more.
+/// reset by email any more. Answers straight away, even while the account is
+/// busy reaching the server, so the lock covers the app as it opens.
 #[tauri::command]
 pub async fn app_lock_status(lock: State<'_, AppLock>, account: State<'_, Account>) -> Result<LockStatus> {
-    if account.status().await == AccountStatus::SignedOut {
+    if account.status_now() == Some(AccountStatus::SignedOut) {
         lock.forget();
     }
     Ok(lock.status())

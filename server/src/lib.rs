@@ -5,6 +5,7 @@
 
 mod account;
 pub mod admin;
+mod ai;
 mod digest_mail;
 pub mod auth;
 mod codes;
@@ -73,6 +74,11 @@ pub struct Shared {
     pub contact_email: Option<String>,
     /// Who runs this server (a person's or business's name), named in the privacy notice and terms.
     pub operator_name: Option<String>,
+    /// Talks to the AI models behind the assistant.
+    pub ai: axiom_ai::Ai,
+    /// Axiom's own AI keys (`GEMINI_API_KEY`, `GROQ_API_KEY`). Without any,
+    /// the assistant works only for people who add their own in the app.
+    pub ai_keys: axiom_ai::Keys,
     /// The admin panel's settings, read from the database at startup.
     pub settings: RwLock<admin::Settings>,
 }
@@ -94,6 +100,8 @@ impl Shared {
             public_url: "http://localhost:8787".into(),
             contact_email: None,
             operator_name: None,
+            ai: axiom_ai::Ai::default(),
+            ai_keys: axiom_ai::Keys::default(),
             settings: RwLock::new(admin::Settings::default()),
         }
     }
@@ -207,6 +215,7 @@ pub fn app(state: AppState) -> Router {
         .route(routes::ADMIN_REVOKE, post(admin::revoke))
         .route(routes::NOTIFY_EMAILS, put(notify::plan))
         .route(routes::WEB_UPDATES, post(web_updates::join))
+        .route(routes::AI_CHAT, post(ai::chat))
         .route(routes::NOTIFY_UNSUBSCRIBE, get(notify::unsubscribe_page).post(notify::unsubscribe_now))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

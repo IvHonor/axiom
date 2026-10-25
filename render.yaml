@@ -41,6 +41,12 @@ services:
       # rate limited per visitor. At least 32 characters: openssl rand -base64 48
       - key: WEB_PROXY_SECRET
         sync: false
+      # The assistant's AI: Gemini first, Groq when Gemini can't answer. Free keys
+      # from aistudio.google.com/apikey and console.groq.com/keys.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
       # New accounts wait for approval. Set to "off" to let anyone sign up.
       - key: WAITLIST
         value: "on"

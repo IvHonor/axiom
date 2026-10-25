@@ -1,7 +1,7 @@
 # One Cargo workspace for everything written in Rust, so the desktop app and the
 # server share one lockfile, one build folder (`target/`) and the protocol crate.
 [workspace]
-members = ["src-tauri", "server", "crates/protocol"]
+members = ["src-tauri", "server", "crates/protocol", "crates/ai"]
 resolver = "3"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

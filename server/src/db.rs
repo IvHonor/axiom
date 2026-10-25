@@ -14,6 +14,7 @@ mod m011_email_codes;
 mod m012_support_tickets;
 mod m013_terms;
 mod m014_web_updates;
+mod m015_session_confirmed;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
 use sea_orm_migration::prelude::*;
@@ -38,6 +39,7 @@ impl MigratorTrait for Migrator {
             Box::new(m012_support_tickets::Migration),
             Box::new(m013_terms::Migration),
             Box::new(m014_web_updates::Migration),
+            Box::new(m015_session_confirmed::Migration),
         ]
     }
 

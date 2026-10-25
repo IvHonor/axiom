@@ -50,12 +50,13 @@ export const deleteAccount = (password: string) => invoke<AccountStatus>("accoun
 export const signOut = (keepData: boolean) => invoke<AccountStatus>("account_sign_out", { keepData });
 
 export type AccountRole = "member" | "admin" | "owner";
-export type Permission = "sync" | "share" | "email";
+export type Permission = "sync" | "share" | "email" | "ai";
 
 export const PERMISSIONS: { id: Permission; label: string; hint: string }[] = [
   { id: "sync", label: "Sync", hint: "Copy their data to the cloud and their other computers" },
   { id: "share", label: "Share boards", hint: "Share Project Board boards with other people" },
   { id: "email", label: "Emails", hint: "Get notification emails" },
+  { id: "ai", label: "Assistant", hint: "Use the assistant on Axiom's AI keys" },
 ];
 
 /** Mirrors `AdminAccountView` in src-tauri/src/account/mod.rs. Times are ISO strings. */

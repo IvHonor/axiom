@@ -27,6 +27,7 @@ tokio = { version = "1.54", features = ["sync", "time", "macros", "net", "io-uti
 sea-orm-migration = { version = "2.0.4", default-features = false, features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.28", features = ["v4", "v7"] }
+axiom-ai = { path = "../crates/ai" }
 reqwest = { version = "0.13.5", features = ["form", "json", "query"] }
 # Stores the sign-in in Windows Credential Manager / macOS Keychain / Secret Service.
 keyring = "4.2.0"

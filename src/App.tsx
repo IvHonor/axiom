@@ -3,6 +3,7 @@ import { EXTENSIONS, findExtension } from "./extensions";
 import type { ExtensionManifest } from "./extensions/types";
 import { AccountPanel } from "./shell/AccountPanel";
 import { AppLockScreen } from "./shell/AppLockScreen";
+import { AssistantPanel } from "./shell/AssistantPanel";
 import { ActivityBar, type SidePanel } from "./shell/ActivityBar";
 import { AreasPanel } from "./shell/AreasPanel";
 import { ExtensionsPanel, type ExtensionKind } from "./shell/ExtensionsPanel";
@@ -181,6 +182,7 @@ export default function App() {
           )}
           {panel === "account" && <AccountPanel status={account} sync={sync} onChange={setAccount} extensions={areas.map((ext) => ext.id)} />}
           {panel === "themes" && <ThemesPanel onBrowse={browseThemes} />}
+          {panel === "assistant" && <AssistantPanel areas={areas} />}
           {shownArea && AreaSidebar && (
             <aside className="sidebar" aria-label={shownArea.name}>
               <button

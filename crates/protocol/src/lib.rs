@@ -5,6 +5,7 @@
 
 use chrono::{DateTime, Utc};
 
+pub mod ai;
 pub mod notify;
 use serde::{Deserialize, Serialize};
 
@@ -97,6 +98,8 @@ pub mod routes {
     pub const NOTIFY_UNSUBSCRIBE: &str = "/v1/notifications/unsubscribe";
     /// `POST` an email to hear when Axiom on the web opens. No account needed.
     pub const WEB_UPDATES: &str = "/v1/web-updates";
+    /// `POST` a `ai::ChatRequest`: the assistant answers on the server's AI keys.
+    pub const AI_CHAT: &str = "/v1/ai/chat";
 }
 
 /// Fills in a route's `{name}` placeholders, e.g. `route(SPACE, &[("id", "p1")])`.
@@ -158,9 +161,15 @@ pub struct PullResponse {
     pub more: bool,
 }
 
-/// Table names and ids are used in SQL on the devices, so only plain ones are allowed.
+/// Table names are written into SQL on the devices, so only plain ones are allowed.
 pub fn is_plain_name(name: &str) -> bool {
     (1..=64).contains(&name.len()) && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
+/// Row ids are only ever bound as SQL parameters, so they may also hold dots,
+/// as kind-named rows do (the notification setting "birthdays.upcoming").
+pub fn is_record_id(id: &str) -> bool {
+    (1..=64).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b'.')
 }
 
 // ---------- Shared boards ----------
@@ -405,7 +414,9 @@ pub mod permissions {
     pub const SHARE: &str = "share";
     /// Get notification emails.
     pub const EMAIL: &str = "email";
-    pub const ALL: &[&str] = &[SYNC, SHARE, EMAIL];
+    /// Use the assistant on the server's AI keys (people with their own keys don't need it).
+    pub const AI: &str = "ai";
+    pub const ALL: &[&str] = &[SYNC, SHARE, EMAIL, AI];
 }
 
 /// An account, as an admin sees it on `ADMIN_ACCOUNTS`.

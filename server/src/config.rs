@@ -36,6 +36,11 @@ pub struct Config {
     /// `OPERATOR_NAME`: who runs this server, named in the privacy notice
     /// and terms as the one responsible for people's data.
     pub operator_name: Option<String>,
+    /// `GEMINI_API_KEY` and `GROQ_API_KEY`: the assistant's AI, Gemini first.
+    /// Free keys from aistudio.google.com/apikey and console.groq.com/keys.
+    pub ai_keys: axiom_ai::Keys,
+    /// `GEMINI_MODEL` and `GROQ_MODEL`, to override the models used.
+    pub ai_models: axiom_ai::Models,
 }
 
 impl Config {
@@ -88,6 +93,10 @@ impl Config {
 
         let operator_name = var("OPERATOR_NAME").map(|name| name.trim().to_owned());
 
+        let ai_keys = axiom_ai::Keys { gemini: var("GEMINI_API_KEY"), groq: var("GROQ_API_KEY") };
+        let defaults = axiom_ai::Models::default();
+        let ai_models = axiom_ai::Models { gemini: var("GEMINI_MODEL").unwrap_or(defaults.gemini), groq: var("GROQ_MODEL").unwrap_or(defaults.groq) };
+
         Ok(Self {
             database_url,
             jwt_secret,
@@ -101,6 +110,8 @@ impl Config {
             public_url,
             contact_email,
             operator_name,
+            ai_keys,
+            ai_models,
         })
     }
 }

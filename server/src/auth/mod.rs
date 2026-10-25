@@ -228,9 +228,11 @@ pub async fn refresh(State(s): State<AppState>, Json(body): Json<RefreshRequest>
                 .one(&s.db)
                 .await?;
             match replaced {
-                // The app refreshed a moment ago but never got the answer: let it retry.
-                Some(session) if now - session.last_used_at < s.reuse_grace => session,
-                // An old token used again much later means someone copied it.
+                // The app never got the answer to its last refresh (it closed,
+                // or the computer slept, mid-request): it hasn't used the new
+                // tokens, so let it retry, however much later.
+                Some(session) if !session.confirmed || now - session.last_used_at < s.reuse_grace => session,
+                // The new tokens are in use, so the old one has been copied.
                 // End the session, so neither copy works any more.
                 Some(session) => {
                     revoke(&s, session).await?;
@@ -254,6 +256,7 @@ pub async fn refresh(State(s): State<AppState>, Json(body): Json<RefreshRequest>
     active.previous_hash = Set(Some(presented));
     active.last_used_at = Set(now);
     active.expires_at = Set(now + chrono::Duration::days(REFRESH_TTL_DAYS));
+    active.confirmed = Set(false);
     let session = active.update(&s.db).await?;
 
     Ok(Json(issue(&s, user, &session.id, refresh_token)))
@@ -476,13 +479,16 @@ pub(crate) async fn signed_in(s: &AppState, headers: &HeaderMap) -> Result<Optio
     let claims = s.keys.verify(token).ok_or_else(|| ApiError::unauthorized("Your session has expired."))?;
 
     // The token is genuine, but the device may have been signed out since.
-    let live = session::Entity::find_by_id(&claims.sid)
+    let session = session::Entity::find_by_id(&claims.sid)
         .filter(session::Column::RevokedAt.is_null())
         .one(&s.db)
         .await?
-        .is_some();
-    if !live {
-        return Err(ApiError::unauthorized(SIGNED_OUT));
+        .ok_or_else(|| ApiError::unauthorized(SIGNED_OUT))?;
+    // A token from the last refresh proves the device got its answer (see `refresh`).
+    if !session.confirmed && claims.iat >= session.last_used_at.timestamp().max(0) as u64 {
+        let mut active: session::ActiveModel = session.into();
+        active.confirmed = Set(true);
+        active.update(&s.db).await?;
     }
     Ok(Some(AuthUser { user_id: claims.sub, session_id: claims.sid }))
 }
@@ -505,6 +511,7 @@ async fn start_session(s: &AppState, user: user::Model, device_name: &str) -> Re
         last_used_at: Set(now),
         expires_at: Set(now + chrono::Duration::days(REFRESH_TTL_DAYS)),
         revoked_at: Set(None),
+        confirmed: Set(true),
     }
     .insert(&s.db)
     .await?;

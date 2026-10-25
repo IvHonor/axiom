@@ -36,7 +36,9 @@ export function AppLockScreen({ accountState }: { accountState: string | undefin
     };
   }, [idleMinutes]);
 
-  if (!status?.locked) return null;
+  // Until the lock has answered, cover the app: it may be locked.
+  if (!status) return createPortal(<div className="app-lock" aria-busy="true" />, document.body);
+  if (!status.locked) return null;
   return createPortal(<Locked needsCode={status.needsCode} />, document.body);
 }
 

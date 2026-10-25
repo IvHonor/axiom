@@ -1,4 +1,5 @@
 mod account;
+mod ai;
 mod app_lock;
 mod db;
 mod error;
@@ -35,6 +36,7 @@ pub fn run() {
         .manage(notifications::runner::Notifier::default())
         .manage(vault::Vault::new(Box::new(vault::Keychain::VAULT)))
         .manage(app_lock::AppLock::new(Box::new(vault::Keychain::APP_LOCK)))
+        .manage(ai::Assistant::new(axiom_ai::Ai::default(), Box::new(vault::Keychain::AI_KEYS)))
         .manage(features::finance::rates::Rates::new(None))
         .manage(features::daily_plan::calendars::accounts::CalendarHub::new(
             Box::new(features::daily_plan::calendars::secrets::Keychain),
@@ -42,6 +44,16 @@ pub fn run() {
             rrule::Tz::LOCAL,
         ))
         .setup(|app| {
+            // The window starts hidden and the frontend shows it once it has
+            // drawn. Should the frontend never load, show it anyway.
+            if let Some(window) = app.get_webview_window("main") {
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    if !window.is_visible().unwrap_or(true) {
+                        let _ = window.show();
+                    }
+                });
+            }
             #[cfg(target_os = "macos")]
             app.set_menu(system::mac_menu(app.handle())?)?;
             #[cfg(target_os = "windows")]
@@ -81,6 +93,9 @@ pub fn run() {
         // Every command React can call. Add new ones here.
         .invoke_handler(tauri::generate_handler![
             system::app_status,
+            ai::commands::ai_key_status,
+            ai::commands::ai_set_key,
+            ai::commands::ai_chat,
             acct::account_status,
             acct::account_sign_up,
             acct::account_sign_in,

@@ -119,14 +119,32 @@ async fn reusing_an_old_refresh_token_ends_the_session() {
     let app = server_with(|s| s.reuse_grace = chrono::Duration::zero()).await;
     let (_, first) = post(&app, routes::SIGN_UP, credentials("ada@example.com", "correct horse")).await;
     let (_, second) = post(&app, routes::REFRESH, json!({ "refresh_token": first["refresh_token"] })).await;
+    assert_eq!(call(&app, Method::GET, routes::ME, second["access_token"].as_str(), None).await.0, StatusCode::OK);
 
-    // Someone replays the first token: the whole session ends.
+    // The device is using its new tokens, then someone replays the first
+    // token: the whole session ends.
     let (status, _) = post(&app, routes::REFRESH, json!({ "refresh_token": first["refresh_token"] })).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     let (status, _) = post(&app, routes::REFRESH, json!({ "refresh_token": second["refresh_token"] })).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "the real device is signed out too");
     let (status, _) = call(&app, Method::GET, routes::ME, second["access_token"].as_str(), None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn a_refresh_whose_answer_was_lost_can_be_retried_later() {
+    let app = server_with(|s| s.reuse_grace = chrono::Duration::zero()).await;
+    let (_, first) = post(&app, routes::SIGN_UP, credentials("ada@example.com", "correct horse")).await;
+    // The app closes before the answer arrives: it never sees these tokens.
+    let (_, lost) = post(&app, routes::REFRESH, json!({ "refresh_token": first["refresh_token"] })).await;
+
+    // Next launch, it tries the token it still has.
+    let (status, retry) = post(&app, routes::REFRESH, json!({ "refresh_token": first["refresh_token"] })).await;
+    assert_eq!(status, StatusCode::OK, "{retry}");
+    assert_eq!(call(&app, Method::GET, routes::ME, retry["access_token"].as_str(), None).await.0, StatusCode::OK);
+    // The lost pair was never used, and is replaced.
+    assert_eq!(post(&app, routes::REFRESH, json!({ "refresh_token": lost["refresh_token"] })).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(post(&app, routes::REFRESH, json!({ "refresh_token": retry["refresh_token"] })).await.0, StatusCode::OK);
 }
 
 #[tokio::test]

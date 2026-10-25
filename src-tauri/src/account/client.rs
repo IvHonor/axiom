@@ -8,6 +8,7 @@ use axiom_protocol::{
     Invite, Members, MyInvite, NewInvite, Profile, PullResponse, PushRequest, PushResponse, RefreshRequest, ResetPassword, Role, Session, Space,
     CheckCode, ConfirmEmail, NewTicket, Pending, Ticket, TicketChange, TicketSent, route, routes,
 };
+use axiom_protocol::ai::{ChatReply, ChatRequest};
 use axiom_protocol::notify::{PlanEmails, PlanResult};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -291,6 +292,13 @@ impl Client {
 
     pub async fn save_admin_settings(&self, token: &str, settings: &AdminSettings) -> Result<AdminSettings, ClientError> {
         read(self.http.put(self.url(routes::ADMIN_SETTINGS)).bearer_auth(token).json(settings).send().await).await
+    }
+
+    /// The assistant, on Axiom's AI keys. Slower than other calls: the
+    /// server may try one AI, then the other.
+    pub async fn ai_chat(&self, token: &str, request: &ChatRequest) -> Result<ChatReply, ClientError> {
+        let request = self.http.post(self.url(routes::AI_CHAT)).bearer_auth(token).json(request).timeout(Duration::from_secs(150));
+        read(request.send().await).await
     }
 
     async fn post<B: Serialize, T: DeserializeOwned>(&self, path: &str, body: &B) -> Result<T, ClientError> {

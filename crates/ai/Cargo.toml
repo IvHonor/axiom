@@ -1,0 +1,15 @@
+[package]
+name = "axiom-ai"
+version = "0.1.0"
+description = "The AI models behind Axiom's assistant: Gemini, with Groq when it can't answer"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+axiom-protocol = { path = "../protocol" }
+reqwest = { version = "0.13.5", features = ["json"] }
+serde_json = "1"
+
+[dev-dependencies]
+axum = "0.8.9"
+tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread", "net"] }

@@ -567,6 +567,7 @@ version = "0.1.0"
 dependencies = [
  "argon2 0.5.3",
  "async-trait",
+ "axiom-ai",
  "axiom-protocol",
  "axiom-server",
  "base64 0.22.1",
@@ -597,6 +598,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "axiom-ai"
+version = "0.1.0"
+dependencies = [
+ "axiom-protocol",
+ "axum",
+ "reqwest",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "axiom-protocol"
 version = "0.1.0"
 dependencies = [
@@ -610,6 +622,7 @@ name = "axiom-server"
 version = "0.1.0"
 dependencies = [
  "argon2 0.6.0",
+ "axiom-ai",
  "axiom-protocol",
  "axum",
  "base64 0.23.1",

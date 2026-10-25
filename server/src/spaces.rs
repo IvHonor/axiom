@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use axiom_protocol::{
     Adopt, Adopted, ChangeRole, CreateSpace, Invite, Member, Members, MyInvite, NewInvite, PullResponse, PushRequest, PushResponse,
-    Record, Role, SYNC_BATCH, Space, check_email, is_plain_name, normalize_email, space_table_role,
+    Record, Role, SYNC_BATCH, Space, check_email, is_plain_name, is_record_id, normalize_email, space_table_role,
 };
 use axum::Json;
 use axum::extract::{Path, Query, State};
@@ -218,7 +218,7 @@ pub async fn push(State(s): State<AppState>, auth: AuthUser, Path(id): Path<Stri
     if body.changes.len() > SYNC_BATCH {
         return Err(ApiError::bad_request(format!("Send at most {SYNC_BATCH} changes at a time.")));
     }
-    if let Some(bad) = body.changes.iter().find(|c| !is_plain_name(&c.id) || !c.id_matches() || space_table_role(&c.table).is_none()) {
+    if let Some(bad) = body.changes.iter().find(|c| !is_record_id(&c.id) || !c.id_matches() || space_table_role(&c.table).is_none()) {
         return Err(ApiError::bad_request(format!("A shared board can't hold {}/{}.", bad.table, bad.id)));
     }
     if body.changes.iter().any(|c| Value::Object(c.fields.clone()).to_string().len() > MAX_RECORD_BYTES) {

@@ -17,6 +17,8 @@ impl Keychain {
     pub const VAULT: Keychain = Keychain(if cfg!(debug_assertions) { "vault-dev" } else { "vault" });
     /// The app lock's PIN (see `crate::app_lock`).
     pub const APP_LOCK: Keychain = Keychain(if cfg!(debug_assertions) { "app-lock-dev" } else { "app-lock" });
+    /// The person's own AI keys, for the assistant (see `crate::ai`).
+    pub const AI_KEYS: Keychain = Keychain(if cfg!(debug_assertions) { "ai-keys-dev" } else { "ai-keys" });
 
     fn entry(&self) -> Option<keyring::Entry> {
         keyring::Entry::new(SERVICE, self.0).ok()

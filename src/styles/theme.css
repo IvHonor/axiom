@@ -2,18 +2,18 @@
    which src/shell/theme/applyTheme.ts writes onto :root as CSS variables. */
 
 :root {
-  --area-board: light-dark(#3569b3, #86ade8);
-  --area-plan: light-dark(#956515, #dcb567);
-  --area-reading: light-dark(#237c79, #78c5bd);
-  --area-uni: light-dark(#7954b3, #b7a0df);
-  --area-finance: light-dark(#357b50, #83bf96);
-  --area-journal: light-dark(#a84d6b, #e39ab2);
-  --area-notes: light-dark(#b0581c, #efa56f);
-  --area-birthdays: light-dark(#a8479a, #e19ad6);
-  --area-goals: light-dark(#2f6fa8, #7fb3e6);
-  --area-learning: light-dark(#66791a, #bcd36e);
-  --success: light-dark(#357b50, #83bf96);
-  --warning: light-dark(#956515, #dcb567);
+  --area-board: #3569b3;
+  --area-plan: #956515;
+  --area-reading: #237c79;
+  --area-uni: #7954b3;
+  --area-finance: #357b50;
+  --area-journal: #a84d6b;
+  --area-notes: #b0581c;
+  --area-birthdays: #a8479a;
+  --area-goals: #2f6fa8;
+  --area-learning: #66791a;
+  --success: #357b50;
+  --warning: #956515;
   font-family: var(--font-ui);
   font-size: var(--font-size);
   line-height: 1.4;
@@ -21,6 +21,22 @@
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   font-synthesis: none;
+}
+
+/* Explicit selectors keep production CSS in step with runtime theme changes. */
+:root[data-color-scheme="dark"] {
+  --area-board: #86ade8;
+  --area-plan: #dcb567;
+  --area-reading: #78c5bd;
+  --area-uni: #b7a0df;
+  --area-finance: #83bf96;
+  --area-journal: #e39ab2;
+  --area-notes: #efa56f;
+  --area-birthdays: #e19ad6;
+  --area-goals: #7fb3e6;
+  --area-learning: #bcd36e;
+  --success: #83bf96;
+  --warning: #dcb567;
 }
 
 *,

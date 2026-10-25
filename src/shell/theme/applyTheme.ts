@@ -31,6 +31,7 @@ export function applyTheme(theme: Theme) {
   for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value);
 
   root.style.colorScheme = theme.type;
+  root.dataset.colorScheme = theme.type;
   root.dataset.brackets = style.brackets ? "on" : "off";
   root.dataset.hatching = style.hatching ? "on" : "off";
   root.dataset.buttons = style.buttons;

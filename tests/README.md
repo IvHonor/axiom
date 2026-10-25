@@ -105,3 +105,7 @@ Counting rules are intentional: archived cards are excluded; subtasks are exclud
 The summary reads full active boards, avoiding the old eight-card summary limit. At most four project reads run concurrently. The title and body share one snapshot, activity is loaded only when selected, and board mutations refresh an active overview. The shared `TileDisplayMenu` handles pointer positioning, focus restoration, keyboard navigation and viewport constraints for both areas.
 
 Journal and Notes responsive summaries: run `node tests/writing-overview-layout.mjs` with Vite on port 1427 and the same PLAYWRIGHT_MODULE setup. The isolated writing fixture checks 1,512 tile-size, window-width and content-state combinations, plus pagination and navigation. No desktop data is used.
+
+## Production colours
+
+Run `npm run build`, then `node tests/production-colours.mjs` with the Playwright setup above. It checks the built CSS and the real theme application function, including light/dark colours and theme switching. This catches colour rules that work in development but break during production CSS optimization.

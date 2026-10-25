@@ -45,7 +45,7 @@ export function StatusBar({ status, sync, onOpenSync, updater, onCheckUpdates }:
               ? label("Update available")
               : updater.state === "error" && !updater.update
                 ? label("Couldn't check for updates")
-                : <>Axiom <span className="dim">{sep}</span> {status.version ?? "—"}</>}
+                : <>Axiom <span className="dim">{sep}</span> {status.version ?? "—"} <span className="dim">{sep}</span> {label("Check for updates")}</>}
       </button>
     </footer>
   );

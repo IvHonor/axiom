@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Footer, Header } from "@/components/Chrome";
+import { SiteFrame } from "@/components/SiteFrame";
 import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
@@ -27,10 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en-GB" className={`${inter.variable} ${grotesk.variable} ${mono.variable}`}>
       <body>
-        <a className="skip-link" href="#main">Skip to content</a>
-        <Header />
-        <main id="main">{children}</main>
-        <Footer />
+        <SiteFrame header={<Header />} footer={<Footer />}>{children}</SiteFrame>
       </body>
     </html>
   );

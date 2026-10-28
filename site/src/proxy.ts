@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ACCESS_COOKIE, REFRESH_COOKIE, cookieValues } from "@/lib/session-cookies";
 import type { Session } from "@/lib/axiom";
-
-const API_URL = (process.env.AXIOM_API_URL ?? "http://localhost:8787").replace(/\/$/, "");
+import { accountErrorCode, accountServerUrl } from "@/lib/account-server";
 
 /**
  * Renews the website sign-in: when the short-lived access cookie has run out
@@ -13,9 +12,16 @@ export async function proxy(request: NextRequest) {
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refresh || request.cookies.has(ACCESS_COOKIE)) return NextResponse.next();
 
+  let apiUrl: string;
+  try { apiUrl = accountServerUrl(); }
+  catch {
+    console.error("[axiom-api]", { kind: "configuration", setting: "AXIOM_API_URL" });
+    return NextResponse.next();
+  }
+
   let session: Session | null = null;
   try {
-    const answer = await fetch(`${API_URL}/v1/auth/refresh`, {
+    const answer = await fetch(`${apiUrl}/v1/auth/refresh`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),
@@ -23,7 +29,8 @@ export async function proxy(request: NextRequest) {
     });
     if (answer.ok) session = await answer.json();
     else if (answer.status !== 401) return NextResponse.next(); // Try again next time.
-  } catch {
+  } catch (cause) {
+    console.error("[axiom-api]", { kind: "session_refresh", code: accountErrorCode(cause) });
     return NextResponse.next();
   }
 

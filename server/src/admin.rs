@@ -241,6 +241,7 @@ pub async fn require(s: &AppState, user_id: &str, permission: &str) -> Result<us
     let what = match permission {
         permissions::SYNC => "Syncing",
         permissions::SHARE => "Sharing boards",
+        permissions::AI => "The assistant on Axiom's AI keys",
         _ => "Notification emails",
     };
     Err(ApiError::new(StatusCode::FORBIDDEN, format!("{what} is switched off for your account. Ask an admin to switch it on.")))

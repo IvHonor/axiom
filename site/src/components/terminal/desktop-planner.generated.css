@@ -1,0 +1,3774 @@
+/* Generated from desktop CSS by scripts/desktop-planner-styles.mjs. */
+/* Base styles. Every color, font and shape value comes from the active theme,
+   which src/shell/theme/applyTheme.ts writes onto :root as CSS variables. */
+
+.desktop-planner {
+  --area-board: #3569b3;
+  --area-plan: #956515;
+  --area-reading: #237c79;
+  --area-uni: #7954b3;
+  --area-finance: #357b50;
+  --area-journal: #a84d6b;
+  --area-notes: #b0581c;
+  --area-birthdays: #a8479a;
+  --area-goals: #2f6fa8;
+  --area-learning: #66791a;
+  --success: #357b50;
+  --warning: #956515;
+  font-family: var(--font-ui);
+  font-size: var(--font-size);
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
+}
+
+/* Explicit selectors keep production CSS in step with runtime theme changes. */
+.desktop-planner[data-color-scheme="dark"] {
+  --area-board: #86ade8;
+  --area-plan: #dcb567;
+  --area-reading: #78c5bd;
+  --area-uni: #b7a0df;
+  --area-finance: #83bf96;
+  --area-journal: #e39ab2;
+  --area-notes: #efa56f;
+  --area-birthdays: #e19ad6;
+  --area-goals: #7fb3e6;
+  --area-learning: #bcd36e;
+  --success: #83bf96;
+  --warning: #dcb567;
+}
+
+.desktop-planner *,
+.desktop-planner *::before,
+.desktop-planner *::after {
+  box-sizing: border-box;
+}
+
+.desktop-planner button,
+.desktop-planner input {
+  font: inherit;
+  color: inherit;
+}
+
+.desktop-planner button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.desktop-planner button:disabled {
+  cursor: default;
+}
+
+.desktop-planner h1,
+.desktop-planner h2,
+.desktop-planner p {
+  margin: 0;
+}
+
+.desktop-planner :focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.desktop-planner ::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.desktop-planner ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.desktop-planner ::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner ::-webkit-scrollbar-track,
+.desktop-planner ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.desktop-planner .dim {
+  color: var(--text-dim);
+}
+
+.desktop-planner .mono {
+  font-family: var(--font-mono);
+}
+
+/* Undo the public site's element styles before applying desktop rules. */
+.desktop-planner :is(h1, h2, h3, h4) { font-family: inherit; font-weight: bold; line-height: inherit; letter-spacing: normal; }
+.desktop-planner :is(h3, h4) { margin: revert; }
+.desktop-planner p { text-wrap: wrap; }
+.desktop-planner svg { vertical-align: baseline; }
+.desktop-planner .section { padding: 0; }
+/* Shell styles. Values come from theme variables (see theme.css); the
+   data-brackets / data-hatching / data-buttons switches on :root come from
+   the theme's `style` settings. */
+
+/* ---------- Layout ---------- */
+
+/* ---------- Top bar ---------- */
+
+/* Open tabs, in the user's saved order. */
+
+/* The overview tab has no close button, so balance its padding. */
+
+@media (prefers-reduced-motion: reduce) {
+}
+
+/* Small outward curves join the selected tab to the page below it. */
+
+/* ---------- Activity bar ---------- */
+@media (prefers-reduced-motion: reduce) {
+}
+
+/* Without HUD brackets, mark the active icon the VS Code way: just the side bar. */
+
+/* ---------- Sidebar ---------- */
+
+.desktop-planner .sidebar-head {
+  height: 42px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: calc(0.16em * var(--tracking));
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.desktop-planner .sidebar-head-link {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.desktop-planner .sidebar-head-link:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.desktop-planner .sidebar-head-link:focus-visible {
+  outline-offset: -4px;
+}
+
+.desktop-planner .sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.desktop-planner .section-head {
+  width: 100%;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: calc(0.14em * var(--tracking));
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-top: 1px solid var(--line);
+}
+
+.desktop-planner .section-head:hover {
+  color: var(--text);
+}
+
+.desktop-planner .section-count {
+  margin-left: auto;
+  font-family: var(--font-label);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.desktop-planner .nav-item {
+  position: relative;
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  color: var(--text-dim);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.desktop-planner .nav-item > svg { flex: none; }
+.desktop-planner .nav-item.is-active { font-weight: 600; }
+
+.desktop-planner .section .nav-item {
+  padding-left: 32px;
+}
+
+.desktop-planner .nav-item:hover,
+.desktop-planner .nav-item.is-active {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.desktop-planner .nav-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
+
+/* ---------- Extension cards ---------- */
+.desktop-planner .ext-footer > :is(.switch, .btn) { flex: none; }
+
+/* ---------- Themes ---------- */
+
+.desktop-planner .theme-row .btn {
+  margin-left: auto;
+}
+
+/* A theme's preview uses that theme's own colors, set inline. */
+
+/* ---------- Buttons ---------- */
+
+.desktop-planner .btn {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--text);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: calc(0.12em * var(--tracking));
+  text-transform: var(--label-case);
+  white-space: nowrap;
+}
+
+.desktop-planner .btn:hover:not(:disabled) {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.desktop-planner .btn:disabled {
+  opacity: 0.45;
+}
+
+.desktop-planner .btn-sm {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 10px;
+}
+
+.desktop-planner .btn-ghost {
+  border-color: var(--line-strong);
+  color: var(--text-dim);
+}
+
+.desktop-planner .btn-ghost:hover:not(:disabled) {
+  background: none;
+  border-color: var(--text);
+  color: var(--text);
+}
+
+/* Filled buttons (e.g. VS Code): accent primary, quiet grey secondary. */
+.desktop-planner[data-buttons="filled"] .btn {
+  height: 26px;
+  font-size: 12px;
+  font-weight: 400;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.desktop-planner[data-buttons="filled"] .btn-sm {
+  height: 22px;
+  font-size: 11px;
+}
+
+.desktop-planner[data-buttons="filled"] .btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--on-accent);
+  filter: brightness(1.12);
+}
+
+.desktop-planner[data-buttons="filled"] .btn-ghost {
+  background: var(--line-strong);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.desktop-planner[data-buttons="filled"] .btn-ghost:hover:not(:disabled) {
+  background: var(--line-strong);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.desktop-planner .row {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- Panel ---------- */
+
+.desktop-planner .panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* HUD corner brackets: eight solid strips drawn over the border. */
+.desktop-planner .panel::before {
+  --b: 12px;
+  --t: 2px;
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--accent) 0 0) top left / var(--b) var(--t),
+    linear-gradient(var(--accent) 0 0) top left / var(--t) var(--b),
+    linear-gradient(var(--accent) 0 0) top right / var(--b) var(--t),
+    linear-gradient(var(--accent) 0 0) top right / var(--t) var(--b),
+    linear-gradient(var(--accent) 0 0) bottom left / var(--b) var(--t),
+    linear-gradient(var(--accent) 0 0) bottom left / var(--t) var(--b),
+    linear-gradient(var(--accent) 0 0) bottom right / var(--b) var(--t),
+    linear-gradient(var(--accent) 0 0) bottom right / var(--t) var(--b);
+  background-repeat: no-repeat;
+}
+
+.desktop-planner[data-brackets="off"] .panel::before {
+  display: none;
+}
+
+.desktop-planner .panel-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px 0;
+}
+
+.desktop-planner .panel-title {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: calc(0.1em * var(--tracking));
+  text-transform: var(--label-case);
+}
+
+.desktop-planner .panel-meta {
+  margin-top: 1px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  line-height: 16px;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.desktop-planner .panel-actions {
+  margin-left: auto;
+}
+
+.desktop-planner .panel-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 18px 18px;
+}
+
+/* ---------- Data bits ---------- */
+
+.desktop-planner .stat-value {
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.desktop-planner .stat-label {
+  margin-top: 8px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+/* Status mark: filled = online, hollow = off, blinking = connecting.
+   Square in sharp themes, round in rounded ones. */
+
+@keyframes blink {
+  to {
+    background: currentColor;
+  }
+}
+
+/* ---------- Status bar ---------- */
+
+/* ---------- Overview ---------- */
+
+.desktop-planner .tile-display-title > .icon-btn > svg:first-child {
+  color: var(--extension-accent, var(--accent));
+}
+
+/* ---------- Resizable tiles ---------- */
+
+/* Column count, row height and gap are set inline from TILE_GRID in ResizableTile.tsx. */
+
+.desktop-planner .tile-cell > .panel {
+  height: 100%;
+}
+
+.desktop-planner .tile-cell .panel-body {
+  min-height: 0;
+  overflow: auto;
+}
+
+.desktop-planner .tile-cell.is-resizing > .panel {
+  border-color: var(--accent);
+}
+.desktop-planner .tile-cell.is-moving > .panel {
+  border-color: var(--accent);
+  box-shadow: 0 8px 24px #0002, 0 2px 6px #0001;
+}
+
+/* Keep the resize cursor while dragging, even off the handle. */
+
+/* ---------- Pages (extension details / views) ---------- */
+
+/* ---------- Icon buttons and dropdown menus ---------- */
+
+.desktop-planner .icon-btn {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .icon-btn:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.desktop-planner .icon-btn.is-armed {
+  width: auto;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.desktop-planner .dropdown {
+  position: relative;
+}
+
+.desktop-planner .dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 20;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.desktop-planner .dropdown-menu.is-right {
+  right: 0;
+}
+
+.desktop-planner .dropdown-menu.is-left {
+  left: 0;
+}
+
+.desktop-planner .dropdown-menu.is-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.desktop-planner .menu-item {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  text-align: left;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .menu-item:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.desktop-planner .menu-item:disabled {
+  color: var(--text-faint);
+}
+
+.desktop-planner .menu-item.is-danger,
+.desktop-planner .menu-item.is-armed {
+  color: var(--danger);
+}
+
+.desktop-planner .menu-check {
+  cursor: pointer;
+}
+
+.desktop-planner .menu-field {
+  justify-content: space-between;
+}
+
+.desktop-planner .menu-field input {
+  width: 64px;
+  height: 24px;
+  padding: 0 6px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--line);
+}
+
+.desktop-planner .btn.is-danger:hover:not(:disabled),
+.desktop-planner .btn.is-armed {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: none;
+  filter: none;
+}
+
+.desktop-planner .dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .menu-heading {
+  margin: 0;
+  padding: 4px 10px 2px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  text-transform: var(--label-case);
+  color: var(--text-faint);
+}
+
+.desktop-planner .menu-row {
+  display: flex;
+  align-items: center;
+}
+
+.desktop-planner .menu-row .menu-item {
+  flex: 1;
+}
+
+/* A preview tab gets replaced by the next extension you browse. */
+
+/* All / Areas / Themes filter in the Extensions sidebar. */
+
+/* "Theme" / "Area" tag in extension metadata and details. */
+
+/* ---------- Account ---------- */
+
+/* Dot on the account icon while signed in. */
+
+.desktop-planner .field-label {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.desktop-planner .field input,
+.desktop-planner .field select,
+.desktop-planner .field textarea,
+.desktop-planner .field-input {
+  height: 30px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 10px;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.desktop-planner .field input:focus,
+.desktop-planner .field select:focus,
+.desktop-planner .field textarea:focus,
+.desktop-planner .field-input:focus-within {
+  border-color: var(--accent);
+}
+
+/* An input with an icon button inside its border (show password). */
+.desktop-planner .field-input {
+  display: flex;
+  align-items: center;
+  padding: 0 4px 0 0;
+}
+
+.desktop-planner .field-input input,
+.desktop-planner .field-input input:focus {
+  height: 100%;
+  flex: 1;
+  border: 0;
+  background: none;
+}
+
+.desktop-planner .field-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .field-icon:hover {
+  color: var(--text);
+}
+
+.desktop-planner .field-hint {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+/* ---------- Profile ---------- */
+
+/* On the activity bar the picture is the icon; the green dot still says "signed in". */
+
+/* ---------- Sections ---------- */
+
+/* Lists inside a section run edge to edge. */
+
+/* ---------- Sync ---------- */
+
+/* A question that needs an answer: data to upload, or what to keep on sign-out. */
+
+.desktop-planner .account-choice .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* ---------- Account tools ---------- */
+
+/* The sign-up form's "I agree to the terms" box. */
+
+.desktop-planner .btn.is-danger {
+  color: var(--danger);
+}
+
+/* ---------- Extension pages ---------- */
+
+/* Shown where the Install button would be. */
+
+/* ---------- Updates ---------- */
+
+@keyframes update-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+}
+
+/* Between the shell's icons and the areas' own (AreaContribution.Sidebar). */
+
+/* The waiting list (admins only): two buttons share the row with the email. */
+
+/* ---------- Switch ---------- */
+
+.desktop-planner .switch {
+  position: relative;
+  width: 30px;
+  height: 17px;
+  flex: none;
+  padding: 0;
+  background: var(--line-strong);
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+
+.desktop-planner .switch.is-on {
+  background: var(--accent);
+}
+
+.desktop-planner .switch:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.desktop-planner .switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  background: var(--surface);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: transform 0.15s ease;
+}
+
+.desktop-planner .switch.is-on .switch-thumb {
+  transform: translateX(13px);
+}
+
+.desktop-planner .switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Auto sync ---------- */
+
+/* ---------- Notification settings ---------- */
+
+/* ---------- Notification bell ---------- */
+
+/* ---------- PIN lock ---------- */
+
+/* Over everything, dialogs included: nothing of the app shows through. */
+
+/* ---------- Modal ---------- */
+
+.desktop-planner .modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.desktop-planner .modal {
+  width: min(640px, 100%);
+  /* The window less the backdrop's padding. (100% would measure the grid
+     row, which grows with the dialog, so a tall one ran off the screen.) */
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
+}
+
+.desktop-planner .modal-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 12px 18px;
+  color: var(--accent);
+  border-bottom: 1px solid var(--line);
+}
+
+.desktop-planner .modal-head h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+}
+
+.desktop-planner .modal-intro {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+/* Notifications at the foot of an extension's side panel. */
+
+/* ---------- Admin ---------- */
+
+/* ---------- Publisher and built-in switches ---------- */
+
+/* "Made by Axiom" with the blue verified tick. */
+
+/* ---------- Locked encrypted data ---------- */
+
+/* ---------- Tags as chips ---------- */
+
+/* ---------- Lemma's settings ---------- */
+
+.desktop-planner .assistant-sidebar > .field-hint {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.desktop-planner .assistant-group .field-hint {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.desktop-planner .assistant-key .row {
+  align-items: center;
+}
+
+/* A view that crashed, kept inside its tab (see ErrorBoundary). */
+
+/* Project Board. Colors, fonts and shapes come from the active theme. */
+
+/* ---------- Toolbar and project tabs ---------- */
+
+.desktop-planner .pb-stats {
+  flex: none;
+  display: flex;
+  gap: 14px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.desktop-planner .pb-stats .is-overdue {
+  color: var(--danger);
+}
+
+/* ---------- Board and columns ---------- */
+
+/* ---------- Cards ---------- */
+
+/* The card's slot while it's being dragged: a dashed placeholder. */
+
+/* Label chip: tinted with the label's color, readable on any theme. */
+
+/* ---------- Card drawer ---------- */
+
+/* Scroll the drawer rather than squashing its sections when it overflows. */
+
+.desktop-planner .pb-bar {
+  height: 4px;
+  overflow: hidden;
+  background: var(--line);
+  border-radius: 2px;
+}
+
+.desktop-planner .pb-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--project);
+}
+
+/* ---------- View switcher and filters ---------- */
+
+.desktop-planner .pb-segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .pb-segmented button {
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-radius: calc(var(--radius-sm) / 1.5);
+}
+
+.desktop-planner .pb-segmented button:hover {
+  color: var(--text);
+}
+
+.desktop-planner .pb-segmented button.is-active {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+/* ---------- Sub-tasks ---------- */
+
+/* ---------- Table view ---------- */
+
+/* ---------- Archive view ---------- */
+
+/* ---------- Repeat and templates ---------- */
+
+/* ---------- Timeline ---------- */
+
+/* One faint line per day. */
+
+/* ---------- Activity feed ---------- */
+
+/* ---------- Insights ---------- */
+
+.desktop-planner .pb-insights {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px 24px;
+}
+
+.desktop-planner .pb-stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.desktop-planner .pb-stat {
+  padding: 16px 18px;
+}
+
+.desktop-planner .pb-stat .stat-label {
+  margin-top: 8px;
+}
+
+.desktop-planner .pb-stat.is-danger .stat-value {
+  color: var(--danger);
+}
+
+.desktop-planner .pb-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.desktop-planner .pb-chart.is-wide {
+  grid-column: 1 / -1;
+}
+
+.desktop-planner .pb-chart {
+  padding: 14px 18px 16px;
+}
+
+.desktop-planner .pb-chart > header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.desktop-planner .pb-chart-body {
+  position: relative;
+}
+
+.desktop-planner .pb-legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .pb-legend span,
+.desktop-planner .pb-tooltip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.desktop-planner .pb-key {
+  width: 10px;
+  height: 3px;
+  flex: none;
+  display: inline-block;
+  border-radius: 2px;
+}
+
+.desktop-planner .pb-key.is-total {
+  background: var(--text-faint);
+}
+
+.desktop-planner .pb-key.is-done {
+  background: var(--accent);
+}
+
+.desktop-planner .pb-barlist .pb-key {
+  height: 10px;
+}
+
+.desktop-planner .pb-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.desktop-planner .pb-axis {
+  font-family: var(--font-label);
+  font-size: 10px;
+  fill: var(--text-faint);
+}
+
+.desktop-planner .pb-direct {
+  font-family: var(--font-label);
+  font-size: 11px;
+  fill: var(--text-dim);
+}
+
+.desktop-planner .pb-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.desktop-planner .pb-line.is-total {
+  stroke: var(--text-faint);
+}
+
+.desktop-planner .pb-line.is-done {
+  stroke: var(--accent);
+}
+
+.desktop-planner .pb-crosshair {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.desktop-planner .pb-dot {
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.desktop-planner .pb-dot.is-total {
+  fill: var(--text-faint);
+}
+
+.desktop-planner .pb-dot.is-done {
+  fill: var(--accent);
+}
+
+.desktop-planner .pb-bar {
+  fill: var(--accent);
+}
+
+.desktop-planner .pb-bar.is-hover {
+  opacity: 0.8;
+}
+
+.desktop-planner .pb-tooltip {
+  position: absolute;
+  top: 34px;
+  z-index: 2;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.desktop-planner .pb-tooltip b {
+  margin-left: auto;
+  padding-left: 12px;
+  font-weight: 600;
+}
+
+.desktop-planner .pb-barlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.desktop-planner .pb-barlist li {
+  display: grid;
+  grid-template-columns: minmax(0, 110px) 1fr 28px;
+  align-items: center;
+  gap: 10px;
+}
+
+.desktop-planner .pb-barlist-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .pb-barlist-track {
+  height: 8px;
+  overflow: hidden;
+  background: var(--line);
+  border-radius: 4px;
+}
+
+.desktop-planner .pb-barlist-track span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+}
+
+.desktop-planner .pb-barlist-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Sharing ---------- */
+
+/* The side panel. */
+
+/* Daily Plan. Every colour comes from the theme's variables. */
+
+.desktop-planner .dp-view {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.desktop-planner .dp-loading {
+  padding: 24px;
+}
+
+/* ---------- Toolbar ---------- */
+
+.desktop-planner .dp-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.desktop-planner .dp-nav {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.desktop-planner .dp-date {
+  margin: 0 0 0 8px;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .dp-date-tag {
+  margin-left: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+/* ---------- Capacity ---------- */
+
+.desktop-planner .dp-capacity {
+  width: 300px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  --cap: var(--accent);
+}
+
+.desktop-planner .dp-capacity.is-tight {
+  --cap: #e2b203;
+}
+
+.desktop-planner .dp-capacity.is-over {
+  --cap: var(--danger);
+}
+
+.desktop-planner .dp-capacity-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12.5px;
+}
+
+.desktop-planner .dp-capacity-note {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-capacity.is-over .dp-capacity-note {
+  color: var(--danger);
+}
+
+.desktop-planner .dp-capacity-bar {
+  position: relative;
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
+}
+
+.desktop-planner .dp-capacity-bar span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--cap);
+  border-radius: 3px;
+  transition: width 0.25s;
+}
+
+/* Where the spare time starts. */
+.desktop-planner .dp-capacity-bar i {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--text-dim);
+  border-radius: 1px;
+}
+
+/* ---------- Settings ---------- */
+
+.desktop-planner .dp-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 260px;
+  padding: 8px;
+}
+
+.desktop-planner .dp-settings-row {
+  display: flex;
+  gap: 10px;
+}
+
+.desktop-planner .dp-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-settings-row label {
+  flex: 1;
+}
+
+.desktop-planner .dp-settings-buffer {
+  flex-direction: row !important;
+  align-items: center;
+}
+
+.desktop-planner .dp-settings input {
+  height: 28px;
+  padding: 0 8px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color-scheme: inherit;
+}
+
+.desktop-planner .dp-settings-buffer input {
+  width: 64px;
+}
+
+/* ---------- Quick add ---------- */
+
+.desktop-planner .dp-quick {
+  flex: none;
+  padding: 12px 20px 0;
+}
+
+.desktop-planner .dp-quick-field {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 12px;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-quick-field:focus-within {
+  border-color: var(--accent);
+}
+
+.desktop-planner .dp-quick-field input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.desktop-planner .dp-quick-field input::placeholder {
+  color: var(--text-faint);
+}
+
+.desktop-planner .dp-kbd {
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-quick-help {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-quick-help b {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.desktop-planner .dp-error {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 20px 0;
+  padding: 6px 6px 6px 12px;
+  font-size: 12px;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  user-select: text;
+}
+
+/* ---------- Layout ---------- */
+
+.desktop-planner .dp-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+  padding: 12px 20px 16px;
+}
+
+.desktop-planner .dp-panel {
+  width: 400px;
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.desktop-planner .dp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.desktop-planner .dp-heading {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: calc(0.12em * var(--tracking));
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-heading-actions {
+  margin-left: auto;
+}
+
+.desktop-planner .dp-count {
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.desktop-planner .dp-hint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+
+.desktop-planner .dp-list {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+}
+
+.desktop-planner .dp-earlier .dp-row {
+  border-style: dashed;
+}
+
+/* ---------- Task rows ---------- */
+
+.desktop-planner .dp-row {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: grab;
+}
+
+.desktop-planner .dp-row:hover {
+  border-color: var(--line-strong);
+}
+
+.desktop-planner .dp-row.is-drop-target {
+  box-shadow: 0 -2px 0 var(--accent);
+}
+
+.desktop-planner .dp-focus .dp-row {
+  border-left: 3px solid var(--accent);
+}
+
+.desktop-planner .dp-rank {
+  width: 14px;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: center;
+}
+
+.desktop-planner .dp-check {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--on-accent);
+  border: 1.5px solid var(--line-strong);
+  border-radius: 50%;
+}
+
+.desktop-planner .dp-check:hover {
+  border-color: var(--accent);
+}
+
+.desktop-planner .dp-check.is-checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.desktop-planner .dp-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .dp-row.is-done .dp-title {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.desktop-planner .dp-title-input,
+.desktop-planner .dp-estimate-input {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.desktop-planner .dp-title-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.desktop-planner .dp-estimate-input {
+  width: 72px;
+}
+
+.desktop-planner .dp-chip {
+  flex: none;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-estimate:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.desktop-planner .dp-estimate.is-empty {
+  color: var(--text-faint);
+  border-style: dashed;
+  opacity: 0;
+}
+
+.desktop-planner .dp-row:hover .dp-estimate.is-empty,
+.desktop-planner .dp-estimate.is-empty:focus-visible {
+  opacity: 1;
+}
+
+.desktop-planner .dp-time {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.desktop-planner .dp-star {
+  color: var(--text-faint);
+}
+
+.desktop-planner .dp-star.is-on {
+  color: #e2b203;
+}
+
+.desktop-planner .dp-star.is-on svg {
+  fill: currentColor;
+}
+
+.desktop-planner .dp-star:disabled {
+  opacity: 0.3;
+}
+
+.desktop-planner .dp-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.desktop-planner .dp-from {
+  margin-right: 4px;
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* ---------- Timeline ---------- */
+
+.desktop-planner .dp-timeline {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  --dp-gutter: 58px;
+}
+
+.desktop-planner .dp-grid {
+  position: relative;
+  user-select: none;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.desktop-planner .dp-hour {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 56px;
+  border-top: 1px solid var(--line);
+  pointer-events: none;
+}
+
+/* A fainter half-hour line. */
+.desktop-planner .dp-hour::after {
+  content: "";
+  position: absolute;
+  top: 28px;
+  left: var(--dp-gutter);
+  right: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--line) 60%, transparent);
+}
+
+.desktop-planner .dp-hour-label {
+  position: absolute;
+  top: 3px;
+  left: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.desktop-planner .dp-offhours {
+  position: absolute;
+  left: var(--dp-gutter);
+  right: 0;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  pointer-events: none;
+}
+
+.desktop-planner .dp-block {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 5px 8px;
+  overflow: hidden;
+  color: var(--text);
+  background: color-mix(in srgb, var(--block) 22%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--block) 55%, transparent);
+  border-left: 3px solid var(--block);
+  border-radius: var(--radius-sm);
+  cursor: grab;
+}
+
+.desktop-planner .dp-block:hover {
+  background: color-mix(in srgb, var(--block) 30%, var(--panel));
+}
+
+.desktop-planner .dp-block.is-dragging {
+  z-index: 3;
+  cursor: grabbing;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.25);
+}
+
+.desktop-planner .dp-block.is-short {
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.desktop-planner .dp-block.is-short .dp-block-text {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.desktop-planner .dp-block.is-done {
+  opacity: 0.55;
+}
+
+.desktop-planner .dp-block.is-done .dp-block-title {
+  text-decoration: line-through;
+}
+
+.desktop-planner .dp-block-check {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  background: var(--panel);
+  border-color: var(--block);
+}
+
+.desktop-planner .dp-block-check.is-checked {
+  background: var(--block);
+  border-color: var(--block);
+}
+
+.desktop-planner .dp-block-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.desktop-planner .dp-block-title {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .dp-block-time {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.desktop-planner .dp-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 7px;
+  cursor: ns-resize;
+}
+
+/* A block being drawn, or a task being dropped. */
+.desktop-planner .dp-pending {
+  left: calc(var(--dp-gutter));
+  right: 8px;
+  z-index: 2;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1.5px dashed var(--accent);
+  pointer-events: none;
+}
+
+.desktop-planner .dp-now {
+  position: absolute;
+  left: calc(var(--dp-gutter) - 6px);
+  right: 0;
+  z-index: 4;
+  height: 0;
+  border-top: 2px solid var(--danger);
+  pointer-events: none;
+}
+
+.desktop-planner .dp-now-dot {
+  position: absolute;
+  top: -6px;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  background: var(--danger);
+  border-radius: 50%;
+}
+
+/* ---------- Block editor ---------- */
+
+.desktop-planner .dp-editor {
+  position: absolute;
+  right: 12px;
+  z-index: 5;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  cursor: default;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.3);
+}
+
+.desktop-planner .dp-editor-title,
+.desktop-planner .dp-editor-row input {
+  height: 30px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.desktop-planner .dp-editor-title:focus,
+.desktop-planner .dp-editor-row input:focus {
+  border-color: var(--accent);
+}
+
+.desktop-planner .dp-editor-task {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.desktop-planner .dp-editor-row {
+  display: flex;
+  gap: 8px;
+}
+
+.desktop-planner .dp-editor-row label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-swatches {
+  display: flex;
+  gap: 6px;
+}
+
+.desktop-planner .dp-swatch {
+  width: 20px;
+  height: 20px;
+  background: var(--block);
+  border: 2px solid transparent;
+  border-radius: 50%;
+}
+
+.desktop-planner .dp-swatch.is-on {
+  border-color: var(--text);
+}
+
+.desktop-planner .dp-editor-problem {
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.desktop-planner .dp-editor-delete {
+  margin-left: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-planner .dp-capacity-bar span {
+    transition: none;
+  }
+}
+
+/* ---------- Phase 2: board cards, timers, focus, rituals ---------- */
+
+.desktop-planner .dp-project {
+  flex: none;
+  max-width: 120px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .dp-project::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: none;
+  background: var(--project);
+  border-radius: 2px;
+}
+
+.desktop-planner .dp-due {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.desktop-planner .dp-due.is-urgent {
+  color: var(--danger);
+}
+
+.desktop-planner .dp-card-row {
+  border-style: dashed;
+  cursor: copy;
+}
+
+.desktop-planner .dp-add {
+  color: var(--accent);
+}
+
+.desktop-planner .dp-tracked {
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-tracked.is-running,
+.desktop-planner .dp-timer.is-on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.desktop-planner .dp-timer {
+  color: var(--text-faint);
+  opacity: 0;
+}
+
+.desktop-planner .dp-row:hover .dp-timer,
+.desktop-planner .dp-timer.is-on,
+.desktop-planner .dp-timer:focus-visible {
+  opacity: 1;
+}
+
+.desktop-planner .dp-row.is-running {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.desktop-planner .dp-block.is-running {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.desktop-planner .dp-pulse {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: dp-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes dp-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---------- Toolbar additions ---------- */
+
+.desktop-planner .dp-date-block {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.desktop-planner .dp-date-tag.is-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.desktop-planner .dp-intention {
+  margin-left: 8px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .dp-intention::before {
+  content: "Today: ";
+  color: var(--text-faint);
+}
+
+.desktop-planner .dp-rituals {
+  display: flex;
+  gap: 4px;
+}
+
+.desktop-planner .dp-rituals .btn {
+  gap: 5px;
+}
+
+/* ---------- Focus bar and prompts ---------- */
+
+.desktop-planner .dp-focusbar,
+.desktop-planner .dp-prompt,
+.desktop-planner .dp-notice {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 20px 0;
+  padding: 8px 10px 8px 14px;
+  font-size: 12.5px;
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-focusbar {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.desktop-planner .dp-focusbar-label {
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-focusbar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .dp-focusbar-clock {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.desktop-planner .dp-focusbar .btn {
+  gap: 4px;
+}
+
+.desktop-planner .dp-prompt {
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+}
+
+.desktop-planner .dp-prompt > span {
+  flex: 1;
+}
+
+.desktop-planner .dp-prompt > svg {
+  color: var(--accent);
+}
+
+.desktop-planner .dp-notice {
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+}
+
+.desktop-planner .dp-notice > span {
+  flex: 1;
+}
+
+/* ---------- Focus mode ---------- */
+
+.desktop-planner .dp-focus-mode {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.desktop-planner .dp-focus-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.desktop-planner .dp-focus-card {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.desktop-planner .dp-focus-kicker {
+  font-family: var(--font-label);
+  font-size: 12px;
+  letter-spacing: calc(0.14em * var(--tracking));
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-focus-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.desktop-planner .dp-focus-clock {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 64px;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-focus-clock.is-running {
+  color: var(--text);
+}
+
+.desktop-planner .dp-focus-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.desktop-planner .dp-focus-bar {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  background: var(--line);
+  border-radius: 3px;
+}
+
+.desktop-planner .dp-focus-bar span {
+  display: block;
+  height: 100%;
+  background: var(--area-plan);
+  transition: width 1s linear;
+}
+
+.desktop-planner .dp-focus-bar.is-over span {
+  background: #e2b203;
+}
+
+.desktop-planner .dp-focus-actions .btn {
+  gap: 6px;
+}
+
+.desktop-planner .dp-focus-notes {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.desktop-planner .dp-focus-notes textarea,
+.desktop-planner .dp-ritual-field textarea,
+.desktop-planner .dp-ritual-field input {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+  resize: vertical;
+}
+
+.desktop-planner .dp-focus-notes textarea:focus,
+.desktop-planner .dp-ritual-field textarea:focus,
+.desktop-planner .dp-ritual-field input:focus {
+  border-color: var(--accent);
+}
+
+/* ---------- Rituals ---------- */
+
+.desktop-planner .dp-ritual-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.desktop-planner .dp-ritual {
+  width: min(680px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
+}
+
+.desktop-planner .dp-ritual-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.desktop-planner .dp-ritual-icon {
+  display: grid;
+  color: var(--accent);
+}
+
+.desktop-planner .dp-ritual-name {
+  font-weight: 600;
+}
+
+.desktop-planner .dp-steps {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.desktop-planner .dp-steps li {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-steps li.is-current {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+.desktop-planner .dp-steps li.is-done {
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-ritual-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 20px 22px;
+}
+
+.desktop-planner .dp-ritual-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.desktop-planner .dp-ritual-lead {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-ritual-list {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+}
+
+.desktop-planner .dp-ritual-row {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-ritual-row.is-done .dp-title {
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-ritual-tick {
+  flex: none;
+  color: var(--accent);
+}
+
+.desktop-planner .dp-ritual-estimate {
+  width: 72px;
+  height: 26px;
+  padding: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.desktop-planner .dp-ritual-estimate:focus {
+  border-color: var(--accent);
+}
+
+.desktop-planner .dp-ritual-add {
+  margin-bottom: 4px;
+}
+
+.desktop-planner .dp-ritual-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.desktop-planner .dp-ritual-result {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.desktop-planner .dp-ritual-body .dp-capacity {
+  width: 100%;
+}
+
+.desktop-planner .dp-ritual-foot {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.desktop-planner .dp-choice {
+  flex: none;
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-choice button {
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-choice button + button {
+  border-left: 1px solid var(--line-strong);
+}
+
+.desktop-planner .dp-choice button.is-on {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+.desktop-planner .dp-time-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.desktop-planner .dp-time-table th {
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-faint);
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.desktop-planner .dp-time-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.desktop-planner .dp-time-table td:not(:first-child),
+.desktop-planner .dp-time-table th:not(:first-child) {
+  width: 100px;
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.desktop-planner .dp-time-table td.is-over {
+  color: #e2b203;
+}
+
+.desktop-planner .dp-ritual-complete {
+  align-items: center;
+  gap: 14px;
+  padding: 36px 28px;
+  text-align: center;
+}
+
+.desktop-planner .dp-complete-mark {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+/* Focus mode and rituals cover the planner, not the whole app. */
+.desktop-planner .dp-view {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-planner .dp-pulse {
+    animation: none;
+  }
+
+  .desktop-planner .dp-focus-bar span {
+    transition: none;
+  }
+}
+
+/* ---------- Phase 3: views, routines, calendars, week, insights ---------- */
+
+.desktop-planner .dp-toolbar .pb-segmented {
+  flex: none;
+}
+
+.desktop-planner .dp-toolbar {
+  container-type: inline-size;
+}
+
+/* A narrow toolbar keeps the date whole: the ritual buttons show icons only. */
+@container (max-width: 1180px) {
+  .desktop-planner .dp-btn-label {
+    display: none;
+  }
+
+  .desktop-planner .dp-capacity {
+    width: 250px;
+  }
+}
+
+.desktop-planner .dp-setup-form .menu-heading {
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.desktop-planner .dp-settings-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.desktop-planner .dp-settings-links .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Capacity at the usual pace: the likely extra time, hatched past the plan. */
+.desktop-planner .dp-capacity-pace {
+  color: var(--text-dim);
+  cursor: help;
+}
+
+.desktop-planner .dp-capacity-bar em {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: repeating-linear-gradient(135deg, var(--cap) 0 3px, transparent 3px 6px);
+  opacity: 0.6;
+}
+
+/* Calendar events: fixed, read-only, with a dashed edge. */
+.desktop-planner .dp-event {
+  z-index: 1;
+  cursor: default;
+  background: color-mix(in srgb, var(--block) 12%, var(--panel));
+  border-style: dashed;
+  border-left-style: solid;
+}
+
+.desktop-planner .dp-event:hover {
+  background: color-mix(in srgb, var(--block) 16%, var(--panel));
+}
+
+.desktop-planner .dp-event.is-free {
+  opacity: 0.6;
+}
+
+.desktop-planner .dp-block-repeat {
+  margin-right: 4px;
+  vertical-align: -1px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-allday {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px 6px var(--dp-gutter);
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.desktop-planner .dp-allday-chip,
+.desktop-planner .dp-week-chip {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  overflow: hidden;
+  font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: color-mix(in srgb, var(--block) 18%, var(--panel));
+  border-left: 3px solid var(--block);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-editor-note {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* The body of the routines and calendars dialogs. */
+.desktop-planner .dp-dialog-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 18px 20px 20px;
+}
+
+.desktop-planner .dp-dialog-body > * {
+  align-self: stretch;
+}
+
+.desktop-planner .dp-dialog-body > .btn {
+  align-self: flex-start;
+}
+
+.desktop-planner .dp-dialog-error,
+.desktop-planner .dp-setup-problem {
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.desktop-planner .dp-setup-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.desktop-planner .dp-setup-list:empty {
+  display: none;
+}
+
+.desktop-planner .dp-setup-list > li + li {
+  border-top: 1px solid var(--line);
+}
+
+.desktop-planner .dp-setup-list .dp-setup-form {
+  padding: 12px;
+}
+
+.desktop-planner .dp-setup-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 12px;
+}
+
+.desktop-planner .dp-setup-empty {
+  padding: 10px 12px;
+  font-size: 12.5px;
+}
+
+.desktop-planner .dp-setup-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.desktop-planner .dp-setup-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13px;
+}
+
+.desktop-planner .dp-setup-main .dim {
+  font-size: 12px;
+}
+
+.desktop-planner .dp-setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.desktop-planner .dp-setup-refresh {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.desktop-planner .dp-spin {
+  animation: dp-spin 1s linear infinite;
+}
+
+@keyframes dp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.desktop-planner .dp-weekdays {
+  display: flex;
+  gap: 4px;
+}
+
+.desktop-planner .dp-weekdays button {
+  flex: 1;
+  height: 28px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-weekdays button.is-on {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.desktop-planner .dp-setup-help {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-setup-help summary {
+  cursor: pointer;
+  color: var(--text);
+}
+
+.desktop-planner .dp-setup-help p {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+/* ---------- Week ---------- */
+
+.desktop-planner .dp-week {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(104px, 1fr)) minmax(120px, 0.9fr);
+  gap: 8px;
+  padding: 12px 20px 16px;
+  overflow: auto;
+}
+
+.desktop-planner .dp-week-day {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.desktop-planner .dp-week-day.is-today {
+  border-color: var(--accent);
+}
+
+.desktop-planner .dp-week-day.is-past {
+  opacity: 0.7;
+}
+
+.desktop-planner .dp-week-day.is-drop-target {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+
+.desktop-planner .dp-week-inbox {
+  background: transparent;
+  border-style: dashed;
+}
+
+.desktop-planner .dp-week-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  color: var(--text);
+  text-align: left;
+  background: none;
+  border: 0;
+}
+
+.desktop-planner button.dp-week-head:hover .dp-week-date {
+  color: var(--accent);
+}
+
+.desktop-planner .dp-week-head.is-static {
+  align-items: center;
+}
+
+.desktop-planner .dp-week-weekday {
+  font-family: var(--font-label);
+  font-size: 11px;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-week-date {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.desktop-planner .dp-week-day.is-today .dp-week-date {
+  color: var(--accent);
+}
+
+.desktop-planner .dp-week-planned {
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.desktop-planner .dp-week-load {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  --cap: var(--accent);
+}
+
+.desktop-planner .dp-week-load.is-tight {
+  --cap: #e2b203;
+}
+
+.desktop-planner .dp-week-load.is-over {
+  --cap: var(--danger);
+  color: var(--danger);
+}
+
+.desktop-planner .dp-week-load .dp-capacity-bar {
+  height: 4px;
+}
+
+.desktop-planner .dp-week-fixed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+}
+
+.desktop-planner .dp-week-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding: 4px 6px;
+  color: var(--text-faint);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-week-add:focus-within {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.desktop-planner .dp-week-add input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+/* ---------- Insights ---------- */
+
+.desktop-planner .dp-insights {
+  padding: 16px 20px 24px;
+}
+
+.desktop-planner .dp-insights-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+/* Planned tasks: a neutral bar the done bar fills from the bottom. */
+.desktop-planner .pb-bar.dp-bar-planned {
+  fill: color-mix(in srgb, var(--text-faint) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-planner .dp-spin {
+    animation: none;
+  }
+}
+
+/* ---------- Calendar accounts ---------- */
+
+.desktop-planner .dp-account {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.desktop-planner .dp-account-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.desktop-planner .dp-account-provider {
+  padding: 1px 7px;
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-account-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .dp-account-calendars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.desktop-planner .dp-account-calendars li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  font-size: 13px;
+}
+
+.desktop-planner .dp-account-calendars label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.desktop-planner .dp-account-calendars label span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .dp-account-calendars .dim,
+.desktop-planner .dp-account-calendars .dp-setup-problem {
+  flex: none;
+  font-size: 11.5px;
+}
+
+.desktop-planner .dp-account-calendars input {
+  accent-color: var(--accent);
+}
+
+.desktop-planner .dp-connect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.desktop-planner .dp-connect .menu-heading {
+  margin-right: 4px;
+  padding: 0;
+}
+
+.desktop-planner .dp-provider {
+  min-width: 76px;
+}
+
+.desktop-planner .dp-connecting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: var(--radius);
+}
+
+.desktop-planner .dp-connecting span {
+  flex: 1;
+}
+
+.desktop-planner .dp-caldav {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.desktop-planner .dp-caldav .dp-hint {
+  margin: 0;
+}
+
+.desktop-planner .dp-publish,
+.desktop-planner .dp-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.desktop-planner .dp-publish > *,
+.desktop-planner .dp-links > .dp-setup-list,
+.desktop-planner .dp-links > .dp-setup-form {
+  align-self: stretch;
+}
+
+.desktop-planner .dp-publish .menu-heading,
+.desktop-planner .dp-links .menu-heading {
+  padding: 0;
+}
+
+.desktop-planner .dp-publish .dp-hint {
+  margin: 0;
+}
+
+.desktop-planner .dp-publish-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-planner .dp-publish-row select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-publish > .dp-setup-refresh {
+  align-self: flex-start;
+}
+
+.desktop-planner .dp-setup-note {
+  margin: 0;
+  font-size: 11.5px;
+}
+
+/* ---------- Connect a calendar ---------- */
+
+.desktop-planner .dp-connect-card {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 20px 0;
+  padding: 10px 10px 10px 14px;
+  font-size: 12.5px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-connect-card-icon {
+  flex: none;
+  color: var(--accent);
+}
+
+.desktop-planner .dp-connect-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.desktop-planner .dp-connect-card-text span {
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-connect-card-actions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------- Sidebar (PlanSidebar) ---------- */
+
+.desktop-planner .ps-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 16px 12px 32px;
+  font-size: 12.5px;
+}
+
+.desktop-planner .ps-progress {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.desktop-planner .ps-progress .dim {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.desktop-planner .ps-bar {
+  height: 4px;
+  overflow: hidden;
+  background: var(--line);
+  border-radius: 2px;
+}
+
+.desktop-planner .ps-bar span {
+  display: block;
+  height: 100%;
+  background: var(--area-plan);
+  border-radius: 2px;
+}
+
+.desktop-planner .ps-next,
+.desktop-planner .ps-note {
+  margin: 0;
+}
+
+.desktop-planner .ps-focus {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.desktop-planner .ps-focus li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.desktop-planner .ps-focus li span:last-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .ps-focus li.is-done span:last-child {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.desktop-planner .ps-focus li > svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.desktop-planner .ps-rank {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.desktop-planner .ps-providers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.desktop-planner .ps-providers .dp-provider {
+  min-width: 0;
+  flex: 1;
+}
+
+.desktop-planner .ps-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.desktop-planner .ps-line-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .ps-line-meta {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.desktop-planner .ps-provider {
+  flex: none;
+  padding: 0 6px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .ps-warn {
+  flex: none;
+  color: var(--danger);
+}
+
+.desktop-planner .ps-manage {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- Agenda rows (week and month) ---------- */
+
+.desktop-planner .dp-ag {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.desktop-planner .dp-ag-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  background: color-mix(in srgb, var(--block, var(--line-strong)) 14%, var(--panel));
+  border-left: 3px solid var(--block, var(--line-strong));
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-ag-item.is-task {
+  cursor: grab;
+}
+
+.desktop-planner .dp-ag-item.is-task:not([style*="--block: var"]) {
+  background: var(--surface);
+}
+
+/* Meetings: fixed, so drawn lighter with a dashed edge, like on the timeline. */
+.desktop-planner .dp-ag-item.is-event {
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--block) 60%, transparent);
+  border-left: 3px solid var(--block);
+}
+
+.desktop-planner .dp-ag-item.is-free {
+  opacity: 0.6;
+}
+
+.desktop-planner .dp-ag-item.is-allday {
+  background: color-mix(in srgb, var(--block) 22%, var(--panel));
+}
+
+.desktop-planner .dp-ag-item.is-done .dp-ag-title {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.desktop-planner .dp-ag-item .dp-check {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 1px;
+}
+
+.desktop-planner .dp-ag-time {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 16px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-ag-title {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.desktop-planner .dp-ag-title .dp-rank {
+  display: inline-grid;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+
+.desktop-planner .dp-ag-icon {
+  margin-right: 4px;
+  vertical-align: -1px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-ag-meta {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 16px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-ag-label {
+  margin: 4px 0 -2px;
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  text-transform: var(--label-case);
+  color: var(--text-faint);
+}
+
+.desktop-planner .dp-ag-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* One line per item in the month's small cells. */
+.desktop-planner .dp-ag.is-compact .dp-ag-item {
+  padding: 1px 5px;
+  font-size: 11.5px;
+}
+
+.desktop-planner .dp-ag.is-compact .dp-ag-title {
+  -webkit-line-clamp: 1;
+}
+
+/* ---------- Month ---------- */
+
+.desktop-planner .dp-month {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 20px 16px;
+  overflow: auto;
+}
+
+.desktop-planner .dp-month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  padding-bottom: 6px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  text-transform: var(--label-case);
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-month-weekdays span {
+  padding-left: 8px;
+}
+
+.desktop-planner .dp-month-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.desktop-planner .dp-month-cell {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-month-cell.is-other {
+  background: transparent;
+}
+
+.desktop-planner .dp-month-cell.is-other .dp-month-date {
+  color: var(--text-faint);
+}
+
+.desktop-planner .dp-month-cell.is-past:not(.is-today) {
+  opacity: 0.75;
+}
+
+.desktop-planner .dp-month-cell.is-today {
+  border-color: var(--accent);
+}
+
+.desktop-planner .dp-month-cell.is-drop-target {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+
+.desktop-planner .dp-month-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-planner .dp-month-top .dp-week-load {
+  flex: 1;
+}
+
+.desktop-planner .dp-month-top .dp-capacity-bar {
+  height: 3px;
+}
+
+.desktop-planner .dp-month-date {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner .dp-month-date:hover {
+  background: var(--hover);
+}
+
+.desktop-planner .dp-month-cell.is-today .dp-month-date {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+.desktop-planner .dp-month-more {
+  align-self: flex-start;
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+}
+
+.desktop-planner .dp-month-more:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+/* ---------- Year ---------- */
+
+.desktop-planner .dp-year {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px 24px;
+  overflow: auto;
+}
+
+.desktop-planner .dp-year-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-year-stats b {
+  color: var(--text);
+}
+
+.desktop-planner .dp-year-legend {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.desktop-planner .dp-year-legend-scale {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.desktop-planner .dp-year-legend .dp-year-day {
+  width: 14px;
+  height: 14px;
+}
+
+.desktop-planner .dp-year-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 18px 24px;
+}
+
+.desktop-planner .dp-year-month {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.desktop-planner .dp-year-month-name {
+  align-self: flex-start;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: 0;
+}
+
+.desktop-planner .dp-year-month-name:hover {
+  color: var(--accent);
+}
+
+.desktop-planner .dp-year-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.desktop-planner .dp-year-weekday {
+  font-family: var(--font-label);
+  font-size: 10px;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+/* Planned time, one hue from light to dark. */
+.desktop-planner .dp-year-day {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--text) 5%, var(--panel));
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+
+.desktop-planner button.dp-year-day:hover {
+  border-color: var(--text-dim);
+}
+
+.desktop-planner .dp-year-day.lv-1 {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 22%, var(--panel));
+}
+
+.desktop-planner .dp-year-day.lv-2 {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 42%, var(--panel));
+}
+
+.desktop-planner .dp-year-day.lv-3 {
+  color: var(--on-accent);
+  background: color-mix(in srgb, var(--accent) 68%, var(--panel));
+}
+
+.desktop-planner .dp-year-day.lv-4 {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+.desktop-planner .dp-year-day.is-today {
+  border-color: var(--text);
+  font-weight: 700;
+}
+
+/* A narrower toolbar keeps the view switch to icons. */
+@container (max-width: 980px) {
+  .desktop-planner .dp-seg-label {
+    display: none;
+  }
+}
+
+/* In the week: the time on its own line, the name across the column below it. */
+.desktop-planner .dp-ag-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.desktop-planner .dp-ag-body .dp-ag-time {
+  line-height: 14px;
+}
+
+/* ---------- The open calendar event (EventPanel) ---------- */
+
+.desktop-planner .dp-event-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.desktop-planner .dp-event-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.desktop-planner .dp-event-source {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desktop-planner .dp-event-title {
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.desktop-planner .dp-event-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.desktop-planner .dp-event-line svg {
+  flex: none;
+  color: var(--text-dim);
+}
+
+.desktop-planner .dp-event-notes {
+  margin: 2px 0 0;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-dim);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  user-select: text;
+}
+
+.desktop-planner .dp-event-readonly {
+  margin: 4px 0 0;
+}
+
+.desktop-planner .dp-event-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.desktop-planner .dp-event-notes-input {
+  width: 100%;
+  min-height: 80px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+  resize: vertical;
+}
+
+.desktop-planner .dp-event-notes-input:focus {
+  border-color: var(--accent);
+}
+
+/* Events can be clicked for their details; the open one is marked. */
+.desktop-planner .dp-event {
+  cursor: pointer;
+}
+
+.desktop-planner .dp-event.is-selected,
+.desktop-planner .dp-allday-chip.is-selected {
+  outline: 2px solid var(--block);
+  outline-offset: 1px;
+}
+
+.desktop-planner button.dp-allday-chip {
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text);
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  cursor: pointer;
+}
+
+/* ---------- Deadlines ---------- */
+
+.desktop-planner .dp-due {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.desktop-planner button.dp-due {
+  cursor: pointer;
+}
+
+.desktop-planner button.dp-due:hover {
+  border-color: var(--text-dim);
+}
+
+.desktop-planner .dp-due.is-soon {
+  color: var(--text);
+}
+
+.desktop-planner .dp-due.is-near {
+  color: #b7791f;
+  border-color: color-mix(in srgb, #e2b203 60%, transparent);
+  background: color-mix(in srgb, #e2b203 12%, transparent);
+}
+
+.desktop-planner .dp-due.is-overdue {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.desktop-planner .dp-due-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.desktop-planner .dp-due-edit input {
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+/* A deadline in the week and month: a flag, not a time. */
+.desktop-planner .dp-ag-item.is-due {
+  cursor: grab;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid #e2b203;
+}
+
+.desktop-planner .dp-ag-item.is-due.is-overdue {
+  border-left-color: var(--danger);
+}
+
+.desktop-planner .dp-ag-item.is-due .dp-ag-icon {
+  color: #e2b203;
+}
+
+.desktop-planner .dp-ag-item.is-due.is-overdue .dp-ag-icon {
+  color: var(--danger);
+}
+
+/* A calendar account whose sign-in stopped working. */
+.desktop-planner .ps-reconnect {
+  flex: none;
+  padding: 0;
+  font-size: 11px;
+  color: var(--danger);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+

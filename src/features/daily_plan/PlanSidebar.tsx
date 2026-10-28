@@ -104,7 +104,7 @@ export function PlanSidebar({ active, onOpen }: AreaSidebarProps) {
               <div className="ps-providers">
                 <ProviderButton name="Google" available={setup.available.google} disabled={false} onClick={() => openDialog("calendars", "google")} />
                 <ProviderButton name="Outlook" available={setup.available.microsoft} disabled={false} onClick={() => openDialog("calendars", "microsoft")} />
-                <ProviderButton name="iCloud" available disabled={false} onClick={() => openDialog("calendars", "caldav")} />
+                <ProviderButton name="iCloud" available={setup.available.caldav !== false} disabled={false} onClick={() => openDialog("calendars", "caldav")} />
               </div>
             </>
           )}

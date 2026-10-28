@@ -1,4 +1,4 @@
-import { Blocks, CircleUserRound, EyeOff, Layers, Palette, ShieldCheck, Sparkles, type LucideIcon } from "lucide-react";
+import { Blocks, CircleUserRound, EyeOff, Layers, Palette, ShieldCheck, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -13,7 +13,7 @@ import { useProfile } from "./useProfile";
 import { shortcut } from "../lib/shortcut";
 
 /** The shell's own panels, or an area's sidebar ("area:<id>"). */
-export type SidePanel = "areas" | "extensions" | "assistant" | "account" | "themes" | `area:${string}`;
+export type SidePanel = "areas" | "extensions" | "account" | "themes" | `area:${string}`;
 
 export interface Item {
   id: SidePanel;
@@ -25,7 +25,6 @@ export interface Item {
 const TOP: Item[] = [
   { id: "areas", label: shortcut("Areas (Ctrl+B)"), icon: Layers },
   { id: "extensions", label: shortcut("Extensions (Ctrl+Shift+X)"), icon: Blocks },
-  { id: "assistant", label: "Assistant", icon: Sparkles },
 ];
 
 const BOTTOM: Item[] = [

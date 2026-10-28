@@ -10,7 +10,7 @@ export const OPERATOR_NAME = process.env.OPERATOR_NAME?.trim() || null;
 
 /** When the privacy notice and terms last changed. Keep in step with
  * `UPDATED` in server/src/privacy.rs. */
-export const LEGAL_UPDATED = "24 October 2026";
+export const LEGAL_UPDATED = "27 October 2026";
 
 /** How long the server keeps things: keep in step with server/src/housekeeping.rs. */
-export const RETENTION = { unconfirmedDays: 7, endedSessionDays: 30, solvedTicketMonths: 12 };
+export const RETENTION = { unconfirmedDays: 7, endedSessionDays: 30, solvedTicketMonths: 12, aiUsageDays: 7 };

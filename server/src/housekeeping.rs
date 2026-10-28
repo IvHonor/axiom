@@ -7,7 +7,7 @@ use chrono::{Duration as Days, Utc};
 use sea_orm::{ColumnTrait, Condition, DbErr, EntityTrait, QueryFilter};
 
 use crate::AppState;
-use crate::entities::{email_code, password_reset, session, support_ticket, user};
+use crate::entities::{ai_usage, email_code, password_reset, session, support_ticket, user};
 
 const TICK: Duration = Duration::from_secs(60 * 60);
 /// A sign-up that never confirmed its address.
@@ -16,9 +16,13 @@ pub const UNCONFIRMED_DAYS: i64 = 7;
 pub const ENDED_SESSION_DAYS: i64 = 30;
 /// A support ticket after it was marked solved.
 pub const SOLVED_TICKET_DAYS: i64 = 365;
+/// How many times an account used the assistant on a day, after that day.
+pub const AI_USAGE_DAYS: i64 = 7;
 
 pub async fn run(s: AppState) {
     let mut every = tokio::time::interval(TICK);
+    // After a pause (a computer asleep), one run, not one for every tick missed.
+    every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         every.tick().await;
         match tidy(&s).await {
@@ -60,6 +64,12 @@ pub async fn tidy(s: &AppState) -> Result<u64, DbErr> {
 
     removed += support_ticket::Entity::delete_many()
         .filter(support_ticket::Column::SolvedAt.lt(now - Days::days(SOLVED_TICKET_DAYS)))
+        .exec(&s.db)
+        .await?
+        .rows_affected;
+
+    removed += ai_usage::Entity::delete_many()
+        .filter(ai_usage::Column::Day.lt((now - Days::days(AI_USAGE_DAYS)).date_naive()))
         .exec(&s.db)
         .await?
         .rows_affected;
@@ -128,8 +138,13 @@ mod tests {
         ticket(&s, Some(long_ago)).await;
         ticket(&s, Some(Utc::now())).await;
         ticket(&s, None).await;
+        for days_ago in [AI_USAGE_DAYS + 1, 0] {
+            let day = (Utc::now() - Days::days(days_ago)).date_naive();
+            ai_usage::ActiveModel { user_id: Set("u".into()), day: Set(day), count: Set(3) }.insert(&s.db).await.unwrap();
+        }
 
-        assert_eq!(tidy(&s).await.unwrap(), 2);
+        assert_eq!(tidy(&s).await.unwrap(), 3);
+        assert_eq!(ai_usage::Entity::find().count(&s.db).await.unwrap(), 1, "today's count stays");
         let left: Vec<String> = user::Entity::find().all(&s.db).await.unwrap().into_iter().map(|u| u.email).collect();
         assert_eq!(left.len(), 2);
         assert!(!left.contains(&"old-unconfirmed@example.com".to_owned()));

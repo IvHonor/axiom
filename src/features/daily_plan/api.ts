@@ -1,6 +1,15 @@
 // Typed wrappers for the Daily Plan's Tauri commands.
 // Mirrors src-tauri/src/features/daily_plan/{entities,types}.rs.
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+
+export type PlanTransport = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+let transport: PlanTransport = tauriInvoke;
+const invoke: PlanTransport = (command, args) => transport(command, args);
+/** The web host supplies storage; the desktop keeps its native command transport. */
+export function setPlanTransport(next: PlanTransport) {
+  transport = next;
+  return () => { if (transport === next) transport = tauriInvoke; };
+}
 
 /** "YYYY-MM-DD" in the user's own time zone. */
 export type Day = string;
@@ -151,7 +160,7 @@ export interface CalendarSetup {
   accounts: CalendarAccount[];
   calendars: Calendar[];
   /** Which providers this copy of Axiom can connect to. */
-  available: { google: boolean; microsoft: boolean };
+  available: { google: boolean; microsoft: boolean; caldav?: boolean };
 }
 
 /** A block that repeats on chosen weekdays. */

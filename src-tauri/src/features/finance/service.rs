@@ -418,7 +418,7 @@ pub async fn list_transactions(db: &DatabaseConnection, filter: TransactionFilte
         .collect())
 }
 
-fn check_transaction(fields: &TransactionFields) -> Result<()> {
+pub(crate) fn check_transaction(fields: &TransactionFields) -> Result<()> {
     if fields.amount == 0 {
         return Err(Error::Invalid("Enter an amount.".into()));
     }

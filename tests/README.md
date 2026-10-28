@@ -1,5 +1,33 @@
 # Daily Plan overview checks
 
+## Lemma 3D companion
+
+Run `node tests/lemma-companion.mjs` against Vite on port 1427 with the Playwright setup below. The fixture uses the real companion, wardrobe and chat view with mocked desktop calls; it does not use AI keys or the desktop database. Checks cover actual WebGL drawing, all four bodies, accessories and keepsakes, pointer and keyboard interaction, voice/activity state, saved wardrobe migration and validation, companion minimisation, chat presence, renderer cleanup, reduced motion, off-screen suspension, graphics-context recovery and the illustration fallback. Screenshots go to `.qa.local/lemma`.
+
+The renderer loads on demand, caps pixel density and frame rate, and pauses when hidden or reduced motion is enabled. Tiny identity marks use a static illustration. Wardrobes remain local under `axiom.lemma.look`; old body choices migrate to the new shapes. The floating companion's compact state is saved under `axiom.lemma.compact`.
+
+## Lemma change cards and streamed replies
+
+Run `node tests/lemma-cards.mjs` against Vite on port 1427 with the Playwright setup below (`CHROMIUM_PATH` can point at a Chromium to use). `lemma-cards-preview.html` renders the real chat view with a chat kept in memory; it never reads the desktop database and sends nothing to an AI. It checks Undo on a card confirmed on this computer, the note on one confirmed on another computer (Undo is kept only where a change was confirmed), the book card's Open Library details, a repeated change pointing back to the card still waiting, Confirm all, and a reply's words appearing as they're written: no "thinking" line under them, earlier words staying while Lemma looks at an area, and the saved answer replacing them. It finishes in the light theme and a narrow window. Screenshots go to `.qa.local/lemma-cards`.
+
+## What's new after an update
+
+Run `node tests/whats-new.mjs` against Vite on port 1427 with the Playwright setup below. `whats-new-preview.html` renders the real window with no desktop calls. It checks which updates get the news (from an older version, not again on the same one, still on a later version that skipped it, and for a fresh install), that Open Lemma, Later and Escape all count as seen, that a version with nothing new shows nothing, and that it fits a narrow window in the light theme. The notes live in `src/shell/releaseNotes.ts`: add an entry with the version that brings something worth announcing. Screenshots go to `.qa.local/whats-new`.
+
+## Lemma overview tile
+
+Run `node tests/lemma-overview-layout.mjs` against Vite on port 1427 with the Playwright setup below. `lemma-overview-preview.html` renders the real tile in a real resizable tile, with every area's summary kept in memory; it never reads the desktop database and sends nothing to an AI. It checks the words being typed out with a talking face, clicking to finish a sentence, bubbles not retyped, paging, lines, numbers and the face opening the right place, read aloud, and that the tile has no text box. It then sweeps all 165 tile sizes at three window widths (**495 combinations**), checking from the real rendered boxes that the face, everything said, the numbers and every button stay inside the tile. It repeats representative sizes with a quiet day, very long unbroken names, no areas, the light theme, a chosen name and personalities. Screenshots go to `.qa.local/lemma-overview`.
+
+The briefing is built on this computer from the summaries of the areas that are on (`src/features/lemma/briefing.ts`), most pressing first. The tile picks one of six layouts from its measured space (pill, ribbon, column, card, wide, stage), then splits what's said into bubblefuls by measuring a hidden copy, so nothing is cut off at any size.
+
+## Confirm buttons in forms
+
+Run `node tests/confirm-button.mjs` against Vite on port 1427. The real `ConfirmButton` sits in a form: the first click must arm it without submitting the form, the second must delete, and Enter must still save. Delete buttons in dialogs (University modules and terms, Finance, Learning, Goals and others) rely on this.
+
+## Tab ordering
+
+Run `node tests/tab-order.mjs` against Vite on port 1427 with the Playwright setup below. The fixture uses the real tab bar and persistence hook with mocked desktop calls. Checks cover mouse and keyboard sorting, movable permanent Overview, Escape cancellation, saved order and migration from older saves, active selection, close buttons and middle-click, previews, disabled extensions, invalid saved tabs and reduced motion. Tab order is saved locally under `axiom.tabs`. Press Space on a focused tab to pick it up, Left/Right to move, Space to drop or Escape to cancel; Enter opens the tab.
+
 ## Activity bar ordering
 
 Run `node tests/activity-order.mjs` against Vite on port 1427 with the Playwright setup below. Checks cover pointer and keyboard sorting, local persistence, Escape cancellation, normal clicks and context menus, disabled/re-enabled extensions, corrupt preferences, and fixed shell/required icons. Only switchable area icons can move. Order is stored locally under `axiom.activityOrder.v1`; it does not change overview tile positions or the extension registry.
@@ -109,3 +137,15 @@ Journal and Notes responsive summaries: run `node tests/writing-overview-layout.
 ## Production colours
 
 Run `npm run build`, then `node tests/production-colours.mjs` with the Playwright setup above. It checks the built CSS and the real theme application function, including light/dark colours and theme switching. This catches colour rules that work in development but break during production CSS optimization.
+
+## Web terminal
+
+`node tests/site-account-api.mjs` checks the real website account request wrapper with a mocked Next request context: missing/invalid production configuration, URL trimming, normal sign-in responses, HTML gateway failures, connection error codes, timeouts and secret-free diagnostic logs.
+
+`node tests/web-terminal-model.mjs` checks the desktop sync format, field merges, dates, encrypted-table write refusal, task/block cleanup, priorities and timer completion. After a production build in `site`, `node tests/web-terminal.mjs` starts isolated account/sync and Next.js servers and verifies the real authenticated shell, task/block/reflection edits, pagination, durable retry, encrypted-area boundaries, account/origin isolation, preferences and phone width. Use the Playwright setup above. No live account or desktop database is used. Screenshots go to `.qa.local/terminal`.
+
+`node tests/web-planner-parity.mjs` covers calendar periods, batch carry-over, block placement/overlap lanes, routine previews, busy-time scheduling, iCalendar recurrence/exception/DST/overnight/all-day handling, export, chunk storage limits, feed URL restrictions and personal-board recurrence/history.
+
+`node tests/web-desktop-planner-model.mjs` checks the web adapter for native Daily Plan commands, DTO conversion, serialized edits, idempotent timers, task/block cleanup, day markers and routine previews/tombstones. The browser suite runs `web-desktop-planner-browser.mjs` against the shared desktop UI for task edits, focus/timers/notes, quick-add, routines, calendars, settings and calendar views. `web-desktop-planner-visual.mjs` builds an isolated desktop reference with the original CSS and compares computed fonts, colours, dimensions and spacing with the production website for Day, Week, Month, Year, Insights and the sidebar in Modern Dark, Modern Light and Ember. It saves screenshots to `.qa.local/terminal`. Both root and site dependencies must be installed.
+
+`node tests/web-board-model.mjs` checks personal Project Board CRUD, columns and ordering, completion/recurrence/history, labels and project scope, checklists/subtasks, templates, archive, planner links, insights, cascading deletion and ordered UUIDv7 IDs. `web-terminal.mjs` additionally runs `web-board-browser.mjs` against the same isolated account fixture to exercise the board UI, drag-and-drop, template reuse, deletion confirmation, persistence and phone width. Shared-board transport and roles remain outside this stage.

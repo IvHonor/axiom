@@ -100,6 +100,11 @@ pub mod routes {
     pub const WEB_UPDATES: &str = "/v1/web-updates";
     /// `POST` a `ai::ChatRequest`: the assistant answers on the server's AI keys.
     pub const AI_CHAT: &str = "/v1/ai/chat";
+    /// `POST` a `ai::ChatRequest`: like `AI_CHAT`, but the answer comes as it's
+    /// written, one `ai::Streamed` per line of JSON.
+    pub const AI_CHAT_STREAM: &str = "/v1/ai/chat/stream";
+    /// `POST` an `ai::Transcribe`: speech to text, on the server's AI keys.
+    pub const AI_TRANSCRIBE: &str = "/v1/ai/transcribe";
 }
 
 /// Fills in a route's `{name}` placeholders, e.g. `route(SPACE, &[("id", "p1")])`.

@@ -273,7 +273,7 @@ pub async fn delete_term(db: &DatabaseConnection, id: &str) -> Result<()> {
 
 // ---------- Modules ----------
 
-fn check_module(fields: &ModuleFields) -> Result<()> {
+pub(crate) fn check_module(fields: &ModuleFields) -> Result<()> {
     if fields.name.trim().is_empty() {
         return Err(Error::Invalid("Give the module a name.".into()));
     }
@@ -349,7 +349,7 @@ pub async fn delete_module(db: &DatabaseConnection, id: &str) -> Result<()> {
 
 // ---------- Lectures ----------
 
-fn check_kind(kind: &str) -> Result<()> {
+pub(crate) fn check_kind(kind: &str) -> Result<()> {
     if KINDS.contains(&kind) { Ok(()) } else { Err(Error::Invalid(format!("Unknown kind: {kind}"))) }
 }
 
@@ -361,7 +361,7 @@ fn week_for(t: &term::Model, week: Option<i32>, day: Option<Date>) -> Result<Opt
     Ok(day.and_then(|d| week_of(t, d)).or(week))
 }
 
-fn check_lecture(fields: &LectureFields) -> Result<String> {
+pub(crate) fn check_lecture(fields: &LectureFields) -> Result<String> {
     let title = fields.title.trim().to_owned();
     if title.is_empty() {
         return Err(Error::Invalid("Give it a title.".into()));

@@ -224,9 +224,19 @@ impl Account {
         self.authed(|token| async move { self.client.plan_emails(&token, plan).await }).await
     }
 
-    /// The assistant, on Axiom's AI keys (see `crate::ai`).
-    pub async fn ai_chat(&self, request: &axiom_protocol::ai::ChatRequest) -> std::result::Result<axiom_protocol::ai::ChatReply, ServerError> {
-        self.authed(|token| async move { self.client.ai_chat(&token, request).await }).await
+    /// The assistant, on Axiom's AI keys (see `crate::ai`), its words going
+    /// to `on` as they're written.
+    pub async fn ai_chat_stream(
+        &self,
+        request: &axiom_protocol::ai::ChatRequest,
+        on: &(dyn Fn(axiom_ai::Delta) + Sync),
+    ) -> std::result::Result<axiom_protocol::ai::ChatReply, ServerError> {
+        self.authed(|token| async move { self.client.ai_chat_stream(&token, request, on).await }).await
+    }
+
+    /// Speech to text for the assistant, on Axiom's AI keys.
+    pub async fn ai_transcribe(&self, request: &axiom_protocol::ai::Transcribe) -> std::result::Result<axiom_protocol::ai::Transcript, ServerError> {
+        self.authed(|token| async move { self.client.ai_transcribe(&token, request).await }).await
     }
 
     /// The name and picture the account shows.

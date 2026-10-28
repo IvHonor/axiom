@@ -163,7 +163,7 @@ pub async fn sources(db: &DatabaseConnection, today: Date) -> Result<Sources> {
 
 // ---------- Goals ----------
 
-fn clean(fields: &mut GoalFields) -> Result<String> {
+pub(crate) fn clean(fields: &mut GoalFields) -> Result<String> {
     let title: String = fields.title.trim().chars().take(200).collect();
     if title.is_empty() {
         return Err(Error::Invalid("What's the goal?".into()));

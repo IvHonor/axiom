@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { BarChart3, Calendar, CalendarDays, CalendarRange, Check, ChevronLeft, ChevronRight, Moon, Plus, Repeat, RotateCcw, Settings2, Sun, Sunrise, X } from "lucide-react";
 import { useDataChanged } from "../../lib/sync";
 import { Dropdown } from "../../shell/ui/Dropdown";
@@ -42,13 +42,13 @@ const CONNECT_HINT_KEY = "axiom.dailyPlan.connectHintDismissed";
 const CALENDAR_CHECK_MS = 5 * 60_000;
 
 /** The Daily Plan: the day's tasks beside its timeline, the week, and insights. */
-export function DailyPlanView() {
+export function DailyPlanView({ initialDay, calendarExtras }: { initialDay?: string; calendarExtras?: (day: string) => ReactNode } = {}) {
   const { view, dialog, todayAsked, event: eventId } = usePlanUi();
   /** Bumped when calendars or routines change, so every view reloads. */
   const [version, setVersion] = useState(0);
   const [calendars, setCalendars] = useState<CalendarSetup | null>(null);
   const [today, setToday] = useState(todayNow);
-  const [day, setDay] = useState(todayNow);
+  const [day, setDay] = useState(() => initialDay ?? todayNow());
   const [plan, setPlan] = useState<DayPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** A one-off message, e.g. what Replan did. */
@@ -354,7 +354,7 @@ export function DailyPlanView() {
         />
       )}
       {dialog?.kind === "routines" && <RoutinesDialog onClose={() => setDialog(null)} onChanged={bump} />}
-      {dialog?.kind === "calendars" && <CalendarsDialog start={dialog.start} onClose={() => setDialog(null)} onChanged={bump} />}
+      {dialog?.kind === "calendars" && <CalendarsDialog start={dialog.start} onClose={() => setDialog(null)} onChanged={bump} extra={calendarExtras?.(day)} />}
       {plan && isToday && ritual === "plan" && <PlanRitual plan={plan} today={today} act={act} onClose={() => setRitual(null)} />}
       {plan && isToday && ritual === "shutdown" && <ShutdownRitual plan={plan} today={today} act={act} onClose={() => setRitual(null)} />}
     </div>
@@ -391,7 +391,7 @@ function ConnectCard({ setup }: { setup: CalendarSetup }) {
       <div className="dp-connect-card-actions">
         <ProviderButton name="Google" available={setup.available.google} disabled={false} onClick={() => start("google")} />
         <ProviderButton name="Outlook" available={setup.available.microsoft} disabled={false} onClick={() => start("microsoft")} />
-        <ProviderButton name="iCloud" available disabled={false} onClick={() => start("caldav")} />
+        <ProviderButton name="iCloud" available={setup.available.caldav !== false} disabled={false} onClick={() => start("caldav")} />
       </div>
       <button className="icon-btn" aria-label="Not now" title="Not now (Calendars stays in the sidebar)" onClick={dismiss}>
         <X size={14} strokeWidth={1.75} />

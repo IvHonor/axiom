@@ -46,7 +46,7 @@ async fn find(db: &impl ConnectionTrait, id: &str) -> Result<person::Model> {
     people().filter(person::Column::Id.eq(id)).one(db).await?.ok_or(Error::NotFound("Person"))
 }
 
-async fn find_gift(db: &impl ConnectionTrait, id: &str) -> Result<gift::Model> {
+pub(crate) async fn find_gift(db: &impl ConnectionTrait, id: &str) -> Result<gift::Model> {
     gifts().filter(gift::Column::Id.eq(id)).one(db).await?.ok_or(Error::NotFound("Gift"))
 }
 
@@ -89,7 +89,7 @@ pub fn view(p: &person::Model, ideas: u32, today: Date) -> PersonView {
     }
 }
 
-fn check(fields: &PersonFields, today: Date) -> Result<String> {
+pub(crate) fn check(fields: &PersonFields, today: Date) -> Result<String> {
     let name: String = fields.name.trim().chars().take(120).collect();
     if name.is_empty() {
         return Err(Error::Invalid("Give them a name.".into()));

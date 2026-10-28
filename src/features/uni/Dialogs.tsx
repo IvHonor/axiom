@@ -75,7 +75,7 @@ export function TermDialog({ term, onClose }: { term: TermCard | null; onClose: 
             <input className="rd-num" inputMode="numeric" value={weeks} onChange={(e) => setWeeks(e.currentTarget.value)} />
           </label>
         </div>
-        <small className="dim">Week 1 is the week the term starts in. Count reading week if your timetable does.</small>
+        <small className="dim">Week 1 is the week the term starts in, so pick the date of your first lecture, even if it's already been. Count reading week if your timetable does.</small>
         <footer className="rd-dialog-foot un-foot">
           {term && (
             <ConfirmButton

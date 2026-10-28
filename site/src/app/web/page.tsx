@@ -57,10 +57,11 @@ async function ForVisitor() {
     return (
       <div className={s.overlayCard}>
         <Wrench size={26} strokeWidth={1.3} />
-        <span className="soon">IN THE WORKS</span>
-        <h2>We&apos;re working on it, {account.display_name || account.email.split("@")[0]}.</h2>
-        <p>Axiom on the web should be here soon. When it opens, you&apos;ll sign in here with <b>{account.email}</b> and find everything you&apos;ve synced.</p>
+        <span className="soon">EARLY ACCESS</span>
+        <h2>Your terminal is taking shape, {account.display_name || account.email.split("@")[0]}.</h2>
+        <p>Open the early workspace to use Daily Plan with <b>{account.email}</b>. More areas are on the way; private areas will stay locked until browser encryption is ready.</p>
         <NotifyForm email={account.email} />
+        <Link className="button button-primary button-md" href="/terminal">Open the early web terminal <ArrowRight size={15} /></Link>
       </div>
     );
   }

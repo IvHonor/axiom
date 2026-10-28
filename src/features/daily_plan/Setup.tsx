@@ -202,7 +202,7 @@ type Busy = "google" | "microsoft" | "caldav" | "link" | "refresh" | "publish" |
 
 /** Calendar accounts and links: their events show as busy time, and the
  * plan can be published into one calendar. */
-export function CalendarsDialog({ start, onClose, onChanged }: { start?: "google" | "microsoft" | "caldav"; onClose: () => void; onChanged: () => void }) {
+export function CalendarsDialog({ start, onClose, onChanged, extra }: { start?: "google" | "microsoft" | "caldav"; onClose: () => void; onChanged: () => void; extra?: ReactNode }) {
   const [setup, setSetup] = useState<CalendarSetup | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
@@ -321,7 +321,7 @@ export function CalendarsDialog({ start, onClose, onChanged }: { start?: "google
           <span className="menu-heading">Connect</span>
           <ProviderButton name="Google" available={setup?.available.google} disabled={busy !== null} onClick={() => connect("google")} />
           <ProviderButton name="Outlook" available={setup?.available.microsoft} disabled={busy !== null} onClick={() => connect("microsoft")} />
-          <ProviderButton name="iCloud" available disabled={busy !== null} onClick={() => setForm(form === "caldav" ? null : "caldav")} />
+          <ProviderButton name="iCloud" available={setup?.available.caldav !== false} disabled={busy !== null} onClick={() => setForm(form === "caldav" ? null : "caldav")} />
         </div>
       )}
       {form === "caldav" && (
@@ -402,6 +402,7 @@ export function CalendarsDialog({ start, onClose, onChanged }: { start?: "google
           </button>
         )}
       </section>
+      {extra}
     </Dialog>
   );
 }

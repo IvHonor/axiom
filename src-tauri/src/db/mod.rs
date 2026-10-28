@@ -101,10 +101,12 @@ async fn open(file: &Path) -> std::result::Result<DatabaseConnection, DbErr> {
     Ok(conn)
 }
 
-/// Brings a database up to date: migrations, then sync's change triggers.
+/// Brings a database up to date: migrations, then sync's change triggers,
+/// and anything a newly synced table has that the server doesn't.
 pub async fn prepare(conn: &DatabaseConnection) -> std::result::Result<(), DbErr> {
     Migrator::up(conn, None).await?;
-    crate::sync::local::install_triggers(conn).await
+    crate::sync::local::install_triggers(conn).await?;
+    crate::sync::local::backfill(conn).await
 }
 
 /// A new id: a UUIDv7, unique across devices and sortable by creation time.

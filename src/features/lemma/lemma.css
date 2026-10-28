@@ -1,0 +1,234 @@
+.lemma-face {
+  position: relative;
+  display: block;
+  flex: none;
+  max-width: 100%;
+  aspect-ratio: 1;
+  border-radius: 24px;
+  isolation: isolate;
+}
+
+.lemma-face canvas, .lemma-illustration {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.lemma-face[data-renderer="illustration"] canvas { visibility: hidden; }
+.lemma-color-probe { position: absolute; visibility: hidden; pointer-events: none; }
+.lemma-face.is-interactive { cursor: grab; touch-action: none; }
+.lemma-face.is-interactive:active { cursor: grabbing; }
+.lemma-face:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
+.lemma-work-badge {
+  position: absolute;
+  right: 10%;
+  bottom: 12%;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+}
+.lemma-illustration-talk { transform-box: fill-box; transform-origin: center; animation: lemma-talk 0.24s ease-in-out infinite alternate; }
+@keyframes lemma-talk { from { transform: scaleY(0.4); } to { transform: scaleY(1.6); } }
+
+/* ---------- The overview tile: Lemma talking you through the day ---------- */
+/* LemmaSummary picks the layout from the measured space; these place it. */
+
+.lemma-brief { height: 100%; min-height: 0; min-width: 0; display: flex; gap: 12px; }
+.lemma-brief-face { flex: none; display: grid; place-items: center; padding: 0; border-radius: 22%; }
+.lemma-brief-face:hover { background: var(--hover); }
+.lemma-brief-face .lemma-face { width: 100% !important; height: 100% !important; }
+
+.lemma-say { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13px; line-height: 19px; color: var(--text); text-align: left; }
+.lemma-say > .extension-symbol { flex: none; margin-top: 2px; }
+.lemma-say strong { font-weight: 600; }
+.lemma-say.is-greeting { font-size: 16px; line-height: 23px; font-weight: 600; letter-spacing: -0.01em; }
+.lemma-say.is-intro, .lemma-say.is-status { color: var(--text-dim); }
+.lemma-say.is-signoff { color: var(--text-dim); font-style: italic; }
+.lemma-say.is-line { width: 100%; padding: 2px 6px; margin: 0 -6px; border-radius: 7px; }
+.lemma-say.is-line:hover { background: color-mix(in srgb, var(--hover) 70%, transparent); }
+.lemma-say.is-line:hover strong { color: var(--extension-accent, var(--accent)); }
+.lemma-unsaid { visibility: hidden; }
+/* Never past the bubble: one thing said is cut to the rows it has (only ever
+   needed when a single thing is taller than the whole bubble). */
+.lemma-speech-words > .lemma-say > span, .lemma-speech-probe > .lemma-say > span { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.lemma-speech-words > .lemma-say > span { -webkit-line-clamp: var(--lemma-rows, 2); }
+.lemma-speech-words > .lemma-say.is-greeting > span { -webkit-line-clamp: var(--lemma-big-rows, 1); }
+
+/* The speech bubble, its tail towards the face. */
+.lemma-speech {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 11px 13px;
+  background: color-mix(in srgb, var(--surface) 70%, var(--bg));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.lemma-speech::before {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border: inherit;
+  border-width: 0 0 1px 1px;
+}
+.lemma-speech[data-tail="left"]::before { left: -7px; top: 22px; transform: rotate(45deg); }
+.lemma-speech[data-tail="top"]::before { top: -7px; left: calc(50% - 6px); transform: rotate(135deg); }
+.lemma-speech-words { position: relative; z-index: 1; flex: 1; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 8px; }
+/* A hidden copy of everything said, measured to split it into bubblefuls. */
+.lemma-speech-probe { position: absolute; top: 0; left: 0; right: 0; display: flex; flex-direction: column; gap: 8px; visibility: hidden; pointer-events: none; }
+.lemma-brief-pager { position: relative; z-index: 1; flex: none; display: flex; justify-content: center; align-items: center; gap: 5px; height: 20px; }
+.lemma-dot { width: 6px; height: 6px; padding: 0; border-radius: 3px; background: var(--line-strong); transition: width 0.2s, background 0.2s; }
+.lemma-dot.is-on { width: 16px; background: var(--accent); }
+.lemma-brief-pager.is-count { gap: 2px; white-space: nowrap; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.lemma-brief-pager.is-count .icon-btn { width: 20px; height: 20px; }
+
+.lemma-brief-hero { flex: 1; min-width: 0; min-height: 0; display: flex; gap: 14px; }
+.lemma-brief-talk { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.lemma-brief-actions { flex: none; display: flex; align-items: center; gap: 4px; height: 30px; }
+
+/* pill: one row */
+.lemma-brief[data-layout="pill"] { align-items: center; gap: 10px; }
+.lemma-brief[data-layout="pill"] .lemma-speech-words { height: 100%; justify-content: center; }
+.lemma-pill-count { flex: none; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.lemma-brief[data-layout="pill"] .lemma-say, .lemma-brief[data-layout="ribbon"] .lemma-say { font-size: 12.5px; }
+.lemma-brief[data-single] .lemma-speech-words { justify-content: center; }
+
+/* ribbon: short */
+.lemma-brief[data-layout="ribbon"] { align-items: center; }
+.lemma-ribbon-body { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; gap: 6px; }
+.lemma-ribbon-hello { flex: none; margin: 0 0 0 2px; font-size: 13.5px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lemma-brief[data-layout="ribbon"] .lemma-speech { padding: 8px 11px; }
+.lemma-brief[data-layout="ribbon"] .lemma-speech[data-tail="left"]::before { top: 14px; }
+.lemma-ribbon-aloud { flex: none; align-self: flex-start; }
+
+/* column: face above the bubble */
+.lemma-brief[data-layout="column"] { flex-direction: column; }
+.lemma-brief[data-layout="column"] .lemma-brief-hero { flex-direction: column; align-items: center; gap: 10px; }
+.lemma-brief[data-layout="column"] .lemma-brief-talk { width: 100%; }
+.lemma-brief[data-layout="column"] .lemma-brief-actions { justify-content: center; }
+
+/* card and wide: face beside the bubble */
+.lemma-brief[data-layout="card"] .lemma-brief-hero, .lemma-brief[data-layout="wide"] .lemma-brief-hero { align-items: center; }
+.lemma-brief[data-layout="card"] .lemma-brief-talk, .lemma-brief[data-layout="wide"] .lemma-brief-talk { align-self: stretch; }
+.lemma-brief[data-layout="wide"] { gap: 18px; }
+.lemma-brief[data-layout="wide"] .lemma-stats { flex: none; width: clamp(180px, 26%, 270px); align-self: center; }
+
+/* stage: the full briefing */
+.lemma-brief[data-layout="stage"] { flex-direction: column; gap: 14px; }
+.lemma-brief[data-layout="stage"]:not([data-split]) .lemma-brief-hero { flex-direction: column; align-items: center; }
+.lemma-brief[data-layout="stage"]:not([data-split]) .lemma-brief-talk { width: 100%; }
+.lemma-brief[data-layout="stage"][data-split] .lemma-brief-hero { align-items: center; justify-content: center; gap: 28px; }
+.lemma-brief[data-layout="stage"][data-split] .lemma-brief-talk { align-self: stretch; max-width: 720px; }
+.lemma-brief[data-layout="stage"]:not([data-split]) .lemma-brief-talk { max-width: 720px; }
+.lemma-brief[data-layout="stage"] .lemma-say { font-size: 13.5px; }
+.lemma-brief[data-layout="stage"] .lemma-say.is-greeting { font-size: 18px; }
+
+/* The day's numbers */
+.lemma-stats { flex: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.lemma-stat {
+  min-width: 0;
+  height: 72px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "icon label" "value value";
+  align-items: center;
+  column-gap: 7px;
+  padding: 10px 12px;
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.lemma-stat:hover:not(:disabled) { border-color: var(--line-strong); background: var(--hover); }
+.lemma-stat > .extension-symbol { grid-area: icon; display: grid; }
+.lemma-stat strong { grid-area: value; align-self: end; font-size: 21px; line-height: 26px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lemma-stat-label { grid-area: label; min-width: 0; font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lemma-stats.is-list { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.lemma-stats.is-list .lemma-stat { height: 40px; grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "icon value label"; padding: 0 10px; }
+.lemma-stats.is-list .lemma-stat strong { align-self: center; font-size: 14px; line-height: 20px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lemma-illustration-talk { animation: none; }
+  .lemma-dot { transition: none; }
+}
+
+.lemma-wardrobe { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 28px; }
+.lemma-wardrobe-preview {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  padding: 23px 0;
+  border: 1px solid #284453;
+  border-radius: 16px;
+  color: #e7f6fb;
+  background: radial-gradient(ellipse at 50% 40%, #183e50 0%, #0b1d2a 45%, #08131d 90%);
+}
+.lemma-preview-eyebrow { display: flex; align-items: center; gap: 7px; color: #a1bdcb; font: 10px var(--font-mono, monospace); letter-spacing: 0.14em; }
+.lemma-preview-eyebrow > span { width: 5px; height: 5px; border-radius: 50%; background: #78e2c5; box-shadow: 0 0 8px #78e2c5; }
+.lemma-preview-stage {
+  width: 100%;
+  display: grid;
+  place-items: center;
+  background-image: linear-gradient(#8ccae508 1px, transparent 1px), linear-gradient(90deg, #8ccae508 1px, transparent 1px);
+  background-size: 30px 30px;
+  mask-image: linear-gradient(transparent, black 15%, black 85%, transparent);
+}
+.lemma-preview-caption { text-align: center; padding: 0 16px; }
+.lemma-preview-caption h3 { margin: 0 0 8px; font-size: 20px; font-weight: 500; letter-spacing: -0.04em; }
+.lemma-preview-caption h3 span { color: #9db7c5; font-weight: 400; }
+.lemma-preview-caption p { margin: 0; color: #abc4d1; font-size: 12px; }
+.lemma-preview-hint { margin: 23px 0 13px; color: #abc4d1; font-size: 11px; }
+.lemma-wardrobe-preview .btn { color: #d8e8ef; border-color: #35505f; }
+.lemma-wardrobe-preview .btn:hover:not(:disabled) { background: #ffffff12; }
+.lemma-wardrobe-options { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.lemma-wardrobe-intro h2 { margin: 0 0 5px; font-size: 21px; font-weight: 500; letter-spacing: -0.04em; }
+.lemma-wardrobe-intro p { margin: 0; font-size: 12px; color: var(--text-dim); }
+.lemma-wardrobe-row h3 { margin: 0 0 9px; font-size: 11px; font-weight: 600; color: var(--text-dim); }
+.lemma-wardrobe-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.lemma-swatch { display: grid; place-items: center; width: 28px; height: 28px; color: #fff; border: 1px solid var(--line-strong); border-radius: 50%; margin: 2px; }
+.lemma-swatch.is-on { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lemma-swatch svg { filter: drop-shadow(0 0 2px #000b); }
+.lemma-choice { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 7px; min-width: 63px; min-height: 62px; padding: 8px 7px; font-size: 10px; color: var(--text-dim); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+.lemma-choice:hover { background: var(--hover); border-color: var(--line-strong); }
+.lemma-choice.is-on { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+.lemma-name { width: 100%; max-width: 260px; }
+.lemma-personality { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: calc(50% - 3px); padding: 8px 10px; text-align: left; color: var(--text-dim); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+.lemma-personality strong { font-size: 12px; font-weight: 500; color: var(--text); }
+.lemma-personality span { font-size: 10px; }
+.lemma-personality:hover { background: var(--hover); border-color: var(--line-strong); }
+.lemma-personality.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+.lemma-personality.is-on strong { color: var(--accent); }
+.lemma-holding { display: grid; place-items: center; height: 23px; }
+.lemma-sidebar-face { align-self: center; padding: 0; border-radius: 50%; }
+.lemma-sidebar-face:hover { background: var(--hover); }
+.lemma-chat-companion { display: flex; flex-direction: column; align-items: center; padding: 0 8px 16px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.lemma-chat-companion p { margin: -10px 0 10px; color: var(--text-dim); font-size: 11px; text-align: center; min-height: 16px; }
+.lemma-companion-dock { position: fixed; z-index: 20; bottom: 38px; right: 18px; width: 164px; display: flex; flex-direction: column; align-items: center; border-radius: 16px; background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line-strong); box-shadow: 0 8px 30px #0002; }
+.lemma-companion-dock > .icon-btn { position: absolute; z-index: 1; right: 4px; top: 4px; }
+.lemma-companion-dock p { margin: -10px 10px 8px; text-align: center; font-size: 11px; color: var(--text-dim); }
+.lemma-companion-actions { display: flex; justify-content: center; gap: 8px; padding-bottom: 10px; }
+.lemma-companion-peek { position: fixed; z-index: 20; bottom: 38px; right: 18px; display: flex; align-items: center; gap: 4px; padding: 2px 10px 2px 0; border: 1px solid var(--line-strong); border-radius: 30px; background: var(--panel); font-size: 11px; }
+@media (max-width: 700px) {
+  .lemma-wardrobe { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .lemma-wardrobe-preview { position: static; padding: 16px 0; }
+  .lemma-preview-stage .lemma-face { width: 230px !important; height: 230px !important; }
+  .lemma-preview-hint { margin-top: 14px; }
+}
+

@@ -2,6 +2,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef } from "react";
+let dataSubscriber: ((handler: () => void) => () => void) | null = null;
+/** Lets another host notify the shared views without emulating native events. */
+export function setDataChangedSubscriber(subscribe: (handler: () => void) => () => void) {
+  dataSubscriber = subscribe;
+  return () => { if (dataSubscriber === subscribe) dataSubscriber = null; };
+}
 
 /** Mirrors `SyncStatus` in src-tauri/src/sync/mod.rs. Times are ISO strings. */
 export type SyncStatus =
@@ -28,6 +34,7 @@ export function useTauriEvent<T>(event: string, handler: (payload: T) => void) {
   latest.current = handler;
 
   useEffect(() => {
+    if (event === "data-changed" && dataSubscriber) return dataSubscriber(() => latest.current(undefined as T));
     let unlisten: (() => void) | undefined;
     let cancelled = false;
     listen<T>(event, (e) => latest.current(e.payload))

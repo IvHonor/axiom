@@ -8,12 +8,14 @@ interface DropdownProps {
   /** ...or a trigger with its own content, such as a text label. */
   trigger?: ReactNode;
   align?: "left" | "right";
+  /** Opens above the button, for controls near the bottom of the window. */
+  up?: boolean;
   /** Menu contents. Call `close` after an action. */
   children: (close: () => void) => ReactNode;
 }
 
 /** A small menu that opens under an icon button and closes on outside click or Escape. */
-export function Dropdown({ label, icon, trigger, align = "right", children }: DropdownProps) {
+export function Dropdown({ label, icon, trigger, align = "right", up, children }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -45,7 +47,7 @@ export function Dropdown({ label, icon, trigger, align = "right", children }: Dr
         {trigger ?? icon}
       </button>
       {open && (
-        <div className={`dropdown-menu is-${align}`} role="menu">
+        <div className={`dropdown-menu is-${align}${up ? " is-up" : ""}`} role="menu">
           {children(() => setOpen(false))}
         </div>
       )}

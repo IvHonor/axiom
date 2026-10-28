@@ -44,7 +44,7 @@ use local::{Cursor, Link};
 /// before they're pushed and opened after they're pulled. While this computer
 /// is locked, their edits wait here and pulled rows are set aside.
 pub static ENCRYPTED: LazyLock<Vec<&'static str>> =
-    LazyLock::new(|| [crate::features::finance::SYNCED_TABLES, crate::features::journal::SYNCED_TABLES, crate::features::notes::SYNCED_TABLES, crate::features::birthdays::SYNCED_TABLES, crate::features::goals::SYNCED_TABLES].concat());
+    LazyLock::new(|| [crate::features::finance::SYNCED_TABLES, crate::features::journal::SYNCED_TABLES, crate::features::notes::SYNCED_TABLES, crate::features::birthdays::SYNCED_TABLES, crate::features::goals::SYNCED_TABLES, crate::features::daily_plan::ENCRYPTED_TABLES, crate::ai::SYNCED_TABLES].concat());
 
 /// Every table that syncs. Features list their own; add new lists here.
 pub static TABLES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
@@ -60,9 +60,15 @@ pub static TABLES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         crate::features::birthdays::SYNCED_TABLES,
         crate::features::goals::SYNCED_TABLES,
         crate::features::learning::SYNCED_TABLES,
+        crate::ai::SYNCED_TABLES,
     ]
     .concat()
 });
+
+/// Columns that belong to each computer (when it last fetched something, a
+/// problem it hit): never pushed, and never overwritten by a pull.
+pub static LOCAL_COLUMNS: LazyLock<Vec<(&'static str, &'static [&'static str])>> =
+    LazyLock::new(|| [crate::features::daily_plan::LOCAL_COLUMNS].concat());
 
 /// How often the loop looks for local edits.
 const TICK: Duration = Duration::from_secs(3);

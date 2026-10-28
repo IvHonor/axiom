@@ -35,10 +35,9 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
-  // The site lives inside the app's repository, which has its own lockfile:
-  // this folder is the project, not the repository root.
-  turbopack: { root: path.join(__dirname) },
-  outputFileTracingRoot: path.join(__dirname),
+  // The planner shares desktop source; keep one React instance across both roots.
+  turbopack: { root: path.join(__dirname, ".."), resolveAlias: { react: "./node_modules/react", "react-dom": "./node_modules/react-dom", "lucide-react": "./node_modules/lucide-react" } },
+  outputFileTracingRoot: path.join(__dirname, ".."),
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

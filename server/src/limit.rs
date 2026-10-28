@@ -31,8 +31,6 @@ pub struct Limits {
     pub code_requests: Limiter,
     /// Support messages per account, or per network without one.
     pub tickets: Limiter,
-    /// The assistant's model calls per account, on Axiom's AI keys.
-    pub ai: Limiter,
 }
 
 impl Default for Limits {
@@ -44,7 +42,6 @@ impl Default for Limits {
             invites: Limiter::new(20, Duration::from_secs(60 * 60)),
             code_requests: Limiter::new(5, Duration::from_secs(60 * 60)),
             tickets: Limiter::new(5, Duration::from_secs(60 * 60)),
-            ai: Limiter::new(crate::ai::REQUESTS_PER_DAY, Duration::from_secs(24 * 60 * 60)),
         }
     }
 }

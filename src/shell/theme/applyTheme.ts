@@ -1,11 +1,10 @@
 import type { Theme } from "../../extensions/types";
 
-/** Writes a theme onto the page as CSS variables and data attributes that the stylesheets read. */
-export function applyTheme(theme: Theme) {
-  const root = document.documentElement;
+/** The same tokens can be applied to a document or an embedded workspace. */
+export function themeVariables(theme: Theme): Record<string, string> {
   const { colors, fonts, style, labels } = theme;
 
-  const vars: Record<string, string> = {
+  return {
     "--bg": colors.background,
     "--surface": colors.surface,
     "--panel": colors.panel,
@@ -28,6 +27,13 @@ export function applyTheme(theme: Theme) {
     "--label-case": labels.uppercase ? "uppercase" : "none",
     "--tracking": String(labels.tracking),
   };
+}
+
+/** Writes a theme onto the page as CSS variables and data attributes that the stylesheets read. */
+export function applyTheme(theme: Theme) {
+  const root = document.documentElement;
+  const { style } = theme;
+  const vars = themeVariables(theme);
   for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value);
 
   root.style.colorScheme = theme.type;

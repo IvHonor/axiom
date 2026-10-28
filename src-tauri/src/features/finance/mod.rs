@@ -11,7 +11,7 @@
 //! - `commands.rs` exposes it all to React
 
 pub mod commands;
-mod entities;
+pub(crate) mod entities;
 pub mod import;
 pub mod migrations;
 pub(crate) mod money;

@@ -1,6 +1,7 @@
 import { ArrowUpRight, Eye, EyeOff } from "lucide-react";
 import type { ExtensionManifest } from "../../extensions/types";
 import { ContextMenu, type MenuPosition } from "./ContextMenu";
+import { useAreaName } from "../../features/lemma/persona";
 
 export function OverviewVisibilityItem({ hidden, onToggle }: { hidden: boolean; onToggle: () => void }) {
   const Icon = hidden ? Eye : EyeOff;
@@ -18,7 +19,7 @@ export function AreaContextMenu({ ext, at, hidden, onOpen, onVisibilityChange, o
   onClose: () => void;
 }) {
   return <ContextMenu at={at} onClose={onClose}>
-    <div className="menu-heading">{ext.name}</div>
+    <div className="menu-heading">{useAreaName()(ext)}</div>
     <button className="menu-item" role="menuitem" onClick={() => { onClose(); onOpen(); }}>
       <ArrowUpRight size={14} />Open
     </button>

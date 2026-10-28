@@ -9,7 +9,7 @@
 //! - `commands.rs` exposes the logic to React
 
 pub mod commands;
-mod entities;
+pub(crate) mod entities;
 pub mod migrations;
 mod outline;
 pub(crate) mod service;

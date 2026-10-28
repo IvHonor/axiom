@@ -9,6 +9,7 @@ license = "MIT"
 axiom-protocol = { path = "../protocol" }
 reqwest = { version = "0.13.5", features = ["json"] }
 serde_json = "1"
+base64 = "0.22"
 
 [dev-dependencies]
 axum = "0.8.9"

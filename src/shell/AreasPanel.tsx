@@ -6,6 +6,7 @@ import type { ExtensionManifest } from "../extensions/types";
 import { Section } from "./ui/Section";
 import { ExtensionIcon } from "./ui/ExtensionIcon";
 import type { View } from "./view";
+import { useAreaName } from "../features/lemma/persona";
 
 interface AreasPanelProps {
   areas: ExtensionManifest[];
@@ -19,6 +20,7 @@ interface AreasPanelProps {
 /** Sidebar listing the overview and every installed area. */
 export function AreasPanel({ areas, view, onOpen, onBrowse, hiddenIds = [], onVisibilityChange }: AreasPanelProps) {
   const isActive = (id: string) => view.kind === "extension" && view.id === id;
+  const nameOf = useAreaName();
   const [menu, setMenu] = useState<{ ext: ExtensionManifest; at: MenuPosition } | null>(null);
 
   return (
@@ -47,14 +49,14 @@ export function AreasPanel({ areas, view, onOpen, onBrowse, hiddenIds = [], onVi
                 key={ext.id}
                 className={isActive(ext.id) ? "nav-item is-active" : "nav-item"}
                 onClick={() => onOpen({ kind: "extension", id: ext.id })}
-                title={hiddenIds.includes(ext.id) ? `${ext.name} · hidden on overview` : ext.name}
+                title={hiddenIds.includes(ext.id) ? `${nameOf(ext)} · hidden on overview` : nameOf(ext)}
                 onContextMenu={onVisibilityChange ? (event) => {
                   event.preventDefault();
                   setMenu({ ext, at: { x: event.clientX, y: event.clientY } });
                 } : undefined}
               >
                 <ExtensionIcon ext={ext} />
-                <span className="nav-label">{ext.name}</span>
+                <span className="nav-label">{nameOf(ext)}</span>
                 {hiddenIds.includes(ext.id) && <EyeOff size={13} className="nav-hidden" aria-label="Hidden on overview" />}
               </button>
             ))

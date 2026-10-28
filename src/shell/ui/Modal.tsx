@@ -1,6 +1,7 @@
-import { useEffect, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+export const ModalHostContext = createContext<RefObject<HTMLElement | null> | null>(null);
 
 /**
  * A centred dialog over the whole app. Closes on Escape or a click outside,
@@ -20,6 +21,7 @@ export function Modal({ title, icon, onClose, children, width, className, bare }
   className?: string;
   bare?: boolean;
 }) {
+  const host = useContext(ModalHostContext);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -38,6 +40,6 @@ export function Modal({ title, icon, onClose, children, width, className, bare }
         </header>
         {bare ? children : <div className="modal-body">{children}</div>}
       </section>
-    </div>, document.body,
+    </div>, host?.current ?? document.body,
   );
 }

@@ -262,7 +262,7 @@ pub async fn get_source(db: &DatabaseConnection, id: &str, today: Date) -> Resul
 
 // ---------- Skills ----------
 
-fn check_skill(f: &SkillFields) -> Result<()> {
+pub(crate) fn check_skill(f: &SkillFields) -> Result<()> {
     if f.name.trim().is_empty() {
         return Err(Error::Invalid("Give the skill a name.".into()));
     }
@@ -323,7 +323,7 @@ pub async fn delete_skill(db: &DatabaseConnection, id: &str) -> Result<()> {
 
 // ---------- Sources ----------
 
-async fn check_source(db: &impl ConnectionTrait, f: &SourceFields) -> Result<()> {
+pub(crate) async fn check_source(db: &impl ConnectionTrait, f: &SourceFields) -> Result<()> {
     find_skill(db, &f.skill_id).await?;
     if !KINDS.contains(&f.kind.as_str()) {
         return Err(Error::Invalid("Pick what kind of source it is.".into()));

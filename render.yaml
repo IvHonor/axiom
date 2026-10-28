@@ -41,12 +41,21 @@ services:
       # rate limited per visitor. At least 32 characters: openssl rand -base64 48
       - key: WEB_PROXY_SECRET
         sync: false
-      # The assistant's AI: Gemini first, Groq when Gemini can't answer. Free keys
-      # from aistudio.google.com/apikey and console.groq.com/keys.
+      # The assistant's AI: Gemini first, Groq when Gemini can't answer. Keys from
+      # aistudio.google.com/apikey and console.groq.com/keys (turn on Zero Data
+      # Retention there). Gemini is used only once GEMINI_PAID is "yes": Google
+      # allows only its paid service for apps used in the UK, EEA and Switzerland,
+      # so turn on billing for the key's project first.
       - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_PAID
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      # The assistant's AI calls per day across every account (each also has
+      # 150 of its own). Caps the paid Gemini bill. Defaults to 1000.
+      - key: AI_DAILY_LIMIT
+        value: "1000"
       # New accounts wait for approval. Set to "off" to let anyone sign up.
       - key: WAITLIST
         value: "on"

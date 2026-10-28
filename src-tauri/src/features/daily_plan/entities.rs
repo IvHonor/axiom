@@ -150,7 +150,8 @@ pub mod day {
     crate::db::stamp_updated_at!();
 }
 
-/// A calendar read from a private iCal link. Kept on this computer only.
+/// A calendar: from a private iCal link, or one of an account's. Synced,
+/// except for each computer's own state (see `LOCAL_COLUMNS`).
 pub mod calendar {
     use sea_orm::entity::prelude::*;
     use serde::Serialize;
@@ -184,6 +185,8 @@ pub mod calendar {
         pub published_hash: Option<String>,
         /// The user's own, not shared with them read-only.
         pub mine: bool,
+        #[serde(skip)]
+        pub deleted_at: Option<DateTimeUtc>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -234,7 +237,7 @@ pub mod event {
 }
 
 /// A calendar account: Google, Microsoft (Outlook) or a CalDAV server such
-/// as iCloud. Its sign-in lives in the system keychain, not here.
+/// as iCloud. Synced; its sign-in lives in each computer's keychain, not here.
 pub mod calendar_account {
     use sea_orm::entity::prelude::*;
     use serde::Serialize;
@@ -253,9 +256,12 @@ pub mod calendar_account {
         pub server: String,
         /// Why the last sync failed, ready to show.
         pub problem: Option<String>,
-        /// The sign-in stopped working (expired, revoked or lost): reconnecting fixes it.
+        /// The sign-in stopped working (expired, revoked or lost), or was
+        /// never made on this computer: reconnecting fixes it.
         pub signed_out: bool,
         pub created_at: DateTimeUtc,
+        #[serde(skip)]
+        pub deleted_at: Option<DateTimeUtc>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

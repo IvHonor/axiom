@@ -461,7 +461,9 @@ mod encrypted {
         let finance_rows: Vec<_> = everything.records.iter().filter(|r| r.table.starts_with("finance_")).collect();
         assert!(!finance_rows.is_empty());
         let raw = serde_json::to_string(&finance_rows).unwrap();
-        assert!(!raw.contains("Tesco") && !raw.contains("-1250") && !raw.contains("Groceries") && !raw.contains("GBP"), "{raw}");
+        // As plain values would appear (quotes and colons never occur in the
+        // sealed text, so random ciphertext can't trip these by chance).
+        assert!(!raw.contains("Tesco Stores") && !raw.contains(":-1250") && !raw.contains("\"Groceries") && !raw.contains("\"GBP\""), "{raw}");
         assert!(finance_rows.iter().all(|r| r.data.iter().all(|(k, v)| k == "id" || v.as_str().is_some_and(|s| s.starts_with("e1:")))));
 
         // Another computer signing in with the password reads it all.
@@ -648,5 +650,83 @@ mod goals_encrypted {
         let there = goals::get(&desktop.db, &g.goal.id, day).await.unwrap();
         assert_eq!((there.goal.goal.start_value, there.goal.goal.target_value, there.goal.current), (84.6, 76.25, 80.4));
         assert_eq!(there.goal.goal.due_date, chrono::NaiveDate::from_ymd_opt(2026, 9, 1));
+    }
+}
+
+mod calendars_synced {
+    use chrono::Utc;
+    use sea_orm::{ActiveModelTrait, ConnectionTrait, EntityTrait, Set};
+
+    use super::*;
+    use crate::features::daily_plan::calendars;
+    use crate::features::daily_plan::entities::calendar;
+
+    /// A calendar added by its private link, with this computer's own state.
+    async fn add_link_calendar(db: &DatabaseConnection, id: &str) {
+        calendar::ActiveModel {
+            id: Set(id.into()),
+            name: Set("Work".into()),
+            url: Set("https://example.com/secret-link.ics".into()),
+            color: Set("blue".into()),
+            refreshed_at: Set(Some(Utc::now())),
+            problem: Set(Some("The laptop's own trouble".into())),
+            created_at: Set(Utc::now()),
+            account_id: Set(None),
+            remote_id: Set(None),
+            writable: Set(false),
+            shown: Set(true),
+            publish: Set(false),
+            published_hash: Set(Some("what the laptop published".into())),
+            mine: Set(false),
+            deleted_at: Set(None),
+        }
+        .insert(db)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn calendar_connections_sync_sealed_without_each_computers_own_state() {
+        let server = start_server().await;
+        let (laptop, desktop) = (Computer::new(&server).await, Computer::new(&server).await);
+        laptop.sign_in().await;
+        desktop.sign_in().await;
+        laptop.sync().await;
+        desktop.sync().await;
+
+        add_link_calendar(&laptop.db, "work").await;
+        laptop.sync().await;
+        let raw = serde_json::to_string(&laptop.account.pull(0).await.unwrap().records).unwrap();
+        assert!(!raw.contains("secret-link") && !raw.contains("Work"), "sealed: {raw}");
+        assert!(!raw.contains("\"problem\"") && !raw.contains("\"published_hash\"") && !raw.contains("\"refreshed_at\""), "each computer's own: {raw}");
+
+        desktop.sync().await;
+        let there = calendar::Entity::find_by_id("work").one(&desktop.db).await.unwrap().unwrap();
+        assert_eq!((there.name.as_str(), there.url.as_str(), there.color.as_str()), ("Work", "https://example.com/secret-link.ics", "blue"));
+        assert_eq!((there.problem, there.published_hash, there.refreshed_at), (None, None, None));
+
+        // Removed on the desktop: gone from the laptop too.
+        calendars::remove_calendar(&desktop.db, "work").await.unwrap();
+        desktop.sync().await;
+        laptop.sync().await;
+        assert!(calendars::list_calendars(&laptop.db).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn calendars_from_before_they_synced_are_sent_after_the_update() {
+        let server = start_server().await;
+        let (laptop, desktop) = (Computer::new(&server).await, Computer::new(&server).await);
+        laptop.sign_in().await;
+        laptop.sync().await;
+        add_link_calendar(&laptop.db, "old").await;
+        // As if it was added before calendars synced: nothing queued for it.
+        laptop.db.execute_unprepared("DELETE FROM sync_outbox").await.unwrap();
+
+        // The updated Axiom starts.
+        crate::db::prepare(&laptop.db).await.unwrap();
+        laptop.sync().await;
+        desktop.sign_in().await;
+        desktop.sync().await;
+        assert_eq!(calendars::list_calendars(&desktop.db).await.unwrap().len(), 1);
     }
 }

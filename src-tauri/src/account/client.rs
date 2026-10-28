@@ -8,7 +8,8 @@ use axiom_protocol::{
     Invite, Members, MyInvite, NewInvite, Profile, PullResponse, PushRequest, PushResponse, RefreshRequest, ResetPassword, Role, Session, Space,
     CheckCode, ConfirmEmail, NewTicket, Pending, Ticket, TicketChange, TicketSent, route, routes,
 };
-use axiom_protocol::ai::{ChatReply, ChatRequest};
+use axiom_ai::Delta;
+use axiom_protocol::ai::{ChatReply, ChatRequest, Streamed, Transcribe, Transcript};
 use axiom_protocol::notify::{PlanEmails, PlanResult};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -298,6 +299,41 @@ impl Client {
     /// server may try one AI, then the other.
     pub async fn ai_chat(&self, token: &str, request: &ChatRequest) -> Result<ChatReply, ClientError> {
         let request = self.http.post(self.url(routes::AI_CHAT)).bearer_auth(token).json(request).timeout(Duration::from_secs(150));
+        read(request.send().await).await
+    }
+
+    /// Like `ai_chat`, but the reply's words go to `on` as they're written.
+    pub async fn ai_chat_stream(&self, token: &str, request: &ChatRequest, on: &(dyn Fn(Delta) + Sync)) -> Result<ChatReply, ClientError> {
+        let sent = self.http.post(self.url(routes::AI_CHAT_STREAM)).bearer_auth(token).json(request).timeout(Duration::from_secs(150)).send().await;
+        let mut response = match check(sent.map_err(|_| ClientError::Offline)?).await {
+            // A server from before streaming answers all at once.
+            Err(err) if matches!(err.status(), Some(404 | 405)) => return self.ai_chat(token, request).await,
+            checked => checked?,
+        };
+        let mut pending: Vec<u8> = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(|_| ClientError::Offline)? {
+            pending.extend_from_slice(&chunk);
+            while let Some(end) = pending.iter().position(|&b| b == b'\n') {
+                let line: Vec<u8> = pending.drain(..=end).collect();
+                if line.trim_ascii().is_empty() {
+                    continue;
+                }
+                match serde_json::from_slice::<Streamed>(&line) {
+                    Ok(Streamed::Text { text }) => on(Delta::Text(&text)),
+                    Ok(Streamed::Restart) => on(Delta::Restart),
+                    Ok(Streamed::Reply { reply }) => return Ok(reply),
+                    Ok(Streamed::Error { status, message }) => return Err(ClientError::Rejected { status, message }),
+                    Err(_) => return Err(ClientError::Rejected { status: 502, message: "The server sent an answer Axiom doesn't understand. Try updating Axiom.".into() }),
+                }
+            }
+        }
+        // The connection ended before the reply did.
+        Err(ClientError::Offline)
+    }
+
+    /// Speech to text for the assistant, on Axiom's AI keys.
+    pub async fn ai_transcribe(&self, token: &str, request: &Transcribe) -> Result<Transcript, ClientError> {
+        let request = self.http.post(self.url(routes::AI_TRANSCRIBE)).bearer_auth(token).json(request).timeout(Duration::from_secs(90));
         read(request.send().await).await
     }
 

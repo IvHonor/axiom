@@ -3,6 +3,7 @@ import { dailyPlan } from "../features/daily_plan";
 import { finance } from "../features/finance";
 import { goals } from "../features/goals";
 import { journal } from "../features/journal";
+import { lemma } from "../features/lemma";
 import { learning } from "../features/learning";
 import { notes } from "../features/notes";
 import { projectBoard } from "../features/project_board";
@@ -28,6 +29,7 @@ import type { ExtensionManifest } from "./types";
  * Themes: each theme extension lives in src/themes/<id>/ and exports its manifest.
  */
 export const EXTENSIONS: ExtensionManifest[] = [
+  lemma,
   birthdays,
   dailyPlan,
   finance,

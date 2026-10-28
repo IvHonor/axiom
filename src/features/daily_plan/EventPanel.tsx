@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ExternalLink, MapPin, Pencil, Repeat, Trash2, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { isTauri } from "@tauri-apps/api/core";
 import { ConfirmButton } from "../../shell/ui/ConfirmButton";
 import { api, errorMessage, type CalendarEvent, type CalendarSetup, type Day, type EventEdit } from "./api";
 import { colorOf } from "./palette";
@@ -93,7 +94,7 @@ export function EventPanel({ event, setup, today, act, onClose }: EventPanelProp
           {calendar?.name ?? "Calendar"} <span className="dim">· {provider}</span>
         </span>
         {event.link && (
-          <button className="icon-btn" title={`Open in ${provider}`} aria-label={`Open in ${provider}`} onClick={() => void openUrl(event.link!)}>
+          <button className="icon-btn" title={`Open in ${provider}`} aria-label={`Open in ${provider}`} onClick={() => isTauri() ? void openUrl(event.link!) : void window.open(event.link!, "_blank", "noopener,noreferrer")}>
             <ExternalLink size={14} strokeWidth={1.75} />
           </button>
         )}

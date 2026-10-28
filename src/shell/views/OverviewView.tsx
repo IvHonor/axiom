@@ -7,6 +7,7 @@ import { useLabels } from "../theme/ThemeProvider";
 import { Panel } from "../ui/Panel";
 import { Logo } from "../ui/Logo";
 import { ExtensionIcon, extensionStyle } from "../ui/ExtensionIcon";
+import { useAreaName } from "../../features/lemma/persona";
 import { ResizableTile, TileGrid } from "../ui/ResizableTile";
 import { TileMoveHandle } from "../ui/TileMoveHandle";
 import { useOverviewLayout } from "../useOverviewLayout";
@@ -39,6 +40,7 @@ export function OverviewView({ areas, onOpen, onBrowse, hiddenIds = [], onVisibi
   const { label } = useLabels();
   const visible = areas.filter((area) => !hiddenIds.includes(area.id));
   const [menu, setMenu] = useState<{ ext: ExtensionManifest; at: MenuPosition } | null>(null);
+  const nameOf = useAreaName();
   const extra = useAreaTiles(visible);
   const { sizeOf, resize, positions, movement } = useOverviewLayout(
     [...visible.map(area => area.id), ...extra.map(({ tile }) => tile.id)],
@@ -72,7 +74,7 @@ export function OverviewView({ areas, onOpen, onBrowse, hiddenIds = [], onVisibi
           const Summary = ext.area?.Summary;
           const SummaryTitle = ext.area?.SummaryTitle;
           return (
-            <ResizableTile key={ext.id} label={ext.name} size={sizeOf(ext.id)}
+            <ResizableTile key={ext.id} label={nameOf(ext)} size={sizeOf(ext.id)}
               position={positions[ext.id]} movement={movement(ext.id)} onResize={(size) => resize(ext.id, size)}>
               <Panel
                 onContextMenu={onVisibilityChange ? (event) => {
@@ -86,19 +88,19 @@ export function OverviewView({ areas, onOpen, onBrowse, hiddenIds = [], onVisibi
                   SummaryTitle ? (
                     <SummaryTitle onOpen={() => onOpen(ext.id)} />
                   ) : (
-                    <button className="tile-title" onClick={() => onOpen(ext.id)} title={`Open ${ext.name}`}>
+                    <button className="tile-title" onClick={() => onOpen(ext.id)} title={`Open ${nameOf(ext)}`}>
                       <ExtensionIcon ext={ext} />
-                      {ext.name}
+                      {nameOf(ext)}
                     </button>
                   )
                 }
                 actions={
-                  <><TileMoveHandle /><button className="icon-btn" aria-label={`Open ${ext.name}`} title="Open in a tab" onClick={() => onOpen(ext.id)}>
+                  <><TileMoveHandle /><button className="icon-btn" aria-label={`Open ${nameOf(ext)}`} title="Open in a tab" onClick={() => onOpen(ext.id)}>
                     <ArrowUpRight size={16} strokeWidth={1.5} />
                   </button></>
                 }
               >
-                {Summary ? <Summary onOpen={() => onOpen(ext.id)} /> : <p className="dim">Open {ext.name} to get started.</p>}
+                {Summary ? <Summary onOpen={() => onOpen(ext.id)} onOpenArea={onOpen} /> : <p className="dim">Open {nameOf(ext)} to get started.</p>}
               </Panel>
             </ResizableTile>
           );

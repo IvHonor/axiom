@@ -12,7 +12,8 @@ use std::time::Duration;
 
 use chrono::{Days, Utc};
 use sea_orm::prelude::Date;
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait};
+use sea_orm::sea_query::Expr;
+use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Select, Set, TransactionTrait};
 
 pub mod accounts;
 mod caldav;
@@ -56,11 +57,45 @@ pub struct CalendarSetup {
 }
 
 pub async fn setup(db: &DatabaseConnection, hub: &accounts::CalendarHub) -> Result<CalendarSetup> {
-    Ok(CalendarSetup { accounts: accounts::list_accounts(db).await?, calendars: list_calendars(db).await?, available: hub.available() })
+    // An account connected on another computer needs signing in here too.
+    let accounts = accounts::list_accounts(db)
+        .await?
+        .into_iter()
+        .map(|mut account| {
+            account.signed_out |= !hub.signed_in_here(&account.id);
+            account
+        })
+        .collect();
+    Ok(CalendarSetup { accounts, calendars: list_calendars(db).await?, available: hub.available() })
+}
+
+/// Calendars that haven't been removed (here or on another computer).
+pub(super) fn live_calendars() -> Select<calendar::Entity> {
+    calendar::Entity::find().filter(calendar::Column::DeletedAt.is_null())
+}
+
+/// Calendar accounts that haven't been removed.
+pub(super) fn live_accounts() -> Select<calendar_account::Entity> {
+    calendar_account::Entity::find().filter(calendar_account::Column::DeletedAt.is_null())
+}
+
+/// Removes calendars: marked deleted, so the user's other computers remove
+/// them too, and their events dropped here.
+pub(super) async fn remove_calendars(db: &impl ConnectionTrait, ids: &[String]) -> Result<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    event::Entity::delete_many().filter(event::Column::CalendarId.is_in(ids.iter().cloned())).exec(db).await?;
+    calendar::Entity::update_many()
+        .col_expr(calendar::Column::DeletedAt, Expr::value(Some(Utc::now())))
+        .filter(calendar::Column::Id.is_in(ids.iter().cloned()))
+        .exec(db)
+        .await?;
+    Ok(())
 }
 
 pub async fn list_calendars(db: &DatabaseConnection) -> Result<Vec<calendar::Model>> {
-    Ok(calendar::Entity::find().order_by_asc(calendar::Column::CreatedAt).all(db).await?)
+    Ok(live_calendars().order_by_asc(calendar::Column::CreatedAt).all(db).await?)
 }
 
 /// Adds a calendar after checking its link really returns one.
@@ -90,6 +125,7 @@ pub async fn add_calendar(db: &DatabaseConnection, name: &str, url: &str, color:
         publish: Set(false),
         published_hash: Set(None),
         mine: Set(false),
+        deleted_at: Set(None),
     }
     .insert(db)
     .await?;
@@ -98,11 +134,7 @@ pub async fn add_calendar(db: &DatabaseConnection, name: &str, url: &str, color:
 }
 
 pub async fn remove_calendar(db: &DatabaseConnection, id: &str) -> Result<()> {
-    let txn = db.begin().await?;
-    event::Entity::delete_many().filter(event::Column::CalendarId.eq(id)).exec(&txn).await?;
-    calendar::Entity::delete_by_id(id).exec(&txn).await?;
-    txn.commit().await?;
-    Ok(())
+    remove_calendars(db, &[id.to_owned()]).await
 }
 
 /// Reads every calendar that's due (or all, with `force`), then publishes
@@ -110,6 +142,7 @@ pub async fn remove_calendar(db: &DatabaseConnection, id: &str) -> Result<()> {
 /// events and notes the problem. Returns whether anything was read.
 pub async fn refresh_calendars(db: &DatabaseConnection, hub: &accounts::CalendarHub, today: Date, force: bool) -> Result<bool> {
     let _one_at_a_time = accounts::exclusive(hub).await;
+    accounts::forget_removed(db, hub).await?;
     let mut refreshed = refresh_links(db, today, force).await?;
     for account in accounts::list_accounts(db).await? {
         refreshed |= accounts::sync_account(db, hub, &account, today, force).await?;

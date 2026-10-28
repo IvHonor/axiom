@@ -986,7 +986,7 @@ async fn find_task(db: &impl ConnectionTrait, id: &str) -> Result<task::Model> {
     tasks().filter(task::Column::Id.eq(id)).one(db).await?.ok_or(Error::NotFound("Task"))
 }
 
-async fn find_item(db: &impl ConnectionTrait, id: &str) -> Result<checklist_item::Model> {
+pub(crate) async fn find_item(db: &impl ConnectionTrait, id: &str) -> Result<checklist_item::Model> {
     items().filter(checklist_item::Column::Id.eq(id)).one(db).await?.ok_or(Error::NotFound("Checklist item"))
 }
 

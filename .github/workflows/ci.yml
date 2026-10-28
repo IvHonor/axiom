@@ -82,12 +82,21 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: site/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            site/package-lock.json
+
+      - name: Install shared desktop UI dependencies
+        run: npm ci
+        working-directory: .
 
       - run: npm ci
 
       - name: Lint
         run: npm run lint
+
+      - name: Account API regression checks
+        run: node ../tests/site-account-api.mjs
 
       # Type-checks and prerenders every page, as Vercel does.
       - name: Build

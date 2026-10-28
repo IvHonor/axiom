@@ -1,5 +1,6 @@
 import "server-only";
 import { headers } from "next/headers";
+import { accountErrorCode, accountServerUrl } from "./account-server.ts";
 
 /**
  * Calls the Axiom account server (the same one the app uses) on a visitor's
@@ -8,7 +9,6 @@ import { headers } from "next/headers";
  * - `AXIOM_WEB_PROXY_SECRET`: the server's `WEB_PROXY_SECRET`, so rate limits
  *   count each visitor rather than the website as one.
  */
-const API_URL = (process.env.AXIOM_API_URL ?? "http://localhost:8787").replace(/\/$/, "");
 const PROXY_SECRET = process.env.AXIOM_WEB_PROXY_SECRET;
 
 /** The terms version sign-up agrees to: `TERMS_VERSION` in crates/protocol. */
@@ -26,6 +26,12 @@ export type Answer<T> = { ok: true; status: number; data: T } | { ok: false; sta
 const TIMEOUT_MS = 70_000;
 
 export async function call<T>(method: string, path: string, { token, body }: { token?: string; body?: unknown } = {}): Promise<Answer<T>> {
+  let apiUrl: string;
+  try { apiUrl = accountServerUrl(); }
+  catch {
+    console.error("[axiom-api]", { kind: "configuration", setting: "AXIOM_API_URL" });
+    return { ok: false, status: 503, message: "Axiom's website is not configured correctly. Sign-in is temporarily unavailable." };
+  }
   const sent = new Headers({ accept: "application/json" });
   if (body !== undefined) sent.set("content-type", "application/json");
   if (token) sent.set("authorization", `Bearer ${token}`);
@@ -37,13 +43,21 @@ export async function call<T>(method: string, path: string, { token, body }: { t
     }
   }
   try {
-    const response = await fetch(`${API_URL}${path}`, { method, headers: sent, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const response = await fetch(`${apiUrl}${path}`, { method, headers: sent, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
     const text = await response.text();
-    const data = text ? JSON.parse(text) : null;
+    let data;
+    try { data = text ? JSON.parse(text) : null; }
+    catch {
+      console.error("[axiom-api]", { kind: "invalid_response", method, status: response.status });
+      return { ok: false, status: response.ok ? 502 : response.status, message: "Axiom's account server is temporarily unavailable. Please try again shortly." };
+    }
     if (response.ok) return { ok: true, status: response.status, data: data as T };
-    return { ok: false, status: response.status, message: data?.message ?? "Something went wrong on our side. Try again in a minute." };
-  } catch {
-    return { ok: false, status: 0, message: "We couldn't reach Axiom's servers. Check your connection and try again." };
+    if (response.status >= 500) console.error("[axiom-api]", { kind: "http", method, status: response.status });
+    return { ok: false, status: response.status, message: typeof data?.message === "string" ? data.message : "Something went wrong on our side. Try again in a minute." };
+  } catch (cause) {
+    const code = accountErrorCode(cause);
+    console.error("[axiom-api]", { kind: "connection", method, code });
+    return { ok: false, status: 0, message: code === "TimeoutError" || code === "AbortError" ? "Axiom's account server took too long to respond. Please try again shortly." : "Axiom's website couldn't connect to the account server. Please try again shortly." };
   }
 }
 

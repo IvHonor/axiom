@@ -194,6 +194,8 @@ fn page(title: &str, message: &str) -> String {
 /// Sends what's due, every minute while the server is awake.
 pub async fn run(s: AppState) {
     let mut every = tokio::time::interval(TICK);
+    // After a pause (a computer asleep), one run, not one for every tick missed.
+    every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         every.tick().await;
         match send_due(&s).await {

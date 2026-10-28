@@ -64,6 +64,16 @@ pub struct ChatReply {
     pub tool_calls: Vec<ToolCall>,
     /// Which AI answered, e.g. "Gemini", to show the person.
     pub provider: String,
+    /// What the call cost, when the AI says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
+}
+
+/// Tokens one AI call used: what it read, and what it wrote (thinking included).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct Usage {
+    pub input: u32,
+    pub output: u32,
 }
 
 impl ChatReply {
@@ -71,4 +81,40 @@ impl ChatReply {
     pub fn message(&self) -> Message {
         Message::Assistant { text: self.text.clone(), tool_calls: self.tool_calls.clone() }
     }
+}
+
+/// One line of `AI_CHAT_STREAM`'s answer: words as they're written, then the
+/// whole reply or why there isn't one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Streamed {
+    /// More of the reply's words.
+    Text { text: String },
+    /// Forget the words so far: one AI failed part-way, and another is
+    /// answering from the start.
+    Restart,
+    /// The finished reply, as `AI_CHAT` would have sent it.
+    Reply { reply: ChatReply },
+    /// No AI could answer. `status` is the one `AI_CHAT` would have sent.
+    Error { status: u16, message: String },
+}
+
+/// Longest recording `AI_TRANSCRIBE` takes, in bytes of audio: a minute of
+/// 16 kHz mono WAV.
+pub const MAX_AUDIO_BYTES: usize = 2 * 1024 * 1024;
+
+/// Speech to turn into text: the recording, base64-encoded, and its type
+/// (e.g. "audio/wav").
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Transcribe {
+    pub audio: String,
+    pub mime: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Transcript {
+    /// What was said. Empty when nothing was.
+    pub text: String,
+    /// Which AI heard it, e.g. "Groq".
+    pub provider: String,
 }

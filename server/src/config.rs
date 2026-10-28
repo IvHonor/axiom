@@ -37,10 +37,16 @@ pub struct Config {
     /// and terms as the one responsible for people's data.
     pub operator_name: Option<String>,
     /// `GEMINI_API_KEY` and `GROQ_API_KEY`: the assistant's AI, Gemini first.
-    /// Free keys from aistudio.google.com/apikey and console.groq.com/keys.
+    /// Keys from aistudio.google.com/apikey and console.groq.com/keys. Gemini
+    /// is only used with `GEMINI_PAID=yes`: Google's terms allow only its paid
+    /// service for apps used in the UK, EEA and Switzerland.
     pub ai_keys: axiom_ai::Keys,
-    /// `GEMINI_MODEL` and `GROQ_MODEL`, to override the models used.
+    /// A `GEMINI_API_KEY` set without `GEMINI_PAID`, and so left unused.
+    pub gemini_unpaid: bool,
+    /// `GEMINI_MODEL`, `GROQ_MODEL` and `WHISPER_MODEL`, to override the models used.
     pub ai_models: axiom_ai::Models,
+    /// `AI_DAILY_LIMIT`: the assistant's model calls per day across every account.
+    pub ai_daily_limit: u32,
 }
 
 impl Config {
@@ -93,9 +99,17 @@ impl Config {
 
         let operator_name = var("OPERATOR_NAME").map(|name| name.trim().to_owned());
 
-        let ai_keys = axiom_ai::Keys { gemini: var("GEMINI_API_KEY"), groq: var("GROQ_API_KEY") };
+        let (ai_keys, gemini_unpaid) = ai_keys(var("GEMINI_API_KEY"), var("GROQ_API_KEY"), var("GEMINI_PAID").as_deref());
         let defaults = axiom_ai::Models::default();
-        let ai_models = axiom_ai::Models { gemini: var("GEMINI_MODEL").unwrap_or(defaults.gemini), groq: var("GROQ_MODEL").unwrap_or(defaults.groq) };
+        let ai_models = axiom_ai::Models {
+            gemini: var("GEMINI_MODEL").unwrap_or(defaults.gemini),
+            groq: var("GROQ_MODEL").unwrap_or(defaults.groq),
+            whisper: var("WHISPER_MODEL").unwrap_or(defaults.whisper),
+        };
+        let ai_daily_limit = match var("AI_DAILY_LIMIT") {
+            Some(limit) => limit.trim().parse().map_err(|_| format!("AI_DAILY_LIMIT must be a whole number, got {limit}"))?,
+            None => crate::ai::EVERYONE_PER_DAY,
+        };
 
         Ok(Self {
             database_url,
@@ -111,7 +125,31 @@ impl Config {
             contact_email,
             operator_name,
             ai_keys,
+            gemini_unpaid,
             ai_models,
+            ai_daily_limit,
         })
+    }
+}
+
+/// The AI keys to use, and whether a Gemini key was left out because it
+/// isn't marked as on Google's paid service.
+fn ai_keys(gemini: Option<String>, groq: Option<String>, paid: Option<&str>) -> (axiom_ai::Keys, bool) {
+    let paid = paid.is_some_and(|p| matches!(p.trim().to_lowercase().as_str(), "yes" | "true" | "1" | "on"));
+    let unpaid = gemini.is_some() && !paid;
+    (axiom_ai::Keys { gemini: gemini.filter(|_| paid), groq }, unpaid)
+}
+
+#[cfg(test)]
+mod ai_key_tests {
+    use super::ai_keys;
+
+    #[test]
+    fn gemini_only_once_it_is_marked_paid() {
+        let (keys, unpaid) = ai_keys(Some("g".into()), Some("q".into()), None);
+        assert_eq!((keys.gemini, keys.groq.as_deref(), unpaid), (None, Some("q"), true));
+        let (keys, unpaid) = ai_keys(Some("g".into()), None, Some("Yes"));
+        assert_eq!((keys.gemini.as_deref(), unpaid), (Some("g"), false));
+        assert!(!ai_keys(None, Some("q".into()), None).1, "no Gemini key, nothing to warn about");
     }
 }

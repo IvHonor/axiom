@@ -33,6 +33,7 @@
 
 .topbar {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 6px;
   padding: 0 8px;
@@ -116,7 +117,7 @@
   color: var(--text);
 }
 
-/* Open tabs: the overview first, then one per opened area or extension page. */
+/* Open tabs, in the user's saved order. */
 .tabs {
   flex: 1;
   min-width: 0;
@@ -146,11 +147,23 @@
   letter-spacing: calc(0.08em * var(--tracking));
   text-transform: var(--label-case);
   cursor: pointer;
+  touch-action: none;
 }
 
 /* The overview tab has no close button, so balance its padding. */
-.tab:first-child {
+.tab-permanent {
   padding-right: 12px;
+}
+
+.tab.is-dragging {
+  z-index: 2;
+  cursor: grabbing;
+  background: var(--bg);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab { transition: none !important; }
 }
 
 .tab:hover {
@@ -212,6 +225,7 @@
 }
 
 .tab:hover .tab-close,
+.tab:focus-within .tab-close,
 .tab.is-active .tab-close,
 .tab-close:focus-visible {
   visibility: visible;
@@ -1217,6 +1231,11 @@
 
 .dropdown-menu.is-left {
   left: 0;
+}
+
+.dropdown-menu.is-up {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .menu-item {
@@ -2459,6 +2478,46 @@
 
 /* ---------- Modal ---------- */
 
+/* ---------- What's new, once after an update ---------- */
+
+.whats-new-release h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.whats-new-intro {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.whats-new-release ul {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.whats-new-release li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  border-left: 2px solid var(--accent);
+}
+
+.whats-new-release li span {
+  color: var(--text-dim);
+}
+
+.whats-new-actions {
+  justify-content: flex-end;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -2987,19 +3046,29 @@
   outline: none;
 }
 
-/* ---------- Assistant panel ---------- */
+/* ---------- Lemma's settings ---------- */
 
-.assistant-intro {
+.assistant-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 16px 16px;
+}
+
+.assistant-sidebar > .field-hint {
   margin: 0;
-  padding: 4px 16px 10px;
   line-height: 1.45;
+}
+
+.assistant-open {
+  justify-content: center;
+  gap: 6px;
 }
 
 .assistant-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 2px 16px 14px;
 }
 
 .assistant-group .field-hint {
@@ -3025,6 +3094,12 @@
   font-size: 13px;
 }
 
+.assistant-area-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .assistant-key {
   display: flex;
   flex-direction: column;
@@ -3046,19 +3121,21 @@
   font-size: 12px;
 }
 
-.assistant-reply {
+/* A view that crashed, kept inside its tab (see ErrorBoundary). */
+.view-crash {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 520px;
+  margin: 48px auto;
+  padding: 16px 18px;
+  font-size: 13px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-radius: var(--radius);
 }
 
-.assistant-reply p {
+.view-crash p {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
+  color: var(--text-dim);
 }

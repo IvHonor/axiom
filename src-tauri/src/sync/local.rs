@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, DbErr, Statement, TransactionTrait, Value as SqlValue};
 use serde_json::{Map, Value};
 
-use super::TABLES;
+use super::{LOCAL_COLUMNS, TABLES};
 use crate::vault::DataKey;
 
 type Row = Map<String, Value>;
@@ -33,6 +33,25 @@ pub async fn install_triggers(db: &impl ConnectionTrait) -> Result<(), DbErr> {
             ))
             .await?;
         }
+    }
+    Ok(())
+}
+
+/// Queues rows the server has never had, on a computer linked to an
+/// account: rows of a table that has only just started syncing, made before
+/// it did. Run at every startup, after `install_triggers`.
+pub async fn backfill(db: &impl ConnectionTrait) -> Result<(), DbErr> {
+    if state(db).await?.user_id.is_none() {
+        return Ok(());
+    }
+    for table in TABLES.iter() {
+        db.execute_unprepared(&format!(
+            r#"INSERT INTO sync_outbox (table_name, row_id, changed_at, version)
+               SELECT '{table}', id, {NOW_MS}, 1 FROM "{table}"
+               WHERE id NOT IN (SELECT row_id FROM sync_base WHERE table_name = '{table}')
+               ON CONFLICT (table_name, row_id) DO NOTHING"#
+        ))
+        .await?;
     }
     Ok(())
 }
@@ -301,16 +320,18 @@ pub async fn apply_some(db: &DatabaseConnection, records: Vec<&Record>, cursor: 
     Ok(applied)
 }
 
-/// Column names per table, read from SQLite once per sync.
+/// The synced column names per table (all but its `LOCAL_COLUMNS`), read
+/// from SQLite once per sync.
 #[derive(Default)]
 struct Columns(HashMap<String, Vec<String>>);
 
 impl Columns {
     async fn of(&mut self, db: &impl ConnectionTrait, table: &str) -> Result<&Vec<String>, DbErr> {
         if !self.0.contains_key(table) {
+            let local: &[&str] = LOCAL_COLUMNS.iter().find(|(t, _)| *t == table).map_or(&[], |(_, columns)| columns);
             let rows = db.query_all_raw(sql("SELECT name FROM pragma_table_info(?)", [table.into()])).await?;
-            let names = rows.iter().map(|r| r.try_get::<String>("", "name")).collect::<Result<_, _>>()?;
-            self.0.insert(table.to_owned(), names);
+            let names: Vec<String> = rows.iter().map(|r| r.try_get::<String>("", "name")).collect::<Result<_, _>>()?;
+            self.0.insert(table.to_owned(), names.into_iter().filter(|n| !local.contains(&n.as_str())).collect());
         }
         Ok(&self.0[table])
     }

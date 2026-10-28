@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowLeft, CalendarPlus, ExternalLink, Pencil, Plus } from "lucide-react";
 import { useDataChanged } from "../../lib/sync";
-import { addDays, mondayOf, today } from "../daily_plan/time";
+import { addDays, mediumDay, mondayOf, today } from "../daily_plan/time";
 import { Progress } from "../reading/Cover";
 import { api, COLORS, errorMessage, type Lecture, type ModuleDetail } from "./api";
 import { LectureDialog, ScheduleDialog } from "./Dialogs";
 import { LectureRow } from "./LectureRow";
-import { setUniUi, useUniUi } from "./uniUi";
+import { setUniUi, uniChanged, useUniUi } from "./uniUi";
 
 type Editing = { kind: "schedule" } | { kind: "lecture"; lecture: Lecture | null } | null;
 
@@ -47,6 +47,20 @@ export function ModulePage({ id }: { id: string }) {
   const start = mondayOf(term.startsOn);
   const weeks = new Map<number | null, Lecture[]>();
   for (const l of lectures) weeks.set(l.week, [...(weeks.get(l.week) ?? []), l]);
+
+  // Lectures dated before the term began mean it really started earlier.
+  const earliest = lectures.reduce<string | null>((min, l) => (l.day && l.day < start && (!min || l.day < min) ? l.day : min), null);
+  const startEarlier = async () => {
+    const startsOn = mondayOf(earliest!);
+    // Keep the end date where it was, so nothing at the end loses its week.
+    const extra = Math.round((Date.parse(start) - Date.parse(startsOn)) / (7 * 864e5));
+    try {
+      await api.updateTerm(term.id, { name: term.name, startsOn, weeks: Math.min(52, term.weeks + extra) }, today());
+      uniChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
 
   return (
     <div className="un-module" style={{ ["--module" as string]: COLORS[card.color] }}>
@@ -97,6 +111,18 @@ export function ModulePage({ id }: { id: string }) {
         <span className="rd-fill" />
         <span className="dim un-small un-legend">Tick when you've gone through it · attended · reviewed · how well you get it</span>
       </div>
+
+      {earliest && (
+        <div className="un-early">
+          <span>
+            Some lectures are before {term.name} starts ({mediumDay(term.startsOn)}), so they have no week. Your first is {mediumDay(earliest)}.
+          </span>
+          <button className="btn btn-sm" onClick={() => void startEarlier()}>
+            Start the term {mediumDay(mondayOf(earliest))}
+          </button>
+        </div>
+      )}
+      {error && <p className="rd-error">{error}</p>}
 
       {lectures.length === 0 ? (
         <div className="rd-empty">

@@ -9,7 +9,7 @@
 
 pub mod calendars;
 pub mod commands;
-mod entities;
+pub(crate) mod entities;
 pub mod migrations;
 mod parse;
 pub(crate) mod service;
@@ -25,6 +25,26 @@ mod tests_routines;
 mod tests_ics;
 
 /// Every table this feature keeps, so sync copies them to the user's other
-/// devices. A new table must be added here to sync.
-pub const SYNCED_TABLES: &[&str] =
-    &["daily_plan_tasks", "daily_plan_blocks", "daily_plan_settings", "daily_plan_days", "daily_plan_routines"];
+/// devices. A new table must be added here to sync. Calendar events aren't:
+/// each computer reads them from the calendars itself.
+pub const SYNCED_TABLES: &[&str] = &[
+    "daily_plan_tasks",
+    "daily_plan_blocks",
+    "daily_plan_settings",
+    "daily_plan_days",
+    "daily_plan_routines",
+    "daily_plan_calendar_accounts",
+    "daily_plan_calendars",
+];
+
+/// Calendar connections are end-to-end encrypted: they hold account
+/// addresses and private iCal links, which work like passwords.
+pub const ENCRYPTED_TABLES: &[&str] = &["daily_plan_calendar_accounts", "daily_plan_calendars"];
+
+/// What each computer keeps to itself about its calendars: when it last read
+/// them, what went wrong, what it last published, and whether it's signed in
+/// (sign-ins never leave the computer's credential store).
+pub const LOCAL_COLUMNS: &[(&str, &[&str])] = &[
+    ("daily_plan_calendar_accounts", &["problem", "signed_out"]),
+    ("daily_plan_calendars", &["refreshed_at", "problem", "published_hash"]),
+];

@@ -5,6 +5,9 @@ import { lockApp, lockStatus, resetLock, sendLockCode, unlockApp, useLockStatus 
 import { ErrorNote, useAction } from "./account/fields";
 import { Logo } from "./ui/Logo";
 
+/** How long the app waits, covered, for the lock to answer before showing anyway. */
+const WAIT_MS = 3000;
+
 /** Activity that counts as using Axiom, for the idle timer. */
 const ACTIVITY = ["pointerdown", "pointermove", "keydown", "wheel"] as const;
 
@@ -15,10 +18,20 @@ const ACTIVITY = ["pointerdown", "pointermove", "keydown", "wheel"] as const;
  */
 export function AppLockScreen({ accountState }: { accountState: string | undefined }) {
   const status = useLockStatus();
+  const [waited, setWaited] = useState(false);
+
+  // Asks again until it answers: a lost answer mustn't leave the app covered.
+  useEffect(() => {
+    let timer = 0;
+    const ask = () => void lockStatus().catch(() => (timer = window.setTimeout(ask, 1000)));
+    ask();
+    return () => window.clearTimeout(timer);
+  }, [accountState]);
 
   useEffect(() => {
-    void lockStatus().catch(() => {});
-  }, [accountState]);
+    const timer = window.setTimeout(() => setWaited(true), WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const idleMinutes = status?.enabled && !status.locked ? status.idleMinutes : 0;
   useEffect(() => {
@@ -36,8 +49,9 @@ export function AppLockScreen({ accountState }: { accountState: string | undefin
     };
   }, [idleMinutes]);
 
-  // Until the lock has answered, cover the app: it may be locked.
-  if (!status) return createPortal(<div className="app-lock" aria-busy="true" />, document.body);
+  // Until the lock has answered, cover the app (it may be locked), but only
+  // briefly: a lock that never answers mustn't leave Axiom blank.
+  if (!status) return waited ? null : createPortal(<div className="app-lock" aria-busy="true" />, document.body);
   if (!status.locked) return null;
   return createPortal(<Locked needsCode={status.needsCode} />, document.body);
 }

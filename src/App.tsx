@@ -3,7 +3,6 @@ import { EXTENSIONS, findExtension } from "./extensions";
 import type { ExtensionManifest } from "./extensions/types";
 import { AccountPanel } from "./shell/AccountPanel";
 import { AppLockScreen } from "./shell/AppLockScreen";
-import { AssistantPanel } from "./shell/AssistantPanel";
 import { ActivityBar, type SidePanel } from "./shell/ActivityBar";
 import { AreasPanel } from "./shell/AreasPanel";
 import { ExtensionsPanel, type ExtensionKind } from "./shell/ExtensionsPanel";
@@ -16,17 +15,21 @@ import { useAppStatus } from "./shell/useAppStatus";
 import { useSync } from "./shell/useSync";
 import { useUpdater } from "./shell/useUpdater";
 import { UpdatePrompt } from "./shell/UpdatePrompt";
+import { WhatsNew } from "./shell/WhatsNew";
 import { useInstalled } from "./shell/useInstalled";
 import { useOverviewVisibility } from "./shell/useOverviewVisibility";
 import { useTabs } from "./shell/useTabs";
 import { AreaNotifications } from "./shell/notifications/AreaNotifications";
 import { setNotificationsOff } from "./lib/notifications";
 import { AdminView } from "./shell/views/AdminView";
-import { ADMIN } from "./shell/view";
+import { ADMIN, viewKey } from "./shell/view";
+import { ErrorBoundary } from "./shell/ui/ErrorBoundary";
 import { ExtensionInfoView } from "./shell/views/ExtensionInfoView";
 import { ExtensionView } from "./shell/views/ExtensionView";
 import { OverviewView } from "./shell/views/OverviewView";
 import { SidebarFrame } from "./shell/ui/SidebarFrame";
+import { Companion } from "./features/lemma/Companion";
+import { useAreaName } from "./features/lemma/persona";
 
 export default function App() {
   const status = useAppStatus();
@@ -35,7 +38,7 @@ export default function App() {
   const updater = useUpdater();
   const { installedIds, install, uninstall, setEnabled, isOn } = useInstalled();
   const { hiddenIds, setHidden } = useOverviewVisibility();
-  const { tabs, active, previewKey, open, pin, close, closeExtension } = useTabs();
+  const { tabs, active, previewKey, open, pin, close, closeExtension, reorder } = useTabs();
   const [panel, setPanel] = useState<SidePanel | null>("areas");
   const [extQuery, setExtQuery] = useState("");
   const [extKind, setExtKind] = useState<ExtensionKind>("all");
@@ -51,6 +54,7 @@ export default function App() {
   }, [offIds]);
   const withSidebar = areas.filter((ext) => ext.area?.Sidebar);
   const shownArea = withSidebar.find((ext) => panel === `area:${ext.id}`);
+  const nameOf = useAreaName();
   const AreaSidebar = shownArea?.area?.Sidebar;
   const isInstalled = (ext: ExtensionManifest) => !!ext.builtIn || installedIds.includes(ext.id);
   const current = active.kind === "extension" || active.kind === "extension-info" ? findExtension(active.id) : undefined;
@@ -147,13 +151,13 @@ export default function App() {
   return (
     <ThemeProvider installed={installed}>
       <div className="app">
-        <TopBar tabs={tabs} active={active} previewKey={previewKey} onSelect={open} onPin={pin} onClose={close} />
+        <TopBar tabs={tabs} active={active} previewKey={previewKey} onSelect={open} onPin={pin} onClose={close} onReorder={reorder} />
         <div className="workbench">
           <ActivityBar
             hiddenIds={hiddenIds}
             onVisibilityChange={setHidden}
             active={panel}
-            areas={withSidebar.map((ext) => ({ id: `area:${ext.id}` as const, label: ext.name, icon: ext.icon, extension: ext }))}
+            areas={withSidebar.map((ext) => ({ id: `area:${ext.id}` as const, label: nameOf(ext), icon: ext.icon, extension: ext }))}
             onToggle={togglePanel}
             accountEmail={account?.state === "signed_in" ? account.email : undefined}
             admin={account?.state === "signed_in" && account.admin ? { open: active.kind === "admin", onOpen: () => open(ADMIN) } : undefined}
@@ -182,17 +186,16 @@ export default function App() {
           )}
           {panel === "account" && <AccountPanel status={account} sync={sync} onChange={setAccount} extensions={areas.map((ext) => ext.id)} />}
           {panel === "themes" && <ThemesPanel onBrowse={browseThemes} />}
-          {panel === "assistant" && <AssistantPanel areas={areas} />}
           {shownArea && AreaSidebar && (
-            <aside className="sidebar" aria-label={shownArea.name}>
+            <aside className="sidebar" aria-label={nameOf(shownArea)}>
               <button
                 type="button"
                 className="sidebar-head sidebar-head-link"
-                title={`Open ${shownArea.name}`}
-                aria-label={`Open ${shownArea.name}`}
+                title={`Open ${nameOf(shownArea)}`}
+                aria-label={`Open ${nameOf(shownArea)}`}
                 onClick={() => open({ kind: "extension", id: shownArea.id })}
               >
-                {shownArea.name}
+                {nameOf(shownArea)}
               </button>
               <div className="sidebar-body">
                 <AreaSidebar
@@ -204,9 +207,15 @@ export default function App() {
             </aside>
           )}
           </SidebarFrame>
-          <main className="main">{main}</main>
+          <main className="main">
+            <ErrorBoundary key={viewKey(active)}>{main}</ErrorBoundary>
+          </main>
         </div>
+        {areas.some((area) => area.id === "lemma") && !(active.kind === "extension" && active.id === "lemma") && (active.kind !== "overview" || hiddenIds.includes("lemma")) && (
+          <Companion onOpen={() => open({ kind: "extension", id: "lemma" })} />
+        )}
         {updater.offered && <UpdatePrompt status={updater.status} onInstall={updater.install} onLater={updater.later} />}
+        <WhatsNew version={status.version} onOpenLemma={() => open({ kind: "extension", id: "lemma" })} />
         <AppLockScreen accountState={account?.state} />
         <StatusBar
           status={status}

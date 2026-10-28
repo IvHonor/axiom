@@ -348,6 +348,27 @@ pub mod server_setting {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
+pub mod ai_usage {
+    use sea_orm::entity::prelude::*;
+
+    /// How many assistant calls an account made on Axiom's AI keys on one
+    /// day (UTC). The row with an empty `user_id` counts everyone's.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "ai_usage")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub user_id: String,
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub day: Date,
+        pub count: i32,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
 pub mod web_update {
     use sea_orm::entity::prelude::*;
 

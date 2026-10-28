@@ -37,6 +37,7 @@ pub fn run() {
         .manage(vault::Vault::new(Box::new(vault::Keychain::VAULT)))
         .manage(app_lock::AppLock::new(Box::new(vault::Keychain::APP_LOCK)))
         .manage(ai::Assistant::new(axiom_ai::Ai::default(), Box::new(vault::Keychain::AI_KEYS)))
+        .manage(ai::commands::Turns::default())
         .manage(features::finance::rates::Rates::new(None))
         .manage(features::daily_plan::calendars::accounts::CalendarHub::new(
             Box::new(features::daily_plan::calendars::secrets::Keychain),
@@ -96,6 +97,17 @@ pub fn run() {
             ai::commands::ai_key_status,
             ai::commands::ai_set_key,
             ai::commands::ai_chat,
+            ai::commands::ai_transcribe,
+            ai::commands::assistant_chats,
+            ai::commands::assistant_chat,
+            ai::commands::assistant_send,
+            ai::commands::assistant_stop,
+            ai::commands::assistant_confirm,
+            ai::commands::assistant_confirm_all,
+            ai::commands::assistant_discard,
+            ai::commands::assistant_undo,
+            ai::commands::assistant_rename_chat,
+            ai::commands::assistant_delete_chat,
             acct::account_status,
             acct::account_sign_up,
             acct::account_sign_in,

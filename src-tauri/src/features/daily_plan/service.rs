@@ -763,7 +763,7 @@ pub async fn update_settings(db: &DatabaseConnection, new: Settings) -> Result<S
 
 // ---------- Helpers ----------
 
-async fn find_task(db: &impl ConnectionTrait, id: &str) -> Result<task::Model> {
+pub(crate) async fn find_task(db: &impl ConnectionTrait, id: &str) -> Result<task::Model> {
     tasks().filter(task::Column::Id.eq(id)).one(db).await?.ok_or(Error::NotFound("Task"))
 }
 
@@ -815,7 +815,7 @@ fn check_estimate(minutes: Option<i32>) -> Result<Option<i32>> {
     }
 }
 
-fn check_span(start_minute: i32, duration_minutes: i32) -> Result<()> {
+pub(crate) fn check_span(start_minute: i32, duration_minutes: i32) -> Result<()> {
     if !(0..DAY_MINUTES).contains(&start_minute) {
         return Err(Error::Invalid("A block has to start within the day.".into()));
     }

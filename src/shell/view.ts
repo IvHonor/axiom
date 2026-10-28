@@ -1,6 +1,6 @@
 import { findExtension } from "../extensions";
 
-/** What the main panel is showing. Every view except the overview lives in a tab. */
+/** What the main panel is showing. Every view lives in a tab. */
 export type View =
   | { kind: "overview" }
   | { kind: "extension"; id: string }
@@ -12,7 +12,7 @@ export const OVERVIEW: View = { kind: "overview" };
 export const ADMIN: View = { kind: "admin" };
 
 /** A stable string for a view, used as its tab key. */
-export const viewKey = (view: View) => (view.kind === "overview" || view.kind === "admin" ? view.kind : `${view.kind}:${view.id}`);
+export const viewKey = (view: View) => ("id" in view ? `${view.kind}:${view.id}` : view.kind);
 
 export const sameView = (a: View, b: View) => viewKey(a) === viewKey(b);
 
@@ -21,6 +21,8 @@ export function parseView(saved: unknown): View | null {
   const view = saved as View;
   if (view?.kind === "overview") return OVERVIEW;
   if (view?.kind === "admin") return ADMIN;
+  // Lemma's chats had a tab of their own before Lemma became an extension.
+  if ((view as { kind?: string })?.kind === "assistant") return { kind: "extension", id: "lemma" };
   if ((view?.kind === "extension" || view?.kind === "extension-info") && typeof view.id === "string") {
     return findExtension(view.id) ? { kind: view.kind, id: view.id } : null;
   }

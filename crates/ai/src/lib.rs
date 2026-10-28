@@ -11,11 +11,15 @@ mod groq;
 
 use std::time::Duration;
 
-use axiom_protocol::ai::{ChatReply, ChatRequest};
+use axiom_protocol::ai::{ChatReply, ChatRequest, Transcript};
 
-/// Long enough for a slow answer with several tool calls; short enough that
-/// a stuck provider falls back to the next one in reasonable time.
-const TIMEOUT: Duration = Duration::from_secs(60);
+/// A good answer takes a few seconds; a provider that's busier than this is
+/// overloaded (free tiers often are), so the next one gets asked instead.
+const TIMEOUT: Duration = Duration::from_secs(25);
+
+/// The most one answer may write, thinking included: plenty for a reply or a
+/// day's plan, and a ceiling on what a call can cost.
+const MAX_OUTPUT_TOKENS: u32 = 8192;
 
 /// The keys to use. A provider without one is skipped.
 #[derive(Clone, Default)]
@@ -30,17 +34,31 @@ impl Keys {
     }
 }
 
+/// Part of a reply as it's being written, so it can be shown straight away.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Delta<'a> {
+    /// More of its words.
+    Text(&'a str),
+    /// Forget the words so far: that AI failed part-way, and the next one
+    /// is answering from the start.
+    Restart,
+}
+
 /// Which model each provider runs.
 #[derive(Clone)]
 pub struct Models {
-    /// Google's alias for its newest Flash model, the best one on the free tier.
+    /// Google's alias for its newest Flash-Lite model: answers in about a
+    /// second, where the full Flash is often overloaded on the free tier
+    /// (minutes, or refused). `GEMINI_MODEL` on the server changes it.
     pub gemini: String,
     pub groq: String,
+    /// Groq's speech-to-text model.
+    pub whisper: String,
 }
 
 impl Default for Models {
     fn default() -> Self {
-        Self { gemini: "gemini-flash-latest".into(), groq: "openai/gpt-oss-120b".into() }
+        Self { gemini: "gemini-flash-lite-latest".into(), groq: "openai/gpt-oss-120b".into(), whisper: "whisper-large-v3-turbo".into() }
     }
 }
 
@@ -153,6 +171,110 @@ impl Ai {
         }
         if failures.is_empty() { Err(AiError::NoKeys) } else { Err(AiError::Failed(failures)) }
     }
+
+    /// Like `chat`, but the reply's words go to `on` as they're written.
+    pub async fn chat_stream(&self, keys: &Keys, request: &ChatRequest, on: &(dyn Fn(Delta) + Sync)) -> Result<ChatReply, AiError> {
+        let mut failures = Vec::new();
+        // Words already shown, to take back if the next AI starts again.
+        let mut wrote = false;
+        if let Some(key) = &keys.gemini {
+            let url = format!("{}/models/{}:streamGenerateContent?alt=sse", self.gemini_url, self.models.gemini);
+            let sent = self.http.post(url).header("x-goog-api-key", key).json(&gemini::body(request)).send().await;
+            let mut gathered = gemini::Gathered::default();
+            let streamed = events(sent, |event| {
+                let words = gathered.add(event);
+                if !words.is_empty() {
+                    wrote = true;
+                    on(Delta::Text(&words));
+                }
+            })
+            .await;
+            match streamed.and_then(|()| gathered.reply()) {
+                Ok(reply) => return Ok(reply),
+                Err(err) => failures.push(("Gemini", err)),
+            }
+        }
+        if let Some(key) = &keys.groq {
+            if wrote {
+                on(Delta::Restart);
+            }
+            let url = format!("{}/chat/completions", self.groq_url);
+            let mut body = groq::body(&self.models.groq, request);
+            body["stream"] = true.into();
+            let sent = self.http.post(url).bearer_auth(key).json(&body).send().await;
+            let mut gathered = groq::Gathered::default();
+            let streamed = events(sent, |event| {
+                let words = gathered.add(event);
+                if !words.is_empty() {
+                    on(Delta::Text(&words));
+                }
+            })
+            .await;
+            match streamed.and_then(|()| gathered.reply()) {
+                Ok(reply) => return Ok(reply),
+                Err(err) => failures.push(("Groq", err)),
+            }
+        }
+        if failures.is_empty() { Err(AiError::NoKeys) } else { Err(AiError::Failed(failures)) }
+    }
+
+    /// Turns speech into text: Groq's Whisper (made for it, and fast) first,
+    /// then Gemini. `audio` is a recording of type `mime`, e.g. "audio/wav".
+    pub async fn transcribe(&self, keys: &Keys, audio: &[u8], mime: &str) -> Result<Transcript, AiError> {
+        let mut failures = Vec::new();
+        if let Some(key) = &keys.groq {
+            let (boundary, body) = speech_form(&self.models.whisper, audio, mime);
+            let sent = self
+                .http
+                .post(format!("{}/audio/transcriptions", self.groq_url))
+                .bearer_auth(key)
+                .header("content-type", format!("multipart/form-data; boundary={boundary}"))
+                .body(body)
+                .send()
+                .await;
+            match answer(sent).await {
+                Ok(body) => return Ok(Transcript { text: body["text"].as_str().unwrap_or_default().trim().to_owned(), provider: "Groq".into() }),
+                Err(err) => failures.push(("Groq", err)),
+            }
+        }
+        if let Some(key) = &keys.gemini {
+            let url = format!("{}/models/{}:generateContent", self.gemini_url, self.models.gemini);
+            let sent = self.http.post(url).header("x-goog-api-key", key).json(&gemini::transcription(audio, mime)).send().await;
+            match answer(sent).await.and_then(|body| gemini::reply(&body)) {
+                Ok(reply) => return Ok(Transcript { text: reply.text.unwrap_or_default().trim().to_owned(), provider: "Gemini".into() }),
+                // Silence can come back as no answer at all.
+                Err(ProviderError::NoAnswer(_)) => return Ok(Transcript { text: String::new(), provider: "Gemini".into() }),
+                Err(err) => failures.push(("Gemini", err)),
+            }
+        }
+        if failures.is_empty() { Err(AiError::NoKeys) } else { Err(AiError::Failed(failures)) }
+    }
+}
+
+/// A multipart form with the recording and the model, as Groq's (OpenAI's)
+/// transcription endpoint takes it. Returns the boundary and the body.
+fn speech_form(model: &str, audio: &[u8], mime: &str) -> (String, Vec<u8>) {
+    let boundary = "axiom-speech-7d1f0c2e9b4a";
+    let extension = match mime.split(';').next().unwrap_or_default() {
+        "audio/webm" => "webm",
+        "audio/ogg" => "ogg",
+        "audio/mp4" | "audio/m4a" => "m4a",
+        "audio/mpeg" => "mp3",
+        _ => "wav",
+    };
+    let mut body = Vec::with_capacity(audio.len() + 512);
+    for (name, value) in [("model", model), ("response_format", "json")] {
+        body.extend(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").as_bytes());
+    }
+    body.extend(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.{extension}\"\r\nContent-Type: {mime}\r\n\r\n").as_bytes());
+    body.extend(audio);
+    body.extend(format!("\r\n--{boundary}--\r\n").as_bytes());
+    (boundary.into(), body)
+}
+
+/// What Gemini is sent for `request`, for checking tools against what it accepts.
+pub fn gemini_body(request: &ChatRequest) -> serde_json::Value {
+    gemini::body(request)
 }
 
 /// The JSON body of a successful response, or why there isn't one.
@@ -161,14 +283,47 @@ async fn answer(sent: reqwest::Result<reqwest::Response>) -> Result<serde_json::
     let status = response.status();
     let text = response.text().await.map_err(|_| ProviderError::Offline)?;
     if !status.is_success() {
-        // Both providers explain themselves in `error.message`.
-        let message = serde_json::from_str::<serde_json::Value>(&text)
-            .ok()
-            .and_then(|v| v["error"]["message"].as_str().map(String::from))
-            .unwrap_or(text);
-        return Err(ProviderError::Rejected { status: status.as_u16(), message });
+        return Err(rejected(status.as_u16(), text));
     }
     serde_json::from_str(&text).map_err(|_| ProviderError::NoAnswer("sent an answer that isn't JSON".into()))
+}
+
+/// Reads a stream of server-sent events (both providers stream this way),
+/// giving each event's data to `each` as it comes.
+async fn events(sent: reqwest::Result<reqwest::Response>, mut each: impl FnMut(serde_json::Value)) -> Result<(), ProviderError> {
+    let mut response = sent.map_err(|_| ProviderError::Offline)?;
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.map_err(|_| ProviderError::Offline)?;
+        return Err(rejected(status.as_u16(), text));
+    }
+    let mut pending: Vec<u8> = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|_| ProviderError::Offline)? {
+        pending.extend_from_slice(&chunk);
+        while let Some(end) = pending.iter().position(|&b| b == b'\n') {
+            let line: Vec<u8> = pending.drain(..=end).collect();
+            let Some(data) = std::str::from_utf8(&line).ok().and_then(|l| l.trim().strip_prefix("data:")) else { continue };
+            let data = data.trim();
+            if data == "[DONE]" {
+                return Ok(());
+            }
+            let event: serde_json::Value = serde_json::from_str(data).map_err(|_| ProviderError::NoAnswer("sent an answer that isn't JSON".into()))?;
+            // A failure part-way comes as an event of its own.
+            if let Some(error) = event.get("error") {
+                let status = error["code"].as_u64().map_or(500, |code| code as u16);
+                return Err(ProviderError::Rejected { status, message: error["message"].as_str().unwrap_or_default().to_owned() });
+            }
+            each(event);
+        }
+    }
+    Ok(())
+}
+
+/// An error status, with the reason the provider gave.
+fn rejected(status: u16, text: String) -> ProviderError {
+    // Both providers explain themselves in `error.message`.
+    let message = serde_json::from_str::<serde_json::Value>(&text).ok().and_then(|v| v["error"]["message"].as_str().map(String::from)).unwrap_or(text);
+    ProviderError::Rejected { status, message }
 }
 
 fn short(message: &str) -> String {

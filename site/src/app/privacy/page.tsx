@@ -76,7 +76,7 @@ export default function PrivacyPage() {
           <b>To provide the service you asked for</b> (performance of a contract): your account, syncing, shared boards, and the codes for confirming your email or resetting your password.
         </li>
         <li>
-          <b>Because you chose it</b> (consent): notification emails, and the Axiom on the web list. Switch emails off at any time, in the app or with the link in each email.
+          <b>Because you chose it</b> (consent): notification emails, the Axiom on the web list, and what Lemma sends to Google or Groq when you ask it something (explicit consent, for anything sensitive in an area you switch on). Switch emails off at any time, in the app or with the link in each email; switch Lemma&apos;s areas off in its settings.
         </li>
         <li>
           <b>Legitimate interests:</b> keeping the service secure (rate limits and backups), answering support messages, and keeping a short record of them.
@@ -100,17 +100,40 @@ export default function PrivacyPage() {
         <li>
           <b>Vercel</b> hosts this website.
         </li>
+        <li>
+          <b>Google</b> (Gemini) and <b>Groq</b> answer Lemma, the assistant, on Axiom&apos;s AI keys. See &ldquo;Lemma, the assistant&rdquo;.
+        </li>
       </ul>
       <p>
         This means your account data is stored in the United States. Each of these providers processes it only on our instructions, under data processing terms. Transfers out of the UK
         are protected by the safeguards in those terms: the UK&apos;s International Data Transfer Addendum, or the UK–US data bridge where the provider is certified.
       </p>
 
+      <h2>Using the web terminal</h2>
+      <p>The signed-in web terminal saves working copies and pending changes in this browser and syncs supported areas to your account. This browser storage remains on the device after signing out. Use your own browser profile on a trusted device.</p>
+      <p>Calendars you import or subscribe to on the web, including event details and private iCalendar links, are synced without end-to-end encryption. The website fetches subscription links on your behalf while the terminal is open. Desktop calendar connections remain local to the desktop app and are separate from these web calendars.</p>
+
+      <h2>Lemma, the assistant</h2>
+      <p>Lemma only uses AI when you ask it something. Then it sends:</p>
+      <ul>
+      <li>your message, and the conversation so far;</li>
+      <li>from the areas you&apos;ve switched on in its settings, only what it looks up to answer, such as the day&apos;s tasks or the book you&apos;re reading. Areas you haven&apos;t switched on are never sent. Journal entries can include sensitive things, like your health: they&apos;re only sent if you switch Journal on;</li>
+      <li>your first name, if your profile has one, and today&apos;s date and time;</li>
+      <li>if you talk to it, the recording, to turn it into text.</li>
+      </ul>
+      <p>It goes to <b>Google</b> (Gemini) or <b>Groq</b>, both in the United States.</p>
+      <ul>
+      <li><b>On Axiom&apos;s AI keys</b> (when you&apos;re signed in), it passes through the Axiom server, which sends it on without keeping it. The server only counts your requests each day, for the daily allowance, and notes which service answered and how much it used. Axiom uses Groq, and Google only through its paid service, never its free one. Google doesn&apos;t use it to improve its products, and keeps it only for a limited time to detect misuse. Groq doesn&apos;t keep it, apart from logs for troubleshooting and misuse that it keeps for up to 30 days.</li>
+      <li><b>On your own AI key</b>, it goes straight from your computer to Google or Groq, under your own agreement with them. Depending on the service and where you are, free tiers may use what they&apos;re sent to improve their models.</li>
+      </ul>
+      <p>Your chats with Lemma stay on your computer and, with an account, sync end-to-end encrypted. Nothing Lemma suggests changes your data until you confirm it. You can switch an area off, or stop using Lemma, at any time.</p>
+
       <h2>Services the app contacts directly</h2>
       <p>These go straight from your computer, never through the Axiom server, and only when you use the feature:</p>
       <ul>
         <li>
-          <b>Open Library</b> (openlibrary.org), to search for books and show covers in Reading and Learning.
+          <b>Open Library</b> (openlibrary.org), to search for books and show covers in Reading and Learning, and when Lemma looks a book up for you. Only the
+          search (a title, author or ISBN) is sent.
         </li>
         <li>
           <b>YouTube</b> (Google), to read a playlist&apos;s videos when you import one into Learning. Only the playlist link is sent.
@@ -130,6 +153,8 @@ export default function PrivacyPage() {
 
       <h2>How long it&apos;s kept</h2>
       <ul>
+        <li>What you send Lemma: the Axiom server doesn&apos;t keep it. Groq may keep troubleshooting logs for up to 30 days, and Google keeps it for a limited time to detect misuse.</li>
+        <li>How many times you used Lemma each day, for the daily allowance: {RETENTION.aiUsageDays} days.</li>
         <li>Your account and everything synced to it: until you delete your account. Copies in backups are gone within 30 days after that.</li>
         <li>Sign-ups that never confirmed their email: {RETENTION.unconfirmedDays} days.</li>
         <li>A device&apos;s record: {RETENTION.endedSessionDays} days after it&apos;s signed out.</li>

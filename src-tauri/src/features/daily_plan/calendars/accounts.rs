@@ -8,7 +8,7 @@ use chrono::{Days, Utc};
 use rrule::Tz;
 use sea_orm::prelude::Date;
 use serde::Deserialize;
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait};
 use serde::Serialize;
 use tokio::sync::{oneshot, Mutex};
 
@@ -20,7 +20,7 @@ use super::oauth::{random_token, Loopback, OAuthApp, Pkce};
 use super::publish::{self, plan_events};
 use super::remote::Remote;
 use super::secrets::{Secret, SecretStore};
-use super::{replace_events, AXIOM_CALENDAR, DAYS_AHEAD, DAYS_BACK, STALE_MINUTES};
+use super::{live_accounts, live_calendars, remove_calendars, replace_events, AXIOM_CALENDAR, DAYS_AHEAD, DAYS_BACK, STALE_MINUTES};
 use crate::db::new_id;
 use crate::error::{Error, Result};
 use crate::features::daily_plan::entities::{calendar, calendar_account as account, event};
@@ -126,7 +126,7 @@ impl CalendarHub {
             }
         }
         let Some(Secret::OAuth { refresh_token, scope }) = self.secrets.load(&account.id) else {
-            return Err(Error::Account("Axiom isn't signed in to this calendar any more. Reconnect it.".into()));
+            return Err(Error::Account("Axiom isn't signed in to this calendar on this computer. Reconnect it.".into()));
         };
         let app = self.app(&account.provider)?;
         let tokens = app.refresh(&self.http, &refresh_token).await?;
@@ -161,7 +161,7 @@ impl CalendarHub {
     pub async fn remote(&self, account: &account::Model) -> Result<Box<dyn Remote>> {
         if account.provider == "caldav" {
             let Some(Secret::Password { username, password }) = self.secrets.load(&account.id) else {
-                return Err(Error::Account("Axiom isn't signed in to this calendar any more. Reconnect it.".into()));
+                return Err(Error::Account("Axiom isn't signed in to this calendar on this computer. Reconnect it.".into()));
             };
             return Ok(Box::new(CalDav::new(&account.server, &username, &password)));
         }
@@ -171,6 +171,12 @@ impl CalendarHub {
             _ => None,
         };
         Ok(self.remote_with(&account.provider, token, scope.as_deref()))
+    }
+
+    /// Whether this computer has a sign-in for the account (one connected on
+    /// another computer doesn't, until it's reconnected here).
+    pub fn signed_in_here(&self, account_id: &str) -> bool {
+        self.secrets.load(account_id).is_some()
     }
 
     /// Stops a sign-in that's waiting on the browser.
@@ -241,7 +247,7 @@ pub async fn connect_caldav(db: &DatabaseConnection, hub: &CalendarHub, server: 
 
 /// Reconnecting the same account updates it instead of adding a second.
 async fn save_account(db: &DatabaseConnection, provider: &str, name: &str, server: &str) -> Result<account::Model> {
-    let existing = account::Entity::find()
+    let existing = live_accounts()
         .filter(account::Column::Provider.eq(provider))
         .filter(account::Column::Name.eq(name))
         .filter(account::Column::Server.eq(server))
@@ -263,6 +269,7 @@ async fn save_account(db: &DatabaseConnection, provider: &str, name: &str, serve
                 problem: Set(None),
                 signed_out: Set(false),
                 created_at: Set(Utc::now()),
+                deleted_at: Set(None),
             }
             .insert(db)
             .await?
@@ -280,7 +287,7 @@ async fn finish_connecting(db: &DatabaseConnection, hub: &CalendarHub, account: 
 /// (shown if they're the user's own), gone ones removed.
 async fn sync_calendar_list(db: &DatabaseConnection, account: &account::Model, remote: &dyn Remote) -> Result<()> {
     let found = remote.calendars().await?;
-    let stored = calendar::Entity::find().filter(calendar::Column::AccountId.eq(account.id.as_str())).all(db).await?;
+    let stored = live_calendars().filter(calendar::Column::AccountId.eq(account.id.as_str())).all(db).await?;
     let txn = db.begin().await?;
     for theirs in &found {
         match stored.iter().find(|c| c.remote_id.as_deref() == Some(theirs.remote_id.as_str())) {
@@ -308,16 +315,16 @@ async fn sync_calendar_list(db: &DatabaseConnection, account: &account::Model, r
                     publish: Set(false),
                     published_hash: Set(None),
                     mine: Set(theirs.mine),
+                    deleted_at: Set(None),
                 }
                 .insert(&txn)
                 .await?;
             }
         }
     }
-    for gone in stored.iter().filter(|c| !found.iter().any(|f| Some(f.remote_id.as_str()) == c.remote_id.as_deref())) {
-        event::Entity::delete_many().filter(event::Column::CalendarId.eq(gone.id.as_str())).exec(&txn).await?;
-        calendar::Entity::delete_by_id(gone.id.as_str()).exec(&txn).await?;
-    }
+    let gone: Vec<String> =
+        stored.iter().filter(|c| !found.iter().any(|f| Some(f.remote_id.as_str()) == c.remote_id.as_deref())).map(|c| c.id.clone()).collect();
+    remove_calendars(&txn, &gone).await?;
     txn.commit().await?;
     Ok(())
 }
@@ -325,7 +332,7 @@ async fn sync_calendar_list(db: &DatabaseConnection, account: &account::Model, r
 /// Reads events for the account's shown calendars. Problems are noted on
 /// the account or calendar rather than stopping the rest.
 async fn pull(db: &DatabaseConnection, hub: &CalendarHub, account: &account::Model, remote: &dyn Remote, today: Date) {
-    let Ok(calendars) = calendar::Entity::find().filter(calendar::Column::AccountId.eq(account.id.as_str())).all(db).await else {
+    let Ok(calendars) = live_calendars().filter(calendar::Column::AccountId.eq(account.id.as_str())).all(db).await else {
         return;
     };
     let (from, to) = (today - Days::new(DAYS_BACK), today + Days::new(DAYS_AHEAD));
@@ -355,7 +362,7 @@ async fn pull(db: &DatabaseConnection, hub: &CalendarHub, account: &account::Mod
 /// Brings one account up to date if it's due (or with `force`, also
 /// re-reading its list of calendars). Returns whether it was read.
 pub async fn sync_account(db: &DatabaseConnection, hub: &CalendarHub, account: &account::Model, today: Date, force: bool) -> Result<bool> {
-    let calendars = calendar::Entity::find().filter(calendar::Column::AccountId.eq(account.id.as_str())).all(db).await?;
+    let calendars = live_calendars().filter(calendar::Column::AccountId.eq(account.id.as_str())).all(db).await?;
     let due = chrono::Duration::minutes(STALE_MINUTES);
     let fresh = !calendars.is_empty() && calendars.iter().filter(|c| c.shown).all(|c| c.refreshed_at.is_some_and(|at| Utc::now() - at < due));
     if fresh && !force {
@@ -381,7 +388,7 @@ pub async fn sync_account(db: &DatabaseConnection, hub: &CalendarHub, account: &
 
 /// Publishes the plan if it changed since last time (or always, with `force`).
 pub async fn publish_plan(db: &DatabaseConnection, hub: &CalendarHub, today: Date, force: bool) -> Result<()> {
-    let Some(cal) = calendar::Entity::find().filter(calendar::Column::Publish.eq(true)).one(db).await? else {
+    let Some(cal) = live_calendars().filter(calendar::Column::Publish.eq(true)).one(db).await? else {
         return Ok(());
     };
     let desired = plan_events(db, today, hub.zone).await?;
@@ -409,19 +416,19 @@ pub async fn publish_plan(db: &DatabaseConnection, hub: &CalendarHub, today: Dat
 }
 
 async fn account_of(db: &DatabaseConnection, cal: &calendar::Model) -> Result<account::Model> {
-    account::Entity::find_by_id(cal.account_id.clone().unwrap_or_default()).one(db).await?.ok_or(Error::NotFound("Calendar account"))
+    live_accounts().filter(account::Column::Id.eq(cal.account_id.clone().unwrap_or_default())).one(db).await?.ok_or(Error::NotFound("Calendar account"))
 }
 
 /// Chooses the calendar the plan is published into, or none. The calendar
 /// published into before has Axiom's upcoming events taken out of it.
 pub async fn set_publish(db: &DatabaseConnection, hub: &CalendarHub, calendar_id: Option<&str>, today: Date) -> Result<()> {
     if let Some(id) = calendar_id {
-        let chosen = calendar::Entity::find_by_id(id).one(db).await?.ok_or(Error::NotFound("Calendar"))?;
+        let chosen = live_calendars().filter(calendar::Column::Id.eq(id)).one(db).await?.ok_or(Error::NotFound("Calendar"))?;
         if !chosen.writable {
             return Err(Error::Invalid("Axiom can't add events to that calendar.".into()));
         }
     }
-    let previous = calendar::Entity::find().filter(calendar::Column::Publish.eq(true)).all(db).await?;
+    let previous = live_calendars().filter(calendar::Column::Publish.eq(true)).all(db).await?;
     for old in previous.into_iter().filter(|c| Some(c.id.as_str()) != calendar_id) {
         // Best effort: an account that's gone shouldn't stop the change.
         if let Ok(account) = account_of(db, &old).await {
@@ -436,7 +443,7 @@ pub async fn set_publish(db: &DatabaseConnection, hub: &CalendarHub, calendar_id
         active.update(db).await?;
     }
     if let Some(id) = calendar_id {
-        let chosen = calendar::Entity::find_by_id(id).one(db).await?.ok_or(Error::NotFound("Calendar"))?;
+        let chosen = live_calendars().filter(calendar::Column::Id.eq(id)).one(db).await?.ok_or(Error::NotFound("Calendar"))?;
         let mut active: calendar::ActiveModel = chosen.into();
         active.publish = Set(true);
         active.published_hash = Set(None);
@@ -448,11 +455,11 @@ pub async fn set_publish(db: &DatabaseConnection, hub: &CalendarHub, calendar_id
 
 /// Makes an "Axiom" calendar in the account and publishes the plan there.
 pub async fn create_plan_calendar(db: &DatabaseConnection, hub: &CalendarHub, account_id: &str, today: Date) -> Result<calendar::Model> {
-    let account = account::Entity::find_by_id(account_id).one(db).await?.ok_or(Error::NotFound("Calendar account"))?;
+    let account = live_accounts().filter(account::Column::Id.eq(account_id)).one(db).await?.ok_or(Error::NotFound("Calendar account"))?;
     let remote = hub.remote(&account).await?;
     let made = remote.create_calendar(AXIOM_CALENDAR).await?;
     sync_calendar_list(db, &account, remote.as_ref()).await?;
-    let stored = calendar::Entity::find()
+    let stored = live_calendars()
         .filter(calendar::Column::AccountId.eq(account_id))
         .filter(calendar::Column::RemoteId.eq(made.remote_id.as_str()))
         .one(db)
@@ -481,18 +488,19 @@ pub async fn create_plan_calendar(db: &DatabaseConnection, hub: &CalendarHub, ac
                 publish: Set(false),
                 published_hash: Set(None),
                 mine: Set(true),
+                deleted_at: Set(None),
             }
             .insert(db)
             .await?
         }
     };
     set_publish(db, hub, Some(&stored.id), today).await?;
-    Ok(calendar::Entity::find_by_id(stored.id).one(db).await?.ok_or(Error::NotFound("Calendar"))?)
+    Ok(live_calendars().filter(calendar::Column::Id.eq(stored.id)).one(db).await?.ok_or(Error::NotFound("Calendar"))?)
 }
 
 /// Shows or hides a calendar's events on the planner.
 pub async fn set_shown(db: &DatabaseConnection, hub: &CalendarHub, calendar_id: &str, shown: bool, today: Date) -> Result<()> {
-    let cal = calendar::Entity::find_by_id(calendar_id).one(db).await?.ok_or(Error::NotFound("Calendar"))?;
+    let cal = live_calendars().filter(calendar::Column::Id.eq(calendar_id)).one(db).await?.ok_or(Error::NotFound("Calendar"))?;
     let mut active: calendar::ActiveModel = cal.clone().into();
     active.shown = Set(shown);
     active.refreshed_at = Set(None);
@@ -502,37 +510,56 @@ pub async fn set_shown(db: &DatabaseConnection, hub: &CalendarHub, calendar_id: 
         return Ok(());
     }
     if let Some(account_id) = &cal.account_id {
-        if let Some(account) = account::Entity::find_by_id(account_id.as_str()).one(db).await? {
+        if let Some(account) = live_accounts().filter(account::Column::Id.eq(account_id.as_str())).one(db).await? {
             sync_account(db, hub, &account, today, false).await?;
         }
     }
     Ok(())
 }
 
-/// Disconnects an account: its calendars and events go, and its sign-in is
-/// removed from the keychain (and revoked, for Google).
+/// Disconnects an account, on every computer: it and its calendars are
+/// marked removed and their events go. This computer's sign-in is removed
+/// from the keychain (and revoked, for Google); the others' go when they
+/// hear about it (see `forget_removed`).
 pub async fn remove_account(db: &DatabaseConnection, hub: &CalendarHub, account_id: &str) -> Result<()> {
-    let account = account::Entity::find_by_id(account_id).one(db).await?.ok_or(Error::NotFound("Calendar account"))?;
-    if account.provider == "google" {
-        if let Some(Secret::OAuth { refresh_token, .. }) = hub.secrets.load(account_id) {
-            let _ = hub.http.post(&hub.providers.google_revoke).form(&[("token", refresh_token)]).send().await;
-        }
-    }
-    let calendars = calendar::Entity::find().filter(calendar::Column::AccountId.eq(account_id)).all(db).await?;
+    let account = live_accounts().filter(account::Column::Id.eq(account_id)).one(db).await?.ok_or(Error::NotFound("Calendar account"))?;
+    forget_sign_in(hub, &account).await;
+    let calendars: Vec<String> = live_calendars().filter(calendar::Column::AccountId.eq(account_id)).all(db).await?.into_iter().map(|c| c.id).collect();
     let txn = db.begin().await?;
-    for cal in &calendars {
-        event::Entity::delete_many().filter(event::Column::CalendarId.eq(cal.id.as_str())).exec(&txn).await?;
-    }
-    calendar::Entity::delete_many().filter(calendar::Column::AccountId.eq(account_id)).exec(&txn).await?;
-    account::Entity::delete_by_id(account_id).exec(&txn).await?;
+    remove_calendars(&txn, &calendars).await?;
+    let mut active: account::ActiveModel = account.into();
+    active.deleted_at = Set(Some(Utc::now()));
+    active.update(&txn).await?;
     txn.commit().await?;
-    hub.secrets.delete(account_id);
-    hub.tokens.lock().await.remove(account_id);
     Ok(())
 }
 
+/// Catches up with removals made on the user's other computers: events of
+/// removed calendars go, and this computer's sign-in to a removed account
+/// is revoked and forgotten.
+pub async fn forget_removed(db: &DatabaseConnection, hub: &CalendarHub) -> Result<()> {
+    db.execute_unprepared("DELETE FROM daily_plan_events WHERE calendar_id NOT IN (SELECT id FROM daily_plan_calendars WHERE deleted_at IS NULL)").await?;
+    let removed = account::Entity::find().filter(account::Column::DeletedAt.is_not_null()).all(db).await?;
+    for gone in removed.iter().filter(|a| hub.signed_in_here(&a.id)) {
+        forget_sign_in(hub, gone).await;
+    }
+    Ok(())
+}
+
+/// Takes this computer's sign-in to the account out of the keychain, and
+/// revokes it with Google (Microsoft and CalDAV offer no way to).
+async fn forget_sign_in(hub: &CalendarHub, account: &account::Model) {
+    if account.provider == "google" {
+        if let Some(Secret::OAuth { refresh_token, .. }) = hub.secrets.load(&account.id) {
+            let _ = hub.http.post(&hub.providers.google_revoke).form(&[("token", refresh_token)]).send().await;
+        }
+    }
+    hub.secrets.delete(&account.id);
+    hub.tokens.lock().await.remove(&account.id);
+}
+
 pub async fn list_accounts(db: &DatabaseConnection) -> Result<Vec<account::Model>> {
-    Ok(account::Entity::find().order_by_asc(account::Column::CreatedAt).all(db).await?)
+    Ok(live_accounts().order_by_asc(account::Column::CreatedAt).all(db).await?)
 }
 
 /// Serialises refreshes: the planner asks on a timer and after changes.
@@ -567,7 +594,7 @@ async fn editable_event(db: &DatabaseConnection, hub: &CalendarHub, event_id: &s
     if !found.editable {
         return Err(Error::Invalid("Axiom can't change this event. Change it in your calendar instead.".into()));
     }
-    let cal = calendar::Entity::find_by_id(found.calendar_id.as_str()).one(db).await?.ok_or(Error::NotFound("Calendar"))?;
+    let cal = live_calendars().filter(calendar::Column::Id.eq(found.calendar_id.as_str())).one(db).await?.ok_or(Error::NotFound("Calendar"))?;
     let account = account_of(db, &cal).await?;
     let remote = hub.remote(&account).await?;
     Ok((found, cal, account, remote))

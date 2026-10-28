@@ -19,6 +19,9 @@ export function ConfirmButton({ onConfirm, children, confirmText = "Click again 
 
   return (
     <button
+      // Never a form's submit button: in a dialog's form, the first click
+      // would save and close it instead of arming the delete.
+      type="button"
       className={`${className ?? ""}${armed ? " is-armed" : ""}`}
       onClick={() => {
         if (armed) {

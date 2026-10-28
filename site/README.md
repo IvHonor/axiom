@@ -23,6 +23,21 @@ through its tabs, then through themes. The header steps aside while it plays.
 Visitors can skip it, or turn it off (remembered in their browser). Reduced
 motion and very short screens get the plain window with working tabs.
 
+## Web terminal (early development)
+
+`/terminal` is the signed-in workspace shell. Daily Plan and personal Project Boards use the
+existing desktop sync protocol through an account-bound same-origin proxy,
+with a per-account IndexedDB cache and durable outbox. The remaining areas are
+explicitly unfinished; encrypted areas stay locked. See
+[`docs/WEB_TERMINAL.md`](../docs/WEB_TERMINAL.md) for the parity checklist,
+architecture and local browser test. This is separate from the public `/web`
+preview and has not been deployed.
+
+Daily Plan renders the desktop React components and theme definitions directly.
+Run `npm ci` at the repository root as well as in `site`. `predev` and `prebuild`
+regenerate scoped desktop CSS; after changing desktop styles during development,
+run `npm run desktop:styles` in `site` to refresh the generated stylesheet.
+
 ## Accounts
 
 Sign-in, the waiting list and the account pages use the account server, the
@@ -43,11 +58,18 @@ when needed; `SITE_TEST_URL` changes the address. Screenshots go to
 ## Deploy (Vercel)
 
 - Import the repository and set **Root Directory** to `site`.
+- Keep **Include source files outside of the Root Directory in the Build Step**
+  enabled, as required for the [shared desktop source](https://vercel.com/docs/monorepos/monorepo-faq#can-i-share-source-files-between-projects-are-shared-packages-supported).
+  `vercel.json` installs both lockfiles so the shared components and fonts are available.
 - Environment variables (the same values as the account server's):
   - `CONTACT_EMAIL`: shown on the privacy, terms and support pages.
   - `OPERATOR_NAME`: who runs Axiom, named in the privacy notice and terms.
   - `SITE_URL`: e.g. `https://axiomterminal.app`, for links in previews.
   - `AXIOM_API_URL`: the account server, e.g. `https://axiom-server-1bil.onrender.com`.
+    Set it for Production (and Preview when testing previews), then redeploy.
+    Production account requests and session refresh reject a missing/invalid URL;
+    only development defaults to `http://localhost:8787`. Safe diagnostic logs
+    use the `[axiom-api]` prefix and exclude credentials and response bodies.
   - `AXIOM_WEB_PROXY_SECRET`: the server's `WEB_PROXY_SECRET`. Without it,
     every website visitor shares one rate limit, and sign-in soon stops working.
     It trusts the visitor address Vercel gives (`x-real-ip`), so keep the site on Vercel

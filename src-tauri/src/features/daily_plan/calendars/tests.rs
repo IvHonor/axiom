@@ -300,10 +300,47 @@ async fn removing_an_account_removes_everything_from_it() {
     let account = accounts::connect_oauth(&db, &hub, "google", day(TODAY), browser("code")).await.unwrap();
 
     accounts::remove_account(&db, &hub, &account.id).await.unwrap();
-    assert!(account::Entity::find().all(&db).await.unwrap().is_empty());
-    assert!(calendar::Entity::find().all(&db).await.unwrap().is_empty());
+    assert!(accounts::list_accounts(&db).await.unwrap().is_empty());
+    assert!(super::list_calendars(&db).await.unwrap().is_empty());
     assert!(event::Entity::find().all(&db).await.unwrap().is_empty());
     assert_eq!(secrets.load(&account.id), None);
+    // Kept, marked removed, so the user's other computers hear about it.
+    let kept = account::Entity::find_by_id(account.id.as_str()).one(&db).await.unwrap().unwrap();
+    assert!(kept.deleted_at.is_some());
+    assert!(calendar::Entity::find().all(&db).await.unwrap().iter().all(|c| c.deleted_at.is_some()));
+}
+
+#[tokio::test]
+async fn an_account_removed_on_another_computer_goes_here_too() {
+    let (db, server, secrets) = (setup().await, MockServer::start().await, Memory::default());
+    google_basics(&server).await;
+    Mock::given(method("POST")).and(path("/google/revoke")).respond_with(ResponseTemplate::new(200)).expect(1).mount(&server).await;
+    let hub = hub(&server, secrets.clone());
+    let account = accounts::connect_oauth(&db, &hub, "google", day(TODAY), browser("code")).await.unwrap();
+    assert!(!event::Entity::find().all(&db).await.unwrap().is_empty());
+
+    // Sync brings the removal: the rows arrive marked deleted.
+    let now = chrono::Utc::now().to_rfc3339();
+    use sea_orm::ConnectionTrait;
+    db.execute_unprepared(&format!("UPDATE daily_plan_calendar_accounts SET deleted_at = '{now}'")).await.unwrap();
+    db.execute_unprepared(&format!("UPDATE daily_plan_calendars SET deleted_at = '{now}'")).await.unwrap();
+
+    refresh_calendars(&db, &hub, day(TODAY), false).await.unwrap();
+    assert!(event::Entity::find().all(&db).await.unwrap().is_empty());
+    assert_eq!(secrets.load(&account.id), None, "this computer's sign-in is revoked and forgotten");
+}
+
+#[tokio::test]
+async fn an_account_connected_on_another_computer_asks_to_reconnect_here() {
+    let (db, server, secrets) = (setup().await, MockServer::start().await, Memory::default());
+    google_basics(&server).await;
+    let hub = hub(&server, secrets.clone());
+    let account = accounts::connect_oauth(&db, &hub, "google", day(TODAY), browser("code")).await.unwrap();
+    assert!(!super::setup(&db, &hub).await.unwrap().accounts[0].signed_out);
+
+    // The same rows on a computer without the sign-in.
+    secrets.delete(&account.id);
+    assert!(super::setup(&db, &hub).await.unwrap().accounts[0].signed_out);
 }
 
 // ---------- Microsoft ----------

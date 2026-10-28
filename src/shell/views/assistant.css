@@ -1,0 +1,615 @@
+/* The Assistant tab: chats with Lemma. */
+
+.lemma-view {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+/* ---------- Chat list ---------- */
+
+.lemma-chats {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+
+.lemma-new {
+  justify-content: center;
+  gap: 6px;
+  margin: 0 4px 4px;
+}
+
+.lemma-chats ul {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lemma-chats li {
+  position: relative;
+  border-radius: var(--radius-sm);
+}
+
+.lemma-chats li:hover,
+.lemma-chats li.is-active {
+  background: var(--hover);
+}
+
+.lemma-chats li.is-active {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.lemma-chat-link {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 34px 7px 10px;
+  text-align: left;
+}
+
+.lemma-chat-title {
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.lemma-chat-when {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.lemma-chat-delete {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  translate: 0 -50%;
+  opacity: 0;
+}
+
+.lemma-chats li:hover .lemma-chat-delete,
+.lemma-chat-delete:focus-visible,
+.lemma-chat-delete.is-armed {
+  opacity: 1;
+}
+
+.lemma-chat-delete.is-armed {
+  width: auto;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--danger);
+}
+
+/* ---------- Conversation ---------- */
+
+.lemma-main {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lemma-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 14px;
+  color: var(--accent);
+  border-bottom: 1px solid var(--line);
+}
+
+.lemma-head h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.lemma-thread {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+.lemma-bubble {
+  max-width: 85%;
+  padding: 9px 13px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+
+.lemma-bubble.is-user {
+  align-self: flex-end;
+  color: var(--on-accent);
+  white-space: pre-wrap;
+  background: var(--accent);
+  border-bottom-right-radius: 4px;
+}
+
+.lemma-bubble.is-lemma {
+  align-self: flex-start;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 4px;
+}
+
+.lemma-bubble.is-lemma p,
+.lemma-bubble.is-lemma ul {
+  margin: 0;
+}
+
+.lemma-bubble.is-lemma > * + * {
+  margin-top: 6px;
+}
+
+.lemma-bubble.is-lemma ul {
+  padding-left: 18px;
+}
+
+.lemma-looked {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 4px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.lemma-repeat {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.lemma-repeat:hover {
+  color: var(--text-dim);
+}
+
+.lemma-confirm-all {
+  align-self: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: min(460px, 100%);
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.lemma-confirm-all span:first-child {
+  flex: 1;
+}
+
+.lemma-confirm-all .btn {
+  gap: 5px;
+}
+
+.lemma-status {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.lemma-spin {
+  animation: lemma-spin 0.9s linear infinite;
+}
+
+@keyframes lemma-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lemma-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.lemma-error p {
+  flex: 1;
+  margin: 0;
+}
+
+/* ---------- A change to confirm ---------- */
+
+.lemma-card {
+  align-self: flex-start;
+  width: min(460px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.lemma-card.is-confirmed {
+  border-left-color: var(--success);
+}
+
+/* Pointed to from "Same change as the card above". */
+.lemma-card.is-shown {
+  animation: lemma-card-shown 1.4s ease-out;
+}
+
+@keyframes lemma-card-shown {
+  from {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lemma-card.is-shown {
+    animation: none;
+    outline: 2px solid var(--accent);
+  }
+}
+
+.lemma-card.is-discarded,
+.lemma-card.is-undone,
+.lemma-card.is-failed {
+  border-left-color: var(--line-strong);
+}
+
+.lemma-card.is-discarded ul,
+.lemma-card.is-undone ul {
+  opacity: 0.55;
+}
+
+.lemma-card header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 6px;
+  font-size: 13px;
+}
+
+.lemma-card ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 2px 12px 8px;
+  list-style: none;
+}
+
+.lemma-card li {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.lemma-card-label {
+  color: var(--text-faint);
+}
+
+.lemma-card-value {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.lemma-card-value del {
+  color: var(--text-faint);
+}
+
+.lemma-card-arrow {
+  color: var(--text-faint);
+}
+
+.lemma-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.lemma-card footer .btn {
+  gap: 5px;
+}
+
+.lemma-card-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--success);
+}
+
+.lemma-card-note {
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+.lemma-card-failed {
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+/* ---------- Starting a chat ---------- */
+
+.lemma-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: auto;
+  padding: 24px 12px;
+  text-align: center;
+}
+
+.lemma-welcome h3 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.lemma-welcome > p {
+  max-width: 420px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.lemma-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.lemma-idea {
+  padding: 7px 12px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+}
+
+.lemma-idea:hover {
+  border-color: var(--accent);
+}
+
+.lemma-callout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 12px 16px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.lemma-callout p {
+  margin: 0;
+}
+
+/* ---------- Writing ---------- */
+
+.lemma-compose {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: calc(100% - 48px);
+  max-width: 712px;
+  margin: 0 auto 18px;
+}
+
+.lemma-voice-note {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.lemma-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+}
+
+.lemma-composer:focus-within {
+  border-color: var(--accent);
+}
+
+.lemma-composer textarea {
+  flex: 1;
+  min-height: 22px;
+  padding: 3px 0;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text);
+  background: none;
+  border: none;
+  outline: none;
+  resize: none;
+}
+
+.lemma-send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.lemma-send:disabled {
+  opacity: 0.4;
+}
+
+/* ---------- Settings ---------- */
+
+.assistant-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.assistant-heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ---------- Talking ---------- */
+
+.lemma-composer.is-listening {
+  border-color: var(--accent);
+}
+
+.lemma-mic {
+  --level: 0;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--text-dim);
+  border-radius: 50%;
+}
+
+.lemma-mic:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.lemma-mic.is-on {
+  color: var(--on-accent);
+  background: var(--accent);
+  /* A ring that grows with the voice. */
+  box-shadow: 0 0 0 calc(3px + var(--level) * 9px) color-mix(in srgb, var(--accent) 28%, transparent);
+  transition: box-shadow 80ms linear;
+}
+
+.lemma-mic:disabled {
+  opacity: 0.5;
+}
+
+.lemma-head .icon-btn.is-on {
+  color: var(--accent);
+}
+
+/* The microphone picker beside the button. */
+.lemma-mic-choice {
+  flex: none;
+  align-self: flex-end;
+  margin-left: -6px;
+}
+
+.lemma-mic-choice .icon-btn {
+  width: 18px;
+  height: 30px;
+  color: var(--text-faint);
+}
+
+.lemma-mic-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 240px;
+  max-width: 320px;
+}
+
+.lemma-mic-list .menu-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lemma-mic-tick {
+  flex: none;
+  width: 14px;
+  color: var(--accent);
+}
+
+.lemma-mic-problem {
+  margin: 0;
+  padding: 4px 10px 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+
+/* Stopping Lemma part-way. */
+.lemma-send.is-stop {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+}
+
+.lemma-send.is-stop:hover {
+  border-color: var(--text-dim);
+}
+
+.lemma-stopped {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}

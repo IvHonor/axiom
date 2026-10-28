@@ -79,6 +79,8 @@ pub struct Shared {
     /// Axiom's own AI keys (`GEMINI_API_KEY`, `GROQ_API_KEY`). Without any,
     /// the assistant works only for people who add their own in the app.
     pub ai_keys: axiom_ai::Keys,
+    /// Model calls per day across every account (`AI_DAILY_LIMIT`).
+    pub ai_daily_limit: u32,
     /// The admin panel's settings, read from the database at startup.
     pub settings: RwLock<admin::Settings>,
 }
@@ -102,6 +104,7 @@ impl Shared {
             operator_name: None,
             ai: axiom_ai::Ai::default(),
             ai_keys: axiom_ai::Keys::default(),
+            ai_daily_limit: ai::EVERYONE_PER_DAY,
             settings: RwLock::new(admin::Settings::default()),
         }
     }
@@ -216,6 +219,9 @@ pub fn app(state: AppState) -> Router {
         .route(routes::NOTIFY_EMAILS, put(notify::plan))
         .route(routes::WEB_UPDATES, post(web_updates::join))
         .route(routes::AI_CHAT, post(ai::chat))
+        .route(routes::AI_CHAT_STREAM, post(ai::chat_stream))
+        // A minute of audio, base64-encoded, is more than the usual 2 MB.
+        .route(routes::AI_TRANSCRIBE, post(ai::transcribe).layer(axum::extract::DefaultBodyLimit::max(4 * 1024 * 1024)))
         .route(routes::NOTIFY_UNSUBSCRIBE, get(notify::unsubscribe_page).post(notify::unsubscribe_now))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

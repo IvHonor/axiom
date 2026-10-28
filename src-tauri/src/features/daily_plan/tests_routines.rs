@@ -179,6 +179,7 @@ async fn calendar_with(db: &DatabaseConnection, events: Vec<super::calendars::ic
         shown: Set(true),
         publish: Set(false),
         published_hash: Set(None),
+        deleted_at: Set(None),
     }
     .insert(db)
     .await

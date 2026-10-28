@@ -6,12 +6,20 @@
 //! computer except to the AI they belong to. Which areas the assistant may
 //! see is chosen in the app (see `src/lib/ai.ts`).
 
+pub mod agent;
 pub mod commands;
+mod entities;
+pub mod migrations;
+mod skills;
+mod undo;
 #[cfg(test)]
 mod tests;
 
-use axiom_ai::{Ai, Keys};
-use axiom_protocol::ai::{ChatReply, ChatRequest};
+/// The chats sync to the person's other computers, end-to-end encrypted.
+pub const SYNCED_TABLES: &[&str] = &["assistant_chats", "assistant_messages", "assistant_proposals"];
+
+use axiom_ai::{Ai, Delta, Keys};
+use axiom_protocol::ai::{ChatReply, ChatRequest, MAX_AUDIO_BYTES, Transcribe, Transcript};
 use serde::{Deserialize, Serialize};
 
 use crate::account::{Account, AccountStatus};
@@ -93,13 +101,22 @@ impl Assistant {
     /// One turn of a conversation: on the person's own keys if they've added
     /// any, falling back to Axiom's (through the server) if those can't answer.
     pub async fn chat(&self, account: &Account, request: &ChatRequest) -> Result<AssistantReply> {
+        self.chat_stream(account, request, &|_| {}).await
+    }
+
+    /// Like `chat`, but the reply's words go to `on` as they're written.
+    pub async fn chat_stream(&self, account: &Account, request: &ChatRequest, on: &(dyn Fn(Delta) + Sync)) -> Result<AssistantReply> {
         let saved = self.saved();
         let own = Keys { gemini: saved.gemini, groq: saved.groq };
         let signed_in = matches!(account.status().await, AccountStatus::SignedIn { .. });
         let own_error = if own.any() {
-            match self.ai.chat(&own, request).await {
+            match self.ai.chat_stream(&own, request, on).await {
                 Ok(reply) => return Ok(AssistantReply { reply, own_key: true }),
-                Err(err) if signed_in => err.message(),
+                Err(err) if signed_in => {
+                    // Axiom's AI answers from the start.
+                    on(Delta::Restart);
+                    err.message()
+                }
                 Err(err) => return Err(Error::Account(err.message())),
             }
         } else if !signed_in {
@@ -107,9 +124,38 @@ impl Assistant {
         } else {
             String::new()
         };
-        match account.ai_chat(request).await {
+        match account.ai_chat_stream(request, on).await {
             Ok(reply) => Ok(AssistantReply { reply, own_key: false }),
             // Your own key's problem is the one to fix; Axiom's was only a fallback.
+            Err(_) if !own_error.is_empty() => Err(Error::Account(own_error)),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    /// What was said in a recording (base64 `audio` of type `mime`): on
+    /// the person's own keys if they've added any, falling back to Axiom's.
+    pub async fn transcribe(&self, account: &Account, audio: &str, mime: &str) -> Result<Transcript> {
+        use base64::Engine;
+        let bytes = base64::engine::general_purpose::STANDARD.decode(audio).map_err(|_| Error::Invalid("That recording couldn't be read.".into()))?;
+        if bytes.len() > MAX_AUDIO_BYTES {
+            return Err(Error::Invalid("Keep it to about a minute at a time.".into()));
+        }
+        let saved = self.saved();
+        let own = Keys { gemini: saved.gemini, groq: saved.groq };
+        let signed_in = matches!(account.status().await, AccountStatus::SignedIn { .. });
+        let own_error = if own.any() {
+            match self.ai.transcribe(&own, &bytes, mime).await {
+                Ok(heard) => return Ok(heard),
+                Err(err) if signed_in => err.message(),
+                Err(err) => return Err(Error::Account(err.message())),
+            }
+        } else if !signed_in {
+            return Err(Error::Account("Sign in to talk to Lemma, or add your own free AI key in its settings.".into()));
+        } else {
+            String::new()
+        };
+        match account.ai_transcribe(&Transcribe { audio: audio.into(), mime: mime.into() }).await {
+            Ok(heard) => Ok(heard),
             Err(_) if !own_error.is_empty() => Err(Error::Account(own_error)),
             Err(err) => Err(err.into()),
         }

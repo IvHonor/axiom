@@ -33,7 +33,7 @@ export interface AreaContribution {
    * area is then listed as "Coming soon" and can't be installed. */
   View?: ComponentType;
   /** Compact tile for the overview. */
-  Summary?: ComponentType<{ onOpen: () => void }>;
+  Summary?: ComponentType<{ onOpen: () => void; /** Opens another area (by id). */ onOpenArea?: (id: string) => void }>;
   /** Summary manages its content within the tile's available space. */
   fittedSummary?: boolean;
   /** Optional overview title with area-specific controls. */

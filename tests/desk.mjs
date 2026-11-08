@@ -11,8 +11,8 @@
 // them up; shakes, chimes and notifies when a task's time is up (with 5
 // more min); asks how study and reading went when stopped, and logs it;
 // notices something about to start (Join for a meeting online); follows the
-// cursor with his eyes and looks straight at you when you deal with him or
-// he's timing; tucks into the screen's edge as a notch that peeks and shows
+// cursor with his eyes (timing or not) and looks straight at you when you
+// deal with him; tucks into the screen's edge as a notch that peeks and shows
 // the day's progress, popping out when wanted; says hello when tapped;
 // listens when double-clicked (or called with Ctrl+Alt+Space) and takes
 // typing on a middle-click, doing a small thing straight away with an Undo,
@@ -94,7 +94,7 @@ try {
 
   // Time's up: the face stops at 0:00 in red (no counting on past it), he
   // shakes, the system notifies, and his bubble offers Done, 5 more min and
-  // Stop. Still timing, he looks straight out, not after the cursor.
+  // Stop. Still timing, his eyes keep following the cursor.
   await open("?over&sound");
   await page.locator(".desk-ring.is-over").waitFor();
   await faceIs(/^0:00$/);
@@ -104,7 +104,7 @@ try {
   await page.screenshot({ path: ".qa.local/desk-times-up.png" });
   await page.evaluate(() => Object.assign(window.cursor, { x: 40, y: 30 }));
   await page.waitForTimeout(600);
-  assert.equal(await looking(), "you", "timing, he looks at you, not the cursor");
+  assert.equal(await looking(), "cursor", "timing, he still follows the cursor");
   await page.getByRole("button", { name: "5 more min" }).click();
   await faceIs(/^[23]:\d\d$/);
   assert.equal(await page.locator(".desk-ring.is-over").count(), 0, "counting down again");

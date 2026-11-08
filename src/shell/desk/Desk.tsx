@@ -493,8 +493,8 @@ export function Desk() {
   const runningFor = timed?.kind === "task" ? (timers.running?.timerStartedAt ? now - Date.parse(timers.running.timerStartedAt) : 0) : (timed?.minutes ?? 0) * 60_000;
   const flowing = focused && runningFor >= FLOW_MS;
   const briefing = useBriefing(prefs.nudges);
-  // While he's a timer, or being dealt with, he looks straight at you.
-  const { facing, gaze: following } = useLooking(hovered || holding || menu || typing || dragging || voice !== "idle" || !!timed, (what) => reactTo(what));
+  // While he's being dealt with, he looks straight at you; timing or not, he otherwise follows the cursor.
+  const { facing, gaze: following } = useLooking(hovered || holding || menu || typing || dragging || voice !== "idle", (what) => reactTo(what));
   const p = persona.personality;
 
   useEffect(() => {
@@ -1621,7 +1621,7 @@ export function Desk() {
   const progress = rest ? 1 - Math.max(0, rest.until - now) / (rest.minutes * 60_000) : timed?.estimate ? Math.min(1, timed.minutes / timed.estimate) : null;
   // No estimate: a short streak goes round once a minute.
   const turn = ((now / 1000) % 60) / 60;
-  const attentive = hovered || holding || menu || typing || dragging || voice !== "idle" || timed;
+  const attentive = hovered || holding || menu || typing || dragging || voice !== "idle";
   // The last minute: the halo and the time beat like a heart.
   const leftMs = rest ? rest.until - now : timed?.estimate && !timed.paused ? (timed.estimate - timed.minutes) * 60_000 : null;
   const final = leftMs !== null && leftMs > 0 && leftMs <= 60_000;
@@ -1831,7 +1831,7 @@ export function Desk() {
             )}
           </svg>
         )}
-        <Face mood={mood} size={size} level={level} facing={facing} gaze={gaze} display={null} quiet={focused} idlePreview={pet} />
+        <Face mood={mood} size={size} level={level} facing={facing} gaze={gaze} display={null} idlePreview={pet} />
         {burst && !tucked && <Burst key={burst.id} big={burst.big} scale={size / 130} onDone={() => setBurst(null)} />}
         {night && !tucked && (
           <span className="desk-zzz" aria-hidden="true">

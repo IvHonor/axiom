@@ -3,8 +3,8 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { lookForRole, type Look, type Holding } from "./look";
 
 /** All of Lemma's shapes and accessories are local geometry: no remote models. */
-export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Color, admin = false) {
-  const look = lookForRole(chosen, admin);
+export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Color, admin = false, firstLight = false) {
+  const look = lookForRole(chosen, admin, firstLight);
   const colourUpdates: ((next: Look, glow: THREE.Color) => void)[] = [];
   const root = new THREE.Group();
   const body = new THREE.Group();
@@ -290,6 +290,7 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
   const prop = new THREE.Group();
   held.add(prop);
   const sprout = new THREE.Group();
+  const bookCover = new THREE.Group();
   const page = new THREE.Group();
   const steam = new THREE.Group();
 
@@ -311,12 +312,20 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
         break;
       }
       case "book":
-        mesh(prop, box(0.39, 0.48, 0.16, 0.025), trim);
-        mesh(prop, box(0.33, 0.41, 0.165, 0.008), white, 0.035, 0, 0);
-        mesh(prop, box(0.39, 0.48, 0.025, 0.015), trim, 0, 0, 0.095);
-        mesh(prop, box(0.19, 0.02, 0.015), white, 0, 0.1, 0.115);
-        prop.add(page); page.position.set(-0.16, 0, 0.10);
-        mesh(page, box(0.31, 0.4, 0.008, 0.002), white, 0.155, 0, 0);
+        mesh(prop, box(0.39, 0.48, 0.025, 0.012), trim, 0, 0, -0.09);
+        mesh(prop, box(0.33, 0.41, 0.14, 0.008), white, 0.025, 0, -0.005);
+        mesh(prop, box(0.035, 0.48, 0.18, 0.012), trim, -0.18, 0, 0);
+        // Both the cover and the turning leaf hinge along the spine.
+        prop.add(bookCover); bookCover.position.set(-0.195, 0, 0.09);
+        mesh(bookCover, box(0.39, 0.48, 0.025, 0.012), trim, 0.195);
+        mesh(bookCover, box(0.19, 0.02, 0.008, 0.003), white, 0.195, 0.1, 0.017);
+        mesh(bookCover, box(0.33, 0.41, 0.012, 0.004), white, 0.215, 0, -0.024);
+        for (let i = 0; i < 3; i++) {
+          mesh(prop, box(0.22 - i * 0.025, 0.012, 0.004, 0.002), dark, 0.025, 0.1 - i * 0.075, 0.068);
+          mesh(bookCover, box(0.22 - i * 0.025, 0.012, 0.004, 0.002), dark, 0.215, 0.1 - i * 0.075, -0.033);
+        }
+        prop.add(page); page.position.set(-0.17, 0, 0.078);
+        mesh(page, box(0.325, 0.4, 0.008, 0.002), white, 0.1625, 0, 0);
         page.visible = false;
         break;
       case "plant": {
@@ -378,6 +387,8 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
     code = codeEffect();
     prop.add(code.core); root.add(code.rain, code.ghostEyes);
   }
+  const lantern = look.holding === "first-light" ? firstLightEffect() : null;
+  if (lantern) { prop.add(lantern.frame); body.add(lantern.star, lantern.sparks); }
   function itemTrim(group: THREE.Object3D, fallback: string, field?: "headwearColor" | "facewearColor" | "neckwearColor", sources = [trim]) {
     const replacements = new Map<THREE.Material, THREE.MeshStandardMaterial>();
     const bindings: { material: THREE.MeshStandardMaterial; base: THREE.Color; emissive: THREE.Color; intensity: number; autoIntensity: number }[] = [];
@@ -444,9 +455,45 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
       object.material.transparent = true;
     }
   });
-  return { root, body, eyes, face, facewear, neckwear, mouth, mouths, hat, hatOrigin: hat.position.clone(), held, heldOrigin: held.position.clone(), prop, work, base, pulse, motes, hologram, sprout, page, steam, drop, sneeze, code, bodyMaterials,
+  return { root, body, eyes, face, facewear, neckwear, mouth, mouths, hat, hatOrigin: hat.position.clone(), held, heldOrigin: held.position.clone(), prop, work, base, pulse, motes, hologram, sprout, bookCover, page, steam, drop, sneeze, code, lantern, bodyMaterials,
     updateColours(next: Look, glow: THREE.Color) { colourUpdates.forEach(update => update(next, glow)); },
   };
+}
+
+/** A brass lantern and a separate star, so its flight stays beside the companion's body. */
+function firstLightEffect() {
+  const frame = new THREE.Group(), star = new THREE.Group(), sparks = new THREE.Group();
+  const brass = new THREE.MeshStandardMaterial({ color: "#bd8846", metalness: 0.75, roughness: 0.3 });
+  const glass = new THREE.MeshPhysicalMaterial({ color: "#ffe6b3", transparent: true, opacity: 0.16, roughness: 0.12, side: THREE.DoubleSide, depthWrite: false });
+  const add = (parent: THREE.Group, geometry: THREE.BufferGeometry, material: THREE.Material, x = 0, y = 0, z = 0) => {
+    const part = new THREE.Mesh(geometry, material); part.position.set(x, y, z); parent.add(part); return part;
+  };
+  add(frame, new THREE.CylinderGeometry(0.22, 0.20, 0.07, 6), brass, 0, -0.25);
+  add(frame, new THREE.CylinderGeometry(0.20, 0.24, 0.08, 6), brass, 0, 0.23);
+  add(frame, new THREE.ConeGeometry(0.24, 0.12, 6), brass, 0, 0.32);
+  add(frame, new THREE.CylinderGeometry(0.185, 0.185, 0.43, 6, 1, true), glass, 0, -0.015);
+  for (let i = 0; i < 6; i++) {
+    const angle = i * Math.PI / 3;
+    add(frame, new THREE.CylinderGeometry(0.012, 0.012, 0.43, 8), brass, Math.sin(angle) * 0.19, -0.015, Math.cos(angle) * 0.19);
+  }
+  add(frame, new THREE.TorusGeometry(0.085, 0.015, 8, 24), brass, 0, 0.43);
+  const outline = new THREE.Shape(Array.from({ length: 10 }, (_, i) => {
+    const angle = i * Math.PI / 5 + Math.PI / 2, radius = i % 2 ? 0.065 : 0.145;
+    return new THREE.Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius);
+  }));
+  const geometry = new THREE.ExtrudeGeometry(outline, { depth: 0.04, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.012, bevelSegments: 2, steps: 1 });
+  geometry.translate(0, 0, -0.02);
+  const starMaterial = new THREE.MeshStandardMaterial({ color: "#ffe7a3", emissive: "#ffb52e", emissiveIntensity: 1.25, metalness: 0.25, roughness: 0.28 });
+  add(star, geometry, starMaterial);
+  const haloMaterial = new THREE.MeshBasicMaterial({ color: "#ffbc48", transparent: true, opacity: 0.10, blending: THREE.AdditiveBlending, depthWrite: false });
+  add(star, new THREE.SphereGeometry(0.19, 16, 12), haloMaterial);
+  const light = new THREE.PointLight("#ffbd54", 0.45, 2.4);
+  star.add(light);
+  const sparkMaterial = new THREE.MeshBasicMaterial({ color: "#ffcf70", transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+  const sparkGeometry = new THREE.OctahedronGeometry(0.018);
+  for (let i = 0; i < 14; i++) add(sparks, sparkGeometry, sparkMaterial);
+  sparks.visible = false;
+  return { frame, star, sparks, starMaterial, haloMaterial, sparkMaterial, light };
 }
 
 /** Animated glyphs share one locally drawn atlas; no fonts or assets are downloaded. */

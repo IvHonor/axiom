@@ -8,6 +8,7 @@ import { exportJournal } from "./exportJournal";
 import { CalendarPage, InsightsPage } from "./Pages";
 import { EntryList, Memories, newEntry } from "./parts";
 import { PAGES, setJournalUi, useDayEntries, useEntries, useJournalStats, useJournalUi, type JournalPage } from "./journalUi";
+import { PhoneBack } from "../../shell/ui/PhoneBack";
 
 const LABELS: Record<JournalPage, string> = { journal: "Journal", calendar: "Calendar", insights: "Insights" };
 
@@ -74,7 +75,7 @@ function JournalPageView({ prompts }: { prompts: { all: string[]; today: string 
   const { data: entries, error } = useEntries({ search: ui.search || null, tag: ui.tag });
 
   return (
-    <div className="jr-split">
+    <div className={`jr-split${ui.entry ? " has-entry" : ""}`}>
       <aside className="jr-timeline">
         <div className="jr-search">
           <Search size={14} strokeWidth={1.75} />
@@ -100,6 +101,7 @@ function JournalPageView({ prompts }: { prompts: { all: string[]; today: string 
         {entries && <EntryList entries={entries} open={ui.entry} empty={ui.search || ui.tag ? "Nothing matches." : "Your entries will appear here."} />}
       </aside>
       <main className="jr-main">
+        {ui.entry && <PhoneBack label="Journal" onBack={() => setJournalUi({ entry: null })} />}
         {ui.entry ? <EntryPage key={ui.entry} id={ui.entry} prompts={prompts.all} /> : <Today prompts={prompts} />}
       </main>
     </div>

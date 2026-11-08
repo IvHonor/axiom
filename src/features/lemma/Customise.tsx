@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Palette, RotateCcw, Circle, Box, Pyramid, Droplet, Headphones, CircleSlash, Crown, CircleEllipsis, GraduationCap, Ribbon, HatGlasses, Glasses, Trash2, Volume2, Square } from "lucide-react";
 import { Modal } from "../../shell/ui/Modal";
 import { Face, type Mood } from "./Face";
-import { ACCESSORIES, FINISHES, GLOWS, HOLDINGS, SHAPES, SHELLS, STANDARD, lookForRole, setLook, useLook, type Look } from "./look";
+import { ACCESSORIES, FINISHES, GLOWS, HOLDINGS, SHAPES, SHELLS, STANDARD, hasFirstLight, lookForRole, setLook, useLook, type Look } from "./look";
 import { DEFAULT_NAME, MAX_NAME, PERSONALITIES, nameOf, setPersona, usePersona } from "./persona";
 import { MAX_OUTFITS, setCompanionPrefs, useCompanionPrefs } from "./preferences";
 import { speak, stopSpeaking } from "../../lib/voice";
@@ -25,7 +25,8 @@ export function Customise({ onClose }: { onClose: () => void }) {
   const chosen = useLook();
   const [account] = useAccount();
   const admin = account?.state === "signed_in" && account.admin;
-  const look = useMemo(() => lookForRole(chosen, admin), [chosen, admin]);
+  const firstLight = hasFirstLight(account);
+  const look = useMemo(() => lookForRole(chosen, admin, firstLight), [chosen, admin, firstLight]);
   const context = useLemma();
   const [idlePreview, setIdlePreview] = useState(0);
   const [reduced, setReduced] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -58,6 +59,7 @@ export function Customise({ onClose }: { onClose: () => void }) {
   };
   const react = (next: Mood) => { window.clearTimeout(timer.current); setMood(next); timer.current = window.setTimeout(() => setMood("idle"), 2200); };
   const shape = SHAPES.find((s) => s.id === look.shape)!;
+  const holding = HOLDINGS.find((h) => h.id === look.holding)!;
   const shapeIcons = { orb: Circle, prism: Box, pyramid: Pyramid, drop: Droplet };
   const accessoryIcons = { none: CircleSlash, headphones: Headphones, halo: CircleEllipsis, cap: GraduationCap, beanie: HatGlasses, crown: Crown, bow: Ribbon };
 
@@ -72,7 +74,7 @@ export function Customise({ onClose }: { onClose: () => void }) {
           <div className="lemma-reaction-preview" aria-label="Preview automatic expressions">
             {(["idle", "thinking", "listening", "speaking"] as const).map(m => <button key={m} className="btn btn-sm btn-ghost" onClick={() => react(m)}>{m === "speaking" ? "Answering" : m[0].toUpperCase() + m.slice(1)}</button>)}
           </div>
-          <button className="btn btn-sm btn-ghost" disabled={!routineFor(look.holding, admin) || reduced || context.focused || prefs.movement === 0} title={reduced ? "Idle routines respect reduced motion" : context.focused ? "Idle routines pause during focus" : "Preview this item's idle routine"} onClick={() => { window.clearTimeout(timer.current); setMood("idle"); setIdlePreview(n => n + 1); }}>Preview item animation</button>
+          <button className="btn btn-sm btn-ghost" disabled={!routineFor(look.holding, admin, firstLight) || reduced || context.focused || prefs.movement === 0} title={reduced ? "Idle routines respect reduced motion" : context.focused ? "Idle routines pause during focus" : "Preview this item's idle routine"} onClick={() => { window.clearTimeout(timer.current); setMood("idle"); setIdlePreview(n => n + 1); }}>Preview item animation</button>
           <button className="btn btn-sm btn-ghost" onClick={() => change(STANDARD)} disabled={JSON.stringify(look) === JSON.stringify(STANDARD)}>
             <RotateCcw size={13} strokeWidth={1.75} /> Reset look
           </button>
@@ -153,18 +155,19 @@ export function Customise({ onClose }: { onClose: () => void }) {
           <Row title="Neckwear">{(["none", "bow"] as const).map(id => <Choice key={id} label={id === "none" ? "No neckwear" : "Bow tie"} on={look.neckwear === id} onPick={() => change({ neckwear: id })}><Ribbon size={20} /></Choice>)}</Row>
           {look.neckwear === "bow" && <ColourControl label="Bow tie colour" value={look.neckwearColor} fallback="#b83f55" onChange={neckwearColor => change({ neckwearColor })} />}
           <Row title="Holding">
-            {HOLDINGS.filter(h => !h.future && (!h.adminOnly || admin)).map(({ id, name, icon: Icon }) => (
+            {HOLDINGS.filter(h => !h.future && (!h.adminOnly || admin) && (!h.earlyOnly || firstLight)).map(({ id, name, icon: Icon }) => (
               <Choice key={id} on={look.holding === id} onPick={() => change({ holding: id })} label={name}>
                 <span className="lemma-holding">{Icon ? <Icon size={18} strokeWidth={1.75} /> : "–"}</span>
               </Choice>
             ))}
           </Row>
+          <p className="field-hint" role="status"><strong>{holding.name}</strong>: {holding.source}</p>
           </>}
           {tab === "Presence" && <>
             <Slider label="Companion size" value={prefs.size} min={120} max={240} step={10} text={`${prefs.size}px`} onChange={size => setCompanionPrefs({ size })} />
             <Slider label="Glow brightness" value={prefs.brightness} min={0.25} max={1.5} step={0.05} text={`${Math.round(prefs.brightness * 100)}%`} onChange={brightness => setCompanionPrefs({ brightness })} />
             <Slider label="Idle movement" value={prefs.movement} min={0} max={1.5} step={0.1} text={prefs.movement === 0 ? "Still" : `${Math.round(prefs.movement * 100)}%`} onChange={movement => setCompanionPrefs({ movement })} />
-            <label className="lemma-control">Companion position<select aria-label="Companion position" value={prefs.corner} onChange={e => setCompanionPrefs({ corner: e.currentTarget.value as typeof prefs.corner })}>{(["bottom-right", "bottom-left", "top-right", "top-left"] as const).map(c => <option key={c} value={c}>{c.replace("-", " ")}</option>)}</select></label>
+            <label className="lemma-control">Companion position<select aria-label="Companion position" value={prefs.spot ? "moved" : prefs.corner} onChange={e => { if (e.currentTarget.value !== "moved") setCompanionPrefs({ corner: e.currentTarget.value as typeof prefs.corner, spot: null }); }}>{prefs.spot && <option value="moved">where you moved it</option>}{(["bottom-right", "bottom-left", "top-right", "top-left"] as const).map(c => <option key={c} value={c}>{c.replace("-", " ")}</option>)}</select></label>
             <div className="lemma-follow-control"><span>Follow me between areas</span><Switch label="Follow me between areas" on={prefs.follow} onChange={follow => setCompanionPrefs({ follow })} /></div>
             <p className="field-hint">Size and position apply to the floating companion inside Axiom. Brightness and idle movement apply to every live Lemma. Your system's reduced-motion setting takes priority.</p>
           </>}
@@ -178,7 +181,7 @@ export function Customise({ onClose }: { onClose: () => void }) {
             }}><input className="field-input" aria-label="Outfit name" maxLength={32} placeholder="Study, Work, Gaming…" value={outfitName} onChange={e => setOutfitName(e.currentTarget.value)} /><button className="btn btn-sm" disabled={!outfitName.trim() || prefs.outfits.length >= MAX_OUTFITS}>Save outfit</button></form>
             <p className="field-hint">Save up to {MAX_OUTFITS} looks. Materials, accessories and colours are included.</p>
             {prefs.outfits.map(outfit => <div className="lemma-outfit" key={outfit.id}>
-              <button className="lemma-outfit-wear" aria-label={`Wear ${outfit.name}`} onClick={() => { change(lookForRole(outfit.look, admin)); setNotice(`${outfit.name} applied.`); }}><Face mood="idle" size={60} alive={false} look={outfit.look} /><span>{outfit.name}</span></button>
+              <button className="lemma-outfit-wear" aria-label={`Wear ${outfit.name}`} onClick={() => { change(lookForRole(outfit.look, admin, firstLight)); setNotice(`${outfit.name} applied.`); }}><Face mood="idle" size={60} alive={false} look={outfit.look} /><span>{outfit.name}</span></button>
               <button className="btn btn-sm btn-ghost" aria-label={`Update ${outfit.name}`} onClick={() => { setCompanionPrefs({ outfits: prefs.outfits.map(o => o.id === outfit.id ? { ...o, look: { ...look } } : o) }); setNotice(`${outfit.name} updated.`); }}>Update</button>
               <button className="icon-btn" aria-label={`Delete ${outfit.name}`} onClick={() => { setCompanionPrefs({ outfits: prefs.outfits.filter(o => o.id !== outfit.id) }); setNotice(`${outfit.name} deleted.`); }}><Trash2 size={14} /></button>
             </div>)}
@@ -186,7 +189,7 @@ export function Customise({ onClose }: { onClose: () => void }) {
             <p role="status" className="field-hint">{notice}</p>
           </>}
           </div>
-          <p className="field-hint">Saved as you choose. Leave the name empty for Lemma. While working, {name} swaps its keepsake for a little task tablet.</p>
+          <p className="field-hint">Saved as you choose. While working, {name} swaps its keepsake for a little task tablet.</p>
         </div>
       </div>
     </Modal>

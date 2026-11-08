@@ -21,11 +21,17 @@ const nullable = (check: (value: unknown) => boolean) => (value: unknown) => val
 const integer = (min: number, max: number) => (value: unknown) => Number.isInteger(value) && Number(value) >= min && Number(value) <= max;
 export const validDay = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 const timestamp = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value));
-const id = (value: unknown) => typeof value === "string" && /^[\w-]{1,64}$/.test(value);
+// Like the server's `is_record_id`: kind-named rows ("overview.tilePositions") hold dots.
+const id = (value: unknown) => typeof value === "string" && /^[\w.-]{1,64}$/.test(value);
 const common = { id, updated_at: timestamp, deleted_at: nullable(timestamp) };
 const finite = (value: unknown) => typeof value === "number" && Number.isFinite(value);
 const boolean = (value: unknown) => typeof value === "boolean";
 const color = (value: unknown) => typeof value === "string" && /^[\w#-]{1,32}$/.test(value);
+const oneOf = (...values: string[]) => (value: unknown) => typeof value === "string" && values.includes(value);
+const short = (value: unknown) => typeof value === "string" && value.length <= 500;
+const link = (value: unknown) => typeof value === "string" && value.length <= 4096;
+const json = (max: number) => (value: unknown) => { if (typeof value !== "string" || value.length > max) return false; try { JSON.parse(value); return true; } catch { return false; } };
+const COLORS = ["blue", "teal", "green", "amber", "orange", "red", "pink", "purple", "slate"];
 const jsonList = (check: (value: unknown) => boolean) => (value: unknown) => {
   try { const list: unknown = typeof value === "string" ? JSON.parse(value) : null; return Array.isArray(list) && list.length <= 500 && list.every(check); } catch { return false; }
 };
@@ -47,6 +53,21 @@ const schemas: Record<string, Record<string, (value: unknown) => boolean>> = {
   project_board_task_events: { ...common, task_id: id, kind: title, detail: text, created_at: timestamp },
   project_board_task_labels: { ...common, task_id: id, label_id: id },
   project_board_checklist_items: { ...common, task_id: id, text, done: boolean, position: finite },
+  // The profile: theme, Overview layout, extensions, Lemma's look… (src/lib/settings.ts).
+  profile_settings: { ...common, value: json(32 * 1024) },
+  notification_settings: { ...common, in_app: boolean, desktop: boolean, email: boolean },
+  reading_books: { ...common, title, authors: short, cover_url: nullable(link), work_key: nullable(short), edition_key: nullable(short), isbn: nullable(short), published_year: nullable(integer(-5000, 5000)), api_pages: nullable(integer(0, 1_000_000)), pages: nullable(integer(0, 1_000_000)), format: oneOf("print", "ebook", "audio"), unit: oneOf("pages", "percent", "minutes"), audio_minutes: nullable(integer(0, 1_000_000)), status: oneOf("want", "reading", "finished", "dnf"), progress: integer(0, 1_000_000), rating: nullable(integer(1, 10)), review: text, started_on: nullable(validDay), finished_on: nullable(validDay), position: finite, created_at: timestamp },
+  reading_sessions: { ...common, book_id: id, day: validDay, start_progress: integer(0, 1_000_000), end_progress: integer(0, 1_000_000), unit: oneOf("pages", "percent", "minutes"), pages: integer(-1_000_000, 1_000_000), minutes: integer(0, 1_000_000), created_at: timestamp },
+  reading_notes: { ...common, book_id: id, kind: oneOf("note", "quote", "bookmark"), page: nullable(integer(0, 1_000_000)), text, created_at: timestamp },
+  reading_reads: { ...common, book_id: id, started_on: nullable(validDay), finished_on: nullable(validDay), outcome: oneOf("finished", "dnf"), rating: nullable(integer(1, 10)), created_at: timestamp },
+  reading_goals: { ...common, year: integer(1900, 3000), books: integer(0, 100_000), created_at: timestamp },
+  uni_terms: { ...common, name: title, starts_on: validDay, weeks: integer(1, 60), created_at: timestamp },
+  uni_modules: { ...common, term_id: id, code: short, name: title, color: oneOf(...COLORS), credits: nullable(integer(0, 1000)), link: nullable(link), position: finite, created_at: timestamp },
+  uni_lectures: { ...common, module_id: id, title, kind: oneOf("lecture", "seminar", "lab", "tutorial"), week: nullable(integer(-10, 100)), day: nullable(validDay), topics: text, recorded: boolean, attended_on: nullable(validDay), caught_up_on: nullable(validDay), reviewed_on: nullable(validDay), confidence: nullable(integer(1, 3)), notes: text, position: finite, created_at: timestamp },
+  learning_skills: { ...common, name: title, icon: short, color: oneOf(...COLORS), why: text, archived: boolean, position: finite, created_at: timestamp },
+  learning_sources: { ...common, skill_id: id, kind: oneOf("book", "course", "video", "other"), title, author: short, link: nullable(link), cover_url: nullable(link), unit_name: short, finish_by: nullable(validDay), finished_on: nullable(validDay), notes: text, position: finite, created_at: timestamp },
+  learning_units: { ...common, source_id: id, title, level: integer(0, 10), minutes: nullable(integer(0, 100_000)), page: nullable(integer(0, 1_000_000)), done_on: nullable(validDay), review_stage: integer(0, 3), review_on: nullable(validDay), notes: text, position: finite, created_at: timestamp },
+  learning_sessions: { ...common, source_id: id, day: validDay, minutes: integer(0, 100_000), note: text, created_at: timestamp },
 };
 
 export const writableTable = (table: string) => Object.hasOwn(schemas, table);

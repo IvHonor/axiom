@@ -47,6 +47,7 @@ pub async fn sign_out_device(State(s): State<AppState>, auth: AuthUser, Path(id)
         let mut found: session::ActiveModel = found.into();
         found.revoked_at = Set(Some(Utc::now()));
         found.update(&s.db).await?;
+        s.cache.forget_user(&auth.user_id);
     }
     Ok(StatusCode::NO_CONTENT)
 }
@@ -74,6 +75,7 @@ pub async fn change_password(State(s): State<AppState>, auth: AuthUser, Json(bod
     active.update(&txn).await?;
     revoke_sessions(&txn, &auth.user_id, Some(&auth.session_id)).await?;
     txn.commit().await?;
+    s.cache.forget_user(&auth.user_id);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -95,17 +97,18 @@ pub async fn delete_account(State(s): State<AppState>, auth: AuthUser, Json(body
     session::Entity::delete_many().filter(session::Column::UserId.eq(&account.id)).exec(&txn).await?;
     ai_usage::Entity::delete_many().filter(ai_usage::Column::UserId.eq(&account.id)).exec(&txn).await?;
     web_update::Entity::delete_by_id(account.email.clone()).exec(&txn).await?;
+    let id = account.id.clone();
     account.delete(&txn).await?;
     txn.commit().await?;
+    s.cache.forget_user(&id);
+    s.cache.forget_spaces();
+    s.cache.forget_plan(&id);
     tracing::info!("Deleted an account and its data");
     Ok(StatusCode::NO_CONTENT)
 }
 
 async fn current_user(s: &AppState, auth: &AuthUser) -> Result<user::Model, ApiError> {
-    user::Entity::find_by_id(&auth.user_id)
-        .one(&s.db)
-        .await?
-        .ok_or_else(|| ApiError::unauthorized("You've been signed out. Sign in again to continue."))
+    crate::admin::account(s, &auth.user_id).await
 }
 
 pub async fn profile(State(s): State<AppState>, auth: AuthUser) -> Result<Json<Profile>, ApiError> {
@@ -126,6 +129,7 @@ pub async fn update_profile(State(s): State<AppState>, auth: AuthUser, Json(body
     active.display_name = Set(name);
     active.avatar = Set(body.avatar);
     let saved = active.update(&s.db).await?;
+    s.cache.forget_user(&auth.user_id);
     Ok(Json(Profile { display_name: saved.display_name, avatar: saved.avatar }))
 }
 
@@ -142,6 +146,7 @@ pub async fn set_encryption_key(State(s): State<AppState>, auth: AuthUser, Json(
     let mut active: user::ActiveModel = current_user(&s, &auth).await?.into();
     active.encryption_key = Set(body.wrapped);
     active.update(&s.db).await?;
+    s.cache.forget_user(&auth.user_id);
     Ok(StatusCode::NO_CONTENT)
 }
 

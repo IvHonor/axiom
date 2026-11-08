@@ -39,7 +39,21 @@ const nextConfig: NextConfig = {
   turbopack: { root: path.join(__dirname, ".."), resolveAlias: { react: "./node_modules/react", "react-dom": "./node_modules/react-dom", "lucide-react": "./node_modules/lucide-react" } },
   outputFileTracingRoot: path.join(__dirname, ".."),
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    return [
+      { source: "/(.*)", headers: securityHeaders },
+      // Axiom on the web: the page always fresh, its hashed files kept for good.
+      { source: "/terminal", headers: [{ key: "Cache-Control", value: "no-cache" }] },
+      { source: "/app/index.html", headers: [{ key: "Cache-Control", value: "no-cache" }] },
+      { source: "/app/assets/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      // Installable as an app: the service worker always fresh (or updates stall), the manifest typed.
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache" }, { key: "Service-Worker-Allowed", value: "/" }] },
+      { source: "/manifest.webmanifest", headers: [{ key: "Content-Type", value: "application/manifest+json" }, { key: "Cache-Control", value: "public, max-age=3600" }] },
+    ];
+  },
+  // Axiom on the web is the desktop app's own frontend, built by
+  // `npm run build:web` (repository root) into public/app.
+  async rewrites() {
+    return { beforeFiles: [{ source: "/terminal", destination: "/app/index.html" }], afterFiles: [], fallback: [] };
   },
 };
 

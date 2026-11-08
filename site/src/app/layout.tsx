@@ -16,7 +16,11 @@ export const metadata: Metadata = {
   title: { default: "Axiom — Your life. Back in command.", template: "%s · Axiom" },
   description,
   openGraph: { title: "Axiom — Your life. Back in command.", description, siteName: "Axiom", type: "website", images: [{ url: "/social-card.png", width: 1200, height: 630, alt: "Axiom — Your life. Back in command." }] },
-  icons: { icon: "/mark.svg" },
+  icons: { icon: "/mark.svg", apple: "/icons/apple-touch-icon.png" },
+  // Axiom installs from the browser as an app (public/manifest.webmanifest): on a phone's
+  // home screen, or in a desktop browser's "Install app".
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Axiom", statusBarStyle: "black" },
 };
 
 export const viewport: Viewport = {

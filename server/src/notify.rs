@@ -4,7 +4,9 @@
 //!
 //! A free host sleeps when idle, so a scheduled request (see
 //! `.github/workflows/wake-server.yml`) wakes it every hour; `run` then sends
-//! whatever has come due.
+//! whatever has come due. Between emails it sleeps until the next one is due
+//! rather than asking the database every minute, so the database can sleep
+//! too (Neon counts every minute it's awake).
 
 use std::collections::HashSet;
 use std::time::Duration;
@@ -32,7 +34,10 @@ const STALE_HOURS: i64 = 6;
 /// However many notifications are on, nobody gets more than this a day.
 const MAX_PER_DAY: u64 = 12;
 const MAX_DIGEST_BYTES: usize = 32 * 1024;
-const TICK: Duration = Duration::from_secs(60);
+/// The longest the sender sleeps without looking again (a backstop).
+const LONGEST_SLEEP: Duration = Duration::from_secs(6 * 60 * 60);
+/// After an email couldn't be sent, when it tries again.
+const RETRY: Duration = Duration::from_secs(5 * 60);
 
 /// Replaces the emails planned for this account. Ones already sent stay sent.
 pub async fn plan(State(s): State<AppState>, auth: AuthUser, Json(body): Json<PlanEmails>) -> Result<Json<PlanResult>, ApiError> {
@@ -53,6 +58,13 @@ pub async fn plan(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Pl
         if email.send_at < now - chrono::Duration::hours(STALE_HOURS) || email.send_at > now + chrono::Duration::days(PLAN_DAYS) {
             return Err(ApiError::bad_request("Plan emails for the next two weeks only."));
         }
+    }
+
+    // Apps send their plan again every so often: the same plan changes
+    // nothing, so it's answered without touching the database.
+    let fingerprint = serde_json::to_string(&body).map_err(ApiError::internal)?;
+    if let Some(unsubscribed) = s.cache.known_plan(&auth.user_id, &fingerprint) {
+        return Ok(Json(PlanResult { unsubscribed }));
     }
 
     let txn = s.db.begin().await?;
@@ -111,8 +123,11 @@ pub async fn plan(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Pl
         .await?
         .into_iter()
         .map(|o| Unsubscribed { kind: o.kind, at: o.at })
-        .collect();
+        .collect::<Vec<_>>();
     txn.commit().await?;
+    s.cache.keep_plan(&auth.user_id, &fingerprint, &unsubscribed);
+    // The sender works out when it next has something to send.
+    s.email_wake.notify_one();
     Ok(Json(PlanResult { unsubscribed }))
 }
 
@@ -163,6 +178,8 @@ async fn unsubscribe(s: &AppState, token: &str) -> Result<String, String> {
         .exec(&s.db)
         .await
         .map_err(failed)?;
+    // The app's next plan must hear about it.
+    s.cache.forget_plan(&user_id);
     tracing::info!("Someone unsubscribed from {kind} emails");
     Ok(kind)
 }
@@ -191,18 +208,60 @@ fn page(title: &str, message: &str) -> String {
     )
 }
 
-/// Sends what's due, every minute while the server is awake.
+/// Sends what's due, then sleeps until the next email is due (or a plan
+/// changes), while the server is awake.
 pub async fn run(s: AppState) {
-    let mut every = tokio::time::interval(TICK);
-    // After a pause (a computer asleep), one run, not one for every tick missed.
-    every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
-        every.tick().await;
         match send_due(&s).await {
             Ok(0) => {}
             Ok(n) => tracing::info!("Sent {n} notification email{}", if n == 1 { "" } else { "s" }),
             Err(e) => tracing::error!("Couldn't send notification emails: {e}"),
         }
+        let wait = match next_due(&s).await {
+            Ok(next) => sleep_for(next, Utc::now()),
+            Err(e) => {
+                tracing::error!("Couldn't check when the next email is due: {e}");
+                RETRY
+            }
+        };
+        tokio::select! {
+            _ = tokio::time::sleep(wait) => {}
+            _ = s.email_wake.notified() => {}
+        }
+    }
+}
+
+/// When the next unsent email is due, if any.
+async fn next_due(s: &AppState) -> Result<Option<chrono::DateTime<Utc>>, DbErr> {
+    Ok(planned_email::Entity::find()
+        .filter(planned_email::Column::SentAt.is_null())
+        .order_by_asc(planned_email::Column::SendAt)
+        .one(&s.db)
+        .await?
+        .map(|email| email.send_at))
+}
+
+/// How long to sleep before the email due at `next`. One already due (it just
+/// failed to send) waits `RETRY`, so a failing mail service isn't hammered.
+fn sleep_for(next: Option<chrono::DateTime<Utc>>, now: chrono::DateTime<Utc>) -> Duration {
+    match next {
+        Some(at) if at > now => (at - now).to_std().unwrap_or(RETRY).min(LONGEST_SLEEP),
+        Some(_) => RETRY,
+        None => LONGEST_SLEEP,
+    }
+}
+
+#[cfg(test)]
+mod sleep_tests {
+    use super::*;
+
+    #[test]
+    fn sleeps_until_the_next_email_but_retries_a_failed_one_later() {
+        let now = Utc::now();
+        assert_eq!(sleep_for(Some(now + chrono::Duration::minutes(10)), now), Duration::from_secs(600));
+        assert_eq!(sleep_for(Some(now - chrono::Duration::minutes(1)), now), RETRY);
+        assert_eq!(sleep_for(Some(now + chrono::Duration::days(3)), now), LONGEST_SLEEP);
+        assert_eq!(sleep_for(None, now), LONGEST_SLEEP);
     }
 }
 

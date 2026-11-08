@@ -57,14 +57,24 @@ struct SignedIn {
 pub enum AccountStatus {
     SignedOut,
     /// `admin`: runs the server's waiting list.
-    SignedIn { email: String, admin: bool },
+    SignedIn {
+        email: String,
+        admin: bool,
+        #[serde(rename = "createdAt")]
+        created_at: DateTime<Utc>,
+    },
 }
 
 /// What signing up or in did. Mirrored by `SignInOutcome` in `src/lib/account.ts`.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum SignInOutcome {
-    SignedIn { email: String, admin: bool },
+    SignedIn {
+        email: String,
+        admin: bool,
+        #[serde(rename = "createdAt")]
+        created_at: DateTime<Utc>,
+    },
     /// The account waits for an admin's approval; nothing is saved here.
     Waitlisted { email: String },
     /// A code was emailed to the address: `confirm_email` with it.
@@ -115,7 +125,7 @@ impl Account {
             SignUp::Pending(Pending { email, confirm_email: true }) => Ok(SignInOutcome::ConfirmEmail { email }),
             SignUp::Pending(Pending { email, .. }) => Ok(SignInOutcome::Waitlisted { email }),
             SignUp::Session(session) => match self.start(session).await? {
-                AccountStatus::SignedIn { email, admin } => Ok(SignInOutcome::SignedIn { email, admin }),
+                AccountStatus::SignedIn { email, admin, created_at } => Ok(SignInOutcome::SignedIn { email, admin, created_at }),
                 AccountStatus::SignedOut => unreachable!("start always signs in"),
             },
         }
@@ -525,7 +535,9 @@ impl Account {
 
 fn status_of(state: &Option<SignedIn>) -> AccountStatus {
     match state {
-        Some(signed_in) => AccountStatus::SignedIn { email: signed_in.saved.user.email.clone(), admin: signed_in.saved.user.admin },
+        Some(signed_in) => AccountStatus::SignedIn {
+            email: signed_in.saved.user.email.clone(), admin: signed_in.saved.user.admin, created_at: signed_in.saved.user.created_at,
+        },
         None => AccountStatus::SignedOut,
     }
 }

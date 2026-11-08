@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, HardDriveDownload, KeyRound, Lock, LockKeyhole, LogOut, MonitorSmartphone, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Bell, Download, HardDriveDownload, KeyRound, Lock, LockKeyhole, LogOut, MonitorSmartphone, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
 import { signOut, type AccountStatus } from "../lib/account";
 import { getAutoSync, linkData, setAutoSync, syncNow, type LinkChoice, type SyncStatus } from "../lib/sync";
 import { AppLockSettings } from "./account/AppLockSettings";
@@ -19,6 +19,8 @@ import { Modal } from "./ui/Modal";
 import { Logo } from "./ui/Logo";
 import { Switch } from "./ui/Switch";
 import { useNow } from "./useSync";
+import { InstallCard } from "./InstallApp";
+import { isWeb } from "../lib/platform";
 
 interface AccountPanelProps {
   status: AccountStatus | null;
@@ -144,6 +146,12 @@ function SignedIn({ email, admin, sync, onChange, extensions }: { email: string;
       <Card icon={MonitorSmartphone} title="Devices">
         <DeviceList />
       </Card>
+
+      {isWeb && (
+        <Card icon={Download} title="App">
+          <InstallCard />
+        </Card>
+      )}
 
       <Card icon={KeyRound} title="Password">
         <ChangePassword />

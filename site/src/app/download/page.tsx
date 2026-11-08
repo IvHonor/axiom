@@ -14,7 +14,7 @@ export default function DownloadPage() {
     <article className="page wrap">
       <h1>Download Axiom</h1>
       <p className="page-lede muted">
-        Free for Windows and macOS.{" "}
+        Free for Windows and macOS. Or skip the download: <Link href="/web">open Axiom in your browser</Link>, and install it on your phone or computer from there.{" "}
         <Suspense fallback={null}>
           <ReleaseLine />
         </Suspense>
@@ -73,7 +73,7 @@ export default function DownloadPage() {
           Axiom is open source: you can <a href={`${REPO_URL}#run-locally`}>build it yourself</a>, including on Linux.
         </li>
         <li>
-          <Link href="/web">Axiom on the web</Link> is coming soon for anyone with an account.
+          <Link href="/web">Axiom on the web</Link>: the same workspace in any browser for anyone with an account. Install it from the browser on your phone (Add to Home Screen) or computer (Install in Chrome or Edge), with no app store, and it works offline.
         </li>
       </ul>
     </article>

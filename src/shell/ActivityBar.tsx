@@ -1,7 +1,7 @@
 import { Blocks, ChartColumn, CircleUserRound, EyeOff, Layers, Palette, ShieldCheck, type LucideIcon } from "lucide-react";
-import { useState } from "react";
-import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useRef, useState } from "react";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, horizontalListSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { usePersistentState } from "./usePersistentState";
 import { AreaContextMenu } from "./ui/AreaContextMenu";
@@ -10,6 +10,8 @@ import type { ExtensionManifest } from "../extensions/types";
 import { Avatar } from "./ui/Avatar";
 import { ExtensionIcon } from "./ui/ExtensionIcon";
 import { useProfile } from "./useProfile";
+import { usePhone } from "./usePhone";
+import { useReorderSensors } from "./ui/reorderSensors";
 import { shortcut } from "../lib/shortcut";
 import type { Badge } from "./sidebar/useBadges";
 
@@ -58,10 +60,11 @@ export function ActivityBar({ active, areas, onToggle, onPeek, badges = {}, acco
   const [menu, setMenu] = useState<{ item: Item; at: MenuPosition } | null>(null);
   const [order, setOrder] = usePersistentState<string[]>("axiom.activityOrder.v1", saved =>
     Array.isArray(saved) ? [...new Set(saved.filter((id): id is string => typeof id === "string" && id.startsWith("area:")))] : []);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = useReorderSensors({ coordinateGetter: sortableKeyboardCoordinates });
+  // On a phone the bar runs along the bottom: icons move sideways, not up and down.
+  const phone = usePhone();
+  /** An icon is being moved: a touch's long press mustn't also open its menu. */
+  const moving = useRef(false);
   const movable = (item: Item) => !!item.extension && !item.extension.required;
   const fullOrder = [...order, ...areas.filter(item => movable(item) && !order.includes(item.id)).map(item => item.id)];
   const sorted = areas.filter(movable).sort((a, b) => fullOrder.indexOf(a.id) - fullOrder.indexOf(b.id));
@@ -87,7 +90,7 @@ export function ActivityBar({ active, areas, onToggle, onPeek, badges = {}, acco
         ref={sortable?.setNodeRef}
         {...sortable?.attributes}
         {...sortable?.listeners}
-        style={sortable ? { transform: CSS.Transform.toString(sortable.transform ? { ...sortable.transform, x: 0 } : null), transition: sortable.transition } : undefined}
+        style={sortable ? { transform: CSS.Transform.toString(sortable.transform ? (phone ? { ...sortable.transform, y: 0 } : { ...sortable.transform, x: 0 }) : null), transition: sortable.transition } : undefined}
         className={`activity${id === active ? " is-active" : ""}${sortable ? " activity-sortable" : ""}${sortable?.isDragging ? " is-dragging" : ""}`}
         onClick={() => onToggle(id)}
         onPointerEnter={onPeek && id !== "account" && id !== "themes" ? () => onPeek(id) : undefined}
@@ -97,6 +100,7 @@ export function ActivityBar({ active, areas, onToggle, onPeek, badges = {}, acco
         aria-pressed={id === active}
         onContextMenu={extension && onVisibilityChange ? (event) => {
           event.preventDefault();
+          if (moving.current) return;
           setMenu({ item: { id, label, icon: Icon, extension }, at: { x: event.clientX, y: event.clientY } });
         } : undefined}
       >
@@ -133,8 +137,11 @@ export function ActivityBar({ active, areas, onToggle, onPeek, badges = {}, acco
         </button>
       )}
       {areas.length > 0 && <div className="activitybar-divider" />}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext items={sorted.map(item => item.id)} strategy={verticalListSortingStrategy}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter}
+        onDragStart={() => { moving.current = true; }}
+        onDragCancel={() => { moving.current = false; }}
+        onDragEnd={(event) => { moving.current = false; onDragEnd(event); }}>
+        <SortableContext items={sorted.map(item => item.id)} strategy={phone ? horizontalListSortingStrategy : verticalListSortingStrategy}>
           {ordered.map(item => movable(item)
             ? <SortableActivity key={item.id} item={item} render={button} />
             : button(item))}

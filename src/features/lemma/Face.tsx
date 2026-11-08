@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
-import { HOLDINGS, lookColors, lookForRole, useLook, type Look } from "./look";
+import { HOLDINGS, hasFirstLight, lookColors, lookForRole, useLook, type Look } from "./look";
 import { useAccount } from "../../shell/useAccount";
 import { useLemma, type LemmaState } from "./state";
 import type { createCompanionScene, SceneState } from "./scene";
@@ -53,11 +53,12 @@ export function Face({ mood, size = 120, level = 0, tool, alive = true, look: gi
   const compact = size < 90;
   const [account] = useAccount();
   const admin = account?.state === "signed_in" && account.admin;
-  const look = useMemo(() => lookForRole(given ?? chosen, admin), [given, chosen, admin]);
+  const firstLight = hasFirstLight(account);
+  const look = useMemo(() => lookForRole(given ?? chosen, admin, firstLight), [given, chosen, admin, firstLight]);
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<ReturnType<typeof createCompanionScene> | null>(null);
-  const latest = useRef<SceneState>({ look, mood, level, working: !!tool, facing, gaze, display, brightness, movement, personality: persona.personality, focused, compact, admin });
-  latest.current = { look, mood, level, working: !!tool, facing, gaze, display, brightness, movement, personality: persona.personality, focused, compact, admin };
+  const latest = useRef<SceneState>({ look, mood, level, working: !!tool, facing, gaze, display, brightness, movement, personality: persona.personality, focused, compact, admin, firstLight });
+  latest.current = { look, mood, level, working: !!tool, facing, gaze, display, brightness, movement, personality: persona.personality, focused, compact, admin, firstLight };
   const [ready, setReady] = useState(false);
   const [greeted, setGreeted] = useState(false);
   const timer = useRef(0);
@@ -75,7 +76,7 @@ export function Face({ mood, size = 120, level = 0, tool, alive = true, look: gi
     }).catch(() => { if (!cancelled) setReady(false); });
     return () => { cancelled = true; scene.current?.dispose(); scene.current = null; };
   }, [alive]);
-  useEffect(() => { scene.current?.update(latest.current); }, [look, mood, level, !!tool, facing?.x, facing?.y, gaze?.x, gaze?.y, display?.text, display?.color, brightness, movement, persona.personality, focused, compact, admin]);
+  useEffect(() => { scene.current?.update(latest.current); }, [look, mood, level, !!tool, facing?.x, facing?.y, gaze?.x, gaze?.y, display?.text, display?.color, brightness, movement, persona.personality, focused, compact, admin, firstLight]);
   const previewed = useRef(0);
   useEffect(() => {
     if (ready && idlePreview > 0 && previewed.current !== idlePreview) { previewed.current = idlePreview; scene.current?.previewIdle(); }

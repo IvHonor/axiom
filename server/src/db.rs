@@ -62,6 +62,9 @@ pub async fn connect(url: &str) -> Result<DatabaseConnection, DbErr> {
         options.max_connections(1);
     } else {
         options.max_connections(10);
+        // Close idle connections before Neon suspends the database (after 5
+        // quiet minutes), rather than holding ones it has already cut.
+        options.idle_timeout(std::time::Duration::from_secs(4 * 60));
     }
     let db = Database::connect(options).await?;
     Migrator::up(&db, None).await?;

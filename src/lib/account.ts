@@ -3,7 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 /** Mirrors `AccountStatus` in src-tauri/src/account/mod.rs. `admin`: runs the server's waiting list. */
-export type AccountStatus = { state: "signed_out" } | { state: "signed_in"; email: string; admin: boolean };
+export type AccountStatus = { state: "signed_out" } | { state: "signed_in"; email: string; admin: boolean; createdAt: string | null };
 
 /**
  * Mirrors `SignInOutcome`: signed in, waiting for an admin to approve the account,

@@ -1,187 +1,139 @@
-# Web terminal implementation
+# Axiom on the web
 
-The target is desktop feature parity. This is the first stage, not a claim that
-all ten areas already work in the browser.
+Axiom on the web is **the desktop app's own frontend**, not a copy of it. The
+same `src/` is built a second time with `vite --mode web`. Every
+`@tauri-apps/*` import is swapped for a small browser stand-in, so the shell,
+tabs, sidebars, overview tiles, Analytics, dialogs, all 20 themes, extensions,
+settings and Lemma's 3D look are the desktop components themselves. A feature
+added to the desktop UI appears on the web without extra work, as long as its
+commands have web handlers (see below).
 
-## Run and inspect
+## How it fits together
 
-From `site`, run `npm run dev`, then open `http://localhost:3000/terminal`.
-Use an existing approved Axiom account. The site uses its existing
-`AXIOM_API_URL` and `AXIOM_WEB_PROXY_SECRET` settings. No new credentials or
-database are needed. The account overview and signed-in `/web` preview both
-link to the terminal.
+```
+src/                      the app (desktop and web)
+src/web/main.tsx          web entry: phone layout + runtime, then <App />
+src/web/tauri/*           stand-ins for @tauri-apps/api/{core,event,window} and plugins
+src/web/runtime.ts        what Rust is to the desktop: account, IndexedDB copy, sync loop, events
+src/web/commands/*.ts     a web handler for every desktop command (invoke("plan_get_day") …)
+src/styles/mobile.css     phone layout, loaded only by the web entry
+site/src/lib/terminal/*   shared rules and storage (protocol/validation, IndexedDB, planner, board)
+site/src/app/api/terminal/*  same-origin routes: session, sync, account, books, calendar-feed
+```
 
-The terminal uses real account sync. Editing a synced Daily Plan task here also
-changes it on desktop after that app syncs. It does not read the desktop's local
-database. The web terminal does not yet unlock the desktop's encrypted calendar
-connection records; calendar sign-in credentials remain local to each device.
+- `invoke(command, args)` runs `src/web/commands` instead of Rust. A handler
+  reads and writes the account's rows in **the desktop's wire format**
+  (snake_case columns, soft deletes, per-field timestamps), queues them in
+  IndexedDB and syncs through `/api/terminal/sync`. An edit made on the web
+  lands on the desktop exactly as one made there, and the other way round.
+- The runtime emits the events Rust would (`data-changed`, `sync-status`,
+  `account-changed`), so views reload when another device's changes arrive.
+- **Settings sync.** Theme, Overview layout and tile sizes, hidden areas,
+  sidebar order, extensions, each area's view options, and Lemma's look and
+  personality are `profile_settings` rows (`src/lib/settings.ts`). The web
+  reads and writes the same rows, so picking a theme on the web changes it on
+  the desktop.
+- Sign-in stays in the website's httpOnly cookies. The page never sees a
+  token, and every `/api/terminal/*` route checks the session and the request's
+  origin. The account route only forwards an explicit list of server calls.
+- `/terminal` is rewritten to `site/public/app/index.html`
+  (`site/next.config.ts`). The site's `prebuild` runs the web build, so a
+  normal site build or deploy includes it.
 
-## Foundation delivered
+## Phones
 
-- [x] Authenticated, full-screen `/terminal` route; existing website keeps its frame.
-- [x] Activity rail, area sidebar/search, tabs, close/restore, overview and mobile layout.
-- [x] Modern Dark, Modern Light and Ember; account-scoped appearance/navigation preferences.
-- [x] Sidebar shortcut and theme chord; keyboard-accessible controls and native dialogs.
-- [x] Scrollbar-free tab strip with wheel/trackpad scrolling and active-tab visibility.
-- [x] Existing httpOnly session; tokens are never passed to terminal client components.
-- [x] Same-origin, authenticated, account-bound sync proxy with a bounded JSON body.
-- [x] Desktop wire format: snake_case columns, field changes, timestamps and soft deletes.
-- [x] Per-account IndexedDB cache and durable outbox; server pagination and cursor.
-- [x] Original timestamps retained on retries; edits made during sync remain queued.
-- [x] Cross-tab sync locking where Web Locks are available and cache refresh via BroadcastChannel.
-- [x] Reconnect, foreground and minute-by-minute sync; visible errors and manual retry.
-- [x] Encrypted tables refuse web writes and are excluded from the browser cache.
+`src/styles/mobile.css` (loaded only by the web entry) rearranges the app
+below 760px:
 
-## Porting sequence and remaining parity
+- **Shell:** the activity bar becomes a bottom bar, the sidebar slides over
+  the screen and closes when you pick something (`usePhone`, `App.tsx`),
+  menus open as bottom sheets, dialogs rise from the bottom, and the page
+  never pans sideways (wide things scroll in their own box).
+- **Areas:** each area has a section, scoped `[data-platform="web"]` so it
+  beats the area's own stylesheet. Headers put actions on one row and tabs
+  on a scrolling row; Daily Plan stacks the day and runs the week one day
+  under another; Notes, Journal, Goals and Birthdays show the list or the open
+  item, with `PhoneBack` to return; Reading, Learning, Finance and Lemma
+  reflow to one column.
+- Encrypted areas could only be checked empty; look again with data once
+  browser encryption lands.
 
-1. **Daily Plan — planner tools implemented; provider integration remains.**
-   The planner and its sidebar now render the actual desktop React components,
-   using the same theme tokens and scoped copies of the original CSS. Day, week,
-   month, year, insights, focus, rituals, menus and dialogs therefore share their
-   presentation with Windows/macOS. The web command adapter supplies the native
-   UI contract from the account's IndexedDB/outbox; desktop still uses Tauri.
-   Task CRUD/completion, estimates, deadlines, top-three priorities, desktop-style
-   quick-add, exclusive focus timers, inbox/earlier/day/week/month/year views,
-   due-soon reminders and individual/batch carry-over are working. The day/week
-   timeline supports drawing blocks, moving/resizing with pointer or keyboard,
-   cross-day moves, task drops, overlap lanes, exact-time editing and full-day
-   hours. Settings, buffer/capacity, fit-into-day and replan use imported busy time.
-   Routines appear automatically on opening a day; future range views preview
-   occurrences without writing a year of blocks. Desktop IDs and tombstones
-   preserve skipped occurrences; edits affect future blocks while preserving
-   history. Guided morning and shutdown flows, intentions/reflections, markers,
-   streaks, pace, priority completion, eight-week focus and fourteen-day completion
-   history are implemented. Personal board suggestions and linked completion
-   preserve column changes, history, recurring copies, labels and checklists.
-   The overview offers glance, now/next, agenda, checklist, priorities, progress,
-   strip, fitted timeline, split, week and month views with remembered options.
-   Remaining: direct Google/Outlook/CalDAV account sign-in, editing provider
-   events, automatic publishing and shared-board links. These require a hosted
-   credential service and the role-checked spaces protocol respectively. Do not
-   put provider credentials into the browser cache or personal-sync plaintext.
-2. **Project Board — personal boards implemented.** Project create/rename/color/
-   delete, default/custom columns, column ordering, completion flags and WIP
-   warnings; card CRUD, descriptions, priorities, dates, hour estimates, recurrence,
-   native drag-and-drop ordering/moves and keyboard-accessible move controls;
-   one-level subtasks, editable checklists and checklist-to-subtask conversion;
-   project-scoped labels and filters; templates with labels and fresh checklists;
-   archive/restore, project/card activity, eight-week throughput, thirty-day progress,
-   cycle time and workflow load. Board/table/timeline/archive views and a project
-   portfolio are live. Cards can be linked to today's Daily Plan; board and planner
-   moves share completion/history/recurrence rules. UUIDv7 IDs preserve desktop
-   history ordering. Deletion removes dependent records, promotes deleted parents'
-   subtasks and leaves other projects intact. An overview card shows personal
-   projects and upcoming deadlines. Remaining: shared boards/invites/roles and
-   the desktop's richer fitted overview variants. Shared records must use the
-   spaces protocol, not the personal sync endpoint.
-3. **Reading.** Library/search, editions/covers, shelves, progress and sessions,
-   audio/ebook support, notes/quotes, ratings and annual goals.
-4. **University.** Terms/modules, timetable generation, attendance, catch-up,
-   review and every overview view.
-5. **Learning.** Skills/sources, EPUB/PDF/playlist imports, chapter progress,
-   study timers, spaced review and overview views.
-6. **Browser encryption.** Match the desktop Argon2id and XChaCha20-Poly1305
-   wrapping and field format exactly. Verify interoperability using desktop
-   vectors, authenticated field paths, tamper tests and recovery. Keep unlocked
-   keys in memory; implement lock/unlock and explicit cache retention before
-   opening private areas. Bump the cache version and pull from cursor zero when
-   adding previously excluded tables.
-7. **Finance.** Accounts, transactions/categories, budgets, recurrence, imports,
-   currencies/rates, reports and all overview views.
-8. **Notes.** Reuse the rich-text editor and Yjs document format, folders/tags,
-   backlinks, sticky notes and export. Do not replace collaborative documents
-   with whole-text last-write-wins records.
-9. **Journal.** Same editor/document interoperability, entries/prompts,
-   moods/energy/tags, calendar, streaks/memories, insights and export.
-10. **Goals and Birthdays.** Full CRUD and domain behavior, cross-area progress,
-    milestones/check-ins/plans; contacts/imports, gifts and reminders.
-11. **Shell parity.** All theme packs/fonts, install/enable/hide extensions,
-    overview tile movement/resizing and fitted views, profile, notifications,
-    PIN/idle lock, data export, admin tools and browser-specific file handling.
-12. **Release readiness.** Actual desktop-to-browser-to-desktop tests, concurrent
-    edits and migration fixtures, Safari/Firefox/Chromium, accessibility, account
-    switching/logout and cache policy, load/performance and production deployment.
+**Lemma's companion** can be dragged anywhere (the pill anywhere, the card by
+its frame or grip; arrow keys too) on the desktop and the web. Where it is
+lives in `lemma.preferences.spot` as shares of the free space, so it syncs and
+fits any window size. On a phone it stays a pill, and tapping it opens Lemma.
 
-Only enable a feature after its domain side effects and wire compatibility are
-implemented. Add its tables to the proxy's explicit validators and browser
-cache allowlist together. Keep desktop-only capabilities out of working web
-controls until their replacement is implemented.
+## Run it
 
-## Web calendars
+```sh
+npm ci && (cd site && npm ci)        # both sets of dependencies
+npm run build:web                    # → site/public/app (gitignored)
+cd site && npm run dev               # website on :3000; open /terminal after signing in
+```
 
-Use Daily Plan → Planner settings → Calendars → Import / export calendar files
-to import an `.ics` file or subscribe to an HTTPS/
-`webcal` iCalendar link. Links refresh every fifteen minutes while the terminal
-is open; Refresh retries immediately. Offline/failed refreshes keep the last
-successful snapshot. Show/hide and removal affect scheduling, capacity and all
-calendar views. Export a date range (up to one year) as `.ics`, including routine
-previews. Imports support repeats, exceptions, cancellations, overnight/all-day
-events and time zones. Events from files/feeds are read-only. Axiom's exported
-blocks carry the desktop marker so reimporting does not count them as meetings.
+To work on the app with hot reload, run `npm run dev:web` (Vite on :1430;
+`/api` goes on to the website on :3000) and open
+`http://localhost:1430/app/`. Sign in on `localhost:3000` first: the cookie
+is shared across ports. **Demo mode:** `http://localhost:1430/app/?demo`
+(development only) opens without an account and keeps everything in the
+browser, which is handy for UI work and browser tests.
 
-The parser is `ical.js`; missing IANA time-zone definitions use the browser's
-Intl data. Imports are capped at 200 KB, 2,500 source events, 5,000 occurrences
-per view and 30,000 expansion steps; sub-daily recurrence is rejected. The feed
-proxy only uses public IPv4 HTTPS endpoints on port 443, pins DNS results and
-rechecks redirects. It forwards no Axiom credentials. IPv6-only feeds are not
-supported. Files split into bounded `web_plan_calendar_chunks`; parent
-`web_plan_calendars` records select a complete revision. Both are web-only tables
-ignored by current desktop clients. Contents and private links in these web-only tables sync without
-end-to-end encryption, as the UI and both privacy notices explain. Existing
-desktop encrypted calendar connection records are not unlocked by this web
-implementation, and desktop-fetched events do not appear automatically.
+`next start` reads `public/` when it starts: restart it after rebuilding the
+web app.
 
-The browser cache is now version 5. Upgrading resets the pull cursor to include
-newly supported tables and retains the outbox. A save coalesces repeated edits
-to one row before assigning operation IDs, so batch priority cleanup cannot
-overwrite a later move. Push batches respect both count and byte limits.
+## Where each area stands
+
+| Area / part | On the web |
+| --- | --- |
+| Shell, tabs, sidebars, Overview (move/resize), Ctrl+P, shortcuts | Same as desktop |
+| Themes (8 packs, 20 variants), extensions, layouts, Lemma's look | Same as desktop, synced through the profile |
+| Account panel: profile, devices, notifications, sign out, delete account, support | Working (website session; delete uses the same login key as the website) |
+| Daily Plan | Working: tasks, blocks, routines, rituals, timers, week/month/year, insights, `.ics` files and calendar links. Not yet: Google/Outlook/CalDAV sign-in, editing provider events, publishing |
+| Project Board | Working for personal boards: columns, cards, sub-tasks, checklists, labels, templates, recurrence, archive, activity, insights. Not yet: shared boards |
+| Reading | Working, with the desktop's rules (units, the day's log adding up, finishing at the end, re-reads, goals, streaks). Open Library search, editions and covers go through `/api/terminal/books` |
+| University | Working: terms, modules, timetable generation, stages, behind/coming up |
+| Learning | Working: skills, sources, units, review, sessions, pasted contents lists. Not yet: reading chapters from EPUB/PDF files, YouTube playlists |
+| Finance, Notes, Journal, Goals, Birthdays | **Locked.** They're end-to-end encrypted and the browser can't unlock the account key yet. They show the desktop's own "not syncing here yet" banner, and changes are refused with a message |
+| Lemma's chat | Not yet: its tools (`src-tauri/src/ai`) need porting. The companion and overview tile show |
+| Lemma on the desktop, PIN lock, updates | Desktop-only by nature; the web answers quietly |
+| Analytics | The page and headline numbers show; each area's report answers "not on the web yet" until ported |
+
+## Next steps, in order
+
+1. **Browser encryption.** Match the desktop's Argon2id + XChaCha20-Poly1305
+   key wrapping and field format exactly (`src-tauri/src/vault`). Test against
+   desktop vectors, keep unlocked keys in memory only, then add the encrypted
+   tables to the browser cache (bump the IndexedDB version) and port each
+   area's service the way Reading, University and Learning were ported.
+   Notes and Journal must keep the Yjs document format (`notes_save` updates
+   and compaction), not whole-text saves.
+2. **Analytics** for the plaintext areas (`src-tauri/src/features/*/analytics.rs`).
+3. **Lemma's chat**, through the server's `/v1/ai/chat/stream` with the skills
+   re-implemented over the web handlers.
+4. **Shared boards** through the spaces API (role-checked; never the personal sync endpoint).
+5. Learning imports (EPUB contents in the browser; YouTube through a site route).
+6. Offline reload (a service worker). Queued edits already survive a reload,
+   but loading the page still needs a connection.
+
+## Adding or porting a command
+
+Add the handler to the area's file in `src/web/commands` and mirror the Rust
+service, rule for rule. Any table it writes must be in the allowlist in
+`site/src/lib/terminal/protocol.ts`. The browser checks that list before
+queueing an edit and the sync route checks it again, so a wrong column fails
+loudly rather than reaching the desktop. Adding tables that were previously
+excluded means bumping the IndexedDB version in `database.ts`, which pulls from
+cursor zero.
 
 ## Checks
 
-From the repository root:
-
-```powershell
-node tests/web-terminal-model.mjs
-node tests/web-planner-parity.mjs
-node tests/web-board-model.mjs
-node tests/web-desktop-planner-model.mjs
+```sh
+npx tsc --noEmit                      # root: app + web runtime + shared site rules
+npm run build:web
+node tests/web-terminal-model.mjs     # and web-planner-parity, web-board-model, web-desktop-planner-model
+(cd site && npx next build)
 ```
 
-Build the site (`npm run build` inside `site`), then:
-
-```powershell
-node tests/web-terminal.mjs
-```
-
-Use the existing `PLAYWRIGHT_MODULE` setting if Playwright is installed outside
-the repository. The browser suite starts its own local account/sync fixture and
-production Next.js server, uses fictional accounts, and stops both. It never
-signs in to a real account. `web-desktop-planner-browser.mjs` checks the shared
-task UI, quick-add, linked blocks, focus/timers/notes, working-day settings,
-all calendar views, routines and calendar import/export. The suite also checks
-durable retry, encrypted-area boundaries, account isolation, preferences and
-cache upgrades. `web-desktop-planner-visual.mjs` builds an independent desktop
-UI fixture with its original CSS and compares computed typography, colours,
-dimensions and spacing for all five views and the sidebar in Dark, Light and
-Ember. The adapter model test checks native DTOs, serialized edits, timer
-idempotency, move/delete cleanup, day markers and virtual routine tombstones.
-The model suite covers recurrence exceptions, DST, overnight/all-day events,
-source chunking, feed-address restrictions and recurring board tasks. The board
-model suite checks schema validation, project/column/card side effects, recurrence,
-templates, subtasks, deletion scope, labels and ordered IDs. The browser suite
-also runs `web-board-browser.mjs`, covering real project/card creation, labels,
-checklist edits/conversion, native dragging, WIP indicators, recurrence, archive/
-restore, table/timeline/activity/insights, templates, deletion confirmation,
-planner links and phone layout. Screenshots are in
-`.qa.local/terminal`.
-
-The site builds shared source outside `site`; install dependencies at both the
-repository root and in `site`. The CSS generator runs before dev/build, or
-manually via `npm run desktop:styles`. `node site/scripts/desktop-planner-styles.mjs --check`
-detects stale generated styles. Vercel must allow source outside its `site` root;
-the checked-in install command and website CI install both sets of dependencies.
-
-This stage is not deployed. Full offline application reload/service-worker
-support is not implemented: the outbox survives a reload, but loading the page
-itself still needs a connection. IndexedDB is browser-local storage and should
-not be treated as an independent backup.
+`web-terminal.mjs`, `web-board-browser.mjs` and the `web-desktop-planner-*`
+browser suites drove the earlier hand-built web shell, which has been
+replaced. They need rewriting against `/terminal` (demo mode makes that easy).

@@ -7,9 +7,10 @@
 // just for being read, so a new computer's defaults can't overwrite the
 // account's. When a sync brings another computer's change, the local copy
 // is updated and whoever's listening hears the new value.
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getAccountStatus } from "./account";
+import { hasProfileSync } from "./platform";
 
 /**
  * The settings that make up the profile: local storage key → the name it
@@ -77,7 +78,7 @@ export function saveSetting(key: string, value: unknown) {
     // Storage unavailable: it lasts for this session, and still syncs.
   }
   const name = SYNCED[key];
-  if (!name || !isTauri()) return;
+  if (!name || !hasProfileSync()) return;
   clearTimeout(unsent.get(key));
   unsent.set(
     key,
@@ -163,7 +164,7 @@ async function importOnce(signedOut: boolean) {
   }
 }
 
-if (isTauri()) {
+if (hasProfileSync()) {
   void pull().catch(() => {});
   void listen("data-changed", () => void pull().catch(() => {})).catch(() => {});
   const status = (state: string) => {

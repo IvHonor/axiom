@@ -108,3 +108,52 @@
   .skip { top: 10px; right: 16px; }
   .skip button { padding: 6px 10px; font-size: 8px; }
 }
+
+/* Everywhere you are: the ways in, a phone sketch, and what's new. */
+.everywhere { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 56px; align-items: start; }
+.ways { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 40px; margin: 0; padding: 0; border-top: 1px solid var(--line-strong); list-style: none; }
+.way { display: grid; grid-template-columns: 34px 1fr; align-content: start; gap: 8px 14px; padding: 24px 0; border-bottom: 1px solid var(--line); }
+.way > span { color: var(--text-faint); font: 10px/1.9 var(--mono); }
+.way h3 { display: flex; align-items: center; gap: 12px; font-size: 19px; letter-spacing: -.03em; }
+.way h3 svg { color: var(--text-dim); }
+.way p { grid-column: 2; color: var(--text-dim); font-size: 12px; line-height: 1.75; }
+.wayAction { grid-column: 2; margin-top: 8px; }
+.wayHint { display: inline-flex; padding: 9px 0; color: var(--text-faint); font: 9px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+
+.phone { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.phone figcaption { color: var(--text-faint); font: 8px/1.6 var(--mono); letter-spacing: .06em; }
+.phoneScreen { position: relative; width: 250px; height: 500px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 34px; background: #121212; box-shadow: 0 30px 60px #0008, inset 0 0 0 6px #0b0b0b; padding: 18px 12px 0; }
+.phoneBar { display: flex; align-items: center; gap: 8px; padding: 6px 4px 10px; border-bottom: 1px solid var(--line); color: var(--text); font-size: 11px; font-weight: 600; }
+.phoneDate { margin: 10px 4px 8px; color: var(--text-faint); font: 7px var(--mono); letter-spacing: .08em; }
+.phoneCards { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.phoneCards > div { display: flex; flex-direction: column; gap: 6px; min-height: 74px; padding: 9px; border: 1px solid var(--line); border-radius: 9px; background: #181818; }
+.phoneCards b { color: var(--text); font-size: 9px; font-weight: 600; }
+.phoneCards small { margin-top: auto; color: var(--text-dim); font-size: 8px; }
+.phoneCards i { display: block; height: 7px; border-radius: 3px; background: #262626; }
+.phoneCards i:nth-of-type(2) { width: 78%; }
+.phoneCards i:nth-of-type(3) { width: 55%; }
+.phoneWide { grid-column: 1 / -1; min-height: 104px !important; }
+.phoneRing { margin-top: auto; align-self: flex-start; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 3px solid #333; border-top-color: var(--text); color: var(--text-dim); font: 7px var(--mono); }
+.phoneNav { position: absolute; right: 0; bottom: 0; left: 0; display: flex; justify-content: space-around; padding: 12px 14px 20px; border-top: 1px solid var(--line); background: #151515; }
+.phoneNav i { width: 16px; height: 16px; border: 1.5px solid #555; border-radius: 4px; }
+.phoneNav i:nth-child(3) { border-color: var(--text); }
+
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 40px; margin: 34px auto 0; padding: 0; border-top: 1px solid var(--line-strong); list-style: none; }
+.features li { display: flex; gap: 14px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+.features li > svg { flex: none; margin-top: 2px; color: var(--accent); }
+.features b { display: block; margin-bottom: 5px; font-size: 14px; letter-spacing: -.02em; }
+.features span { color: var(--text-dim); font-size: 12px; line-height: 1.7; }
+
+.closingActions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+
+@media (max-width: 1100px) {
+  .everywhere { grid-template-columns: 1fr; }
+  .phone { order: -1; }
+  .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 759px) {
+  .ways, .features { grid-template-columns: 1fr; }
+  .phoneScreen { width: 220px; height: 440px; }
+  .actions > a.button { width: 100%; }
+}

@@ -38,6 +38,9 @@ import { useTimers } from "./shell/desk/timers";
 import { Companion } from "./features/lemma/Companion";
 import { useAreaName } from "./features/lemma/persona";
 import { useDesk } from "./shell/desk/useDesk";
+import { isOverlaySidebar, useOverlaySidebar } from "./shell/usePhone";
+import { useEdgeSwipe } from "./shell/useEdgeSwipe";
+import { useLaunchArea } from "./shell/useLaunchArea";
 
 export default function App() {
   const status = useAppStatus();
@@ -48,7 +51,9 @@ export default function App() {
   const { hiddenIds, setHidden } = useOverviewVisibility();
   const { tabs, active, previewKey, open, pin, close, closeExtension, reorder } = useTabs();
   useDesk(open);
-  const [panel, setPanel] = useState<SidePanel | null>("areas");
+  // On a phone or tablet the sidebar slides over what's open, so it starts closed.
+  const overlay = useOverlaySidebar();
+  const [panel, setPanel] = useState<SidePanel | null>(() => (isOverlaySidebar() ? null : "areas"));
   const [extQuery, setExtQuery] = useState("");
   const [extKind, setExtKind] = useState<ExtensionKind>("all");
 
@@ -75,7 +80,9 @@ export default function App() {
   const openArea = active.kind === "extension" ? active.id : null;
   const sidebarIds = withSidebar.map((ext) => ext.id).join();
   const { running } = useTimers();
-  const collapseReason = useCollapseReason(active, !!running);
+  const reason = useCollapseReason(active, !!running);
+  // A phone or tablet is always "narrow": there the sidebar closes when you pick something, not on a timer.
+  const collapseReason = overlay && reason === "narrow" ? null : reason;
   /** Tucked away by itself: why, and what to bring back once that's over. */
   const tucked = useRef<{ reason: string; restore: SidePanel } | null>(null);
   /** A reason you overruled (opening the sidebar anyway): it's left alone until that's over. */
@@ -102,6 +109,7 @@ export default function App() {
   // clicking the icon of the sidebar that's showing closes it.
   const togglePanel = (next: SidePanel) => {
     if (panel === next) return choose(null);
+    keepOnPhone.current = true;
     choose(next);
     if (next.startsWith("area:")) {
       const id = next.slice("area:".length);
@@ -135,6 +143,23 @@ export default function App() {
     }
     setPanel(target);
   }, [openArea, active.kind, pinned, sidebarIds, sidebarPrefs.follow, sidebarPrefs.perArea]);
+
+  // On a phone or tablet, picking something in the sidebar shows it: the sidebar gets
+  // out of the way (but not when an icon in the bottom bar opened both).
+  const keepOnPhone = useRef(false);
+  const shownKey = viewKey(active);
+  useEffect(() => {
+    if (keepOnPhone.current) keepOnPhone.current = false;
+    else if (overlay) setPanel(null);
+  }, [shownKey, overlay]);
+
+  // Swiping in from the left edge brings the sidebar out; swiping it back puts it away.
+  useEdgeSwipe(overlay, !!panel, {
+    open: () => setPanel(active.kind === "extension" && sidebarIds.split(",").includes(active.id) ? (`area:${active.id}` as SidePanel) : "areas"),
+    close: () => setPanel(null),
+  });
+  // Opened from a home-screen shortcut ("Today", "Project Board"…): straight to that area.
+  useLaunchArea(areas, open);
 
   // Tucking itself away (narrow window, a roomy area, writing, a focus
   // timer), and coming back when that's over. Never while you're on it,
@@ -337,6 +362,7 @@ export default function App() {
           >
             {panel && panelFor(panel)}
           </SidebarFrame>
+          {overlay && panel && <div className="sidebar-scrim" aria-hidden="true" onClick={() => setPanel(null)} />}
           {/* Peeking, with the sidebar closed: the panel over what's open, until the pointer leaves. */}
           {peek && !panel && (
             <div className="sidebar-peek" onPointerEnter={() => window.clearTimeout(peekTimer.current)} onPointerLeave={() => peekAt(null)}>

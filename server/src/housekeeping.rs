@@ -1,5 +1,7 @@
-//! Deletes what the server no longer needs, every hour, so personal data
-//! isn't kept longer than the privacy notice says.
+//! Deletes what the server no longer needs, once a day (and when the server
+//! starts), so personal data isn't kept longer than the privacy notice says.
+//! Every limit is days or more, so a daily run keeps to them; running hourly
+//! only woke the database 24 times a day.
 
 use std::time::Duration;
 
@@ -9,7 +11,7 @@ use sea_orm::{ColumnTrait, Condition, DbErr, EntityTrait, QueryFilter};
 use crate::AppState;
 use crate::entities::{ai_usage, email_code, password_reset, session, support_ticket, user};
 
-const TICK: Duration = Duration::from_secs(60 * 60);
+const TICK: Duration = Duration::from_secs(24 * 60 * 60);
 /// A sign-up that never confirmed its address.
 pub const UNCONFIRMED_DAYS: i64 = 7;
 /// A device's record after it was signed out or its sign-in ran out.

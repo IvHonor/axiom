@@ -113,6 +113,8 @@ pub async fn push(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Pu
     account.sync_seq = Set(seq);
     account.update(&txn).await?;
     txn.commit().await?;
+    // The remembered account has the old sequence number.
+    s.cache.forget_user(&auth.user_id);
 
     Ok(Json(PushResponse { seq }))
 }
@@ -124,7 +126,12 @@ pub struct PullQuery {
 }
 
 pub async fn pull(State(s): State<AppState>, auth: AuthUser, Query(query): Query<PullQuery>) -> Result<Json<PullResponse>, ApiError> {
-    crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
+    let account = crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
+    // Nothing pushed since this device last pulled: the usual answer to an
+    // app checking in, given without reading the database.
+    if query.since >= account.sync_seq {
+        return Ok(Json(PullResponse { records: Vec::new(), cursor: query.since, more: false }));
+    }
     let mut rows = sync_record::Entity::find()
         .filter(sync_record::Column::UserId.eq(&auth.user_id))
         .filter(sync_record::Column::Seq.gt(query.since))

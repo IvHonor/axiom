@@ -69,7 +69,13 @@ async fn email_of(db: &impl ConnectionTrait, user_id: &str) -> Result<String, Ap
 // ---------- Spaces ----------
 
 /// The shared boards you're in.
+/// The boards you're on. Every app asks each time it syncs, so the answer
+/// is remembered until a board or its members change (see `cache`).
 pub async fn list(State(s): State<AppState>, auth: AuthUser) -> Result<Json<Vec<Space>>, ApiError> {
+    if let Some(known) = s.cache.spaces(&auth.user_id) {
+        return Ok(Json(known));
+    }
+    let generation = s.cache.generation();
     let memberships = space_member::Entity::find().filter(space_member::Column::UserId.eq(&auth.user_id)).all(&s.db).await?;
     let mut out = Vec::new();
     for m in memberships {
@@ -85,6 +91,7 @@ pub async fn list(State(s): State<AppState>, auth: AuthUser) -> Result<Json<Vec<
             members,
         });
     }
+    s.cache.keep_spaces(generation, &auth.user_id, &out);
     Ok(Json(out))
 }
 
@@ -275,7 +282,21 @@ pub async fn push(State(s): State<AppState>, auth: AuthUser, Path(id): Path<Stri
 /// Like `sync::pull`, for a shared board. Any member may pull.
 pub async fn pull(State(s): State<AppState>, auth: AuthUser, Path(id): Path<String>, Query(query): Query<PullQuery>) -> Result<Json<PullResponse>, ApiError> {
     crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
-    membership(&s.db, &id, &auth.user_id).await?;
+    // On the board, and nothing new on it since this device last pulled:
+    // answered from what's remembered, without reading the database.
+    let member = s.cache.spaces(&auth.user_id).is_some_and(|boards| boards.iter().any(|b| b.id == id));
+    let newest = match (member, s.cache.space_seq(&id)) {
+        (true, Some(seq)) => seq,
+        _ => {
+            let generation = s.cache.generation();
+            let (found, _) = membership(&s.db, &id, &auth.user_id).await?;
+            s.cache.keep_space_seq(generation, &id, found.seq);
+            found.seq
+        }
+    };
+    if query.since >= newest {
+        return Ok(Json(PullResponse { records: Vec::new(), cursor: query.since, more: false }));
+    }
     let mut rows = space_record::Entity::find()
         .filter(space_record::Column::SpaceId.eq(&id))
         .filter(space_record::Column::Seq.gt(query.since))

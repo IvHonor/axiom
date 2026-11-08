@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { useEffect, useRef, useState } from "react";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { horizontalListSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Blocks, ChartColumn, LayoutDashboard, ShieldCheck, X, type LucideIcon } from "lucide-react";
@@ -11,6 +11,9 @@ import { ExtensionIcon } from "./ui/ExtensionIcon";
 import { formatTime } from "./format";
 import { useTheme } from "./theme/ThemeProvider";
 import { Logo } from "./ui/Logo";
+import { useReorderSensors } from "./ui/reorderSensors";
+import { usePhone } from "./usePhone";
+import { PhoneTopBar } from "./PhoneTopBar";
 import { OVERVIEW, sameView, viewKey, type View } from "./view";
 
 interface TopBarProps {
@@ -36,16 +39,21 @@ function describe(view: View, nameOf: (ext: { id: string; name: string }) => str
 /** Logo, open tabs and, in themes that want one, a clock. */
 export function TopBar({ tabs, active, previewKey, onSelect, onPin, onClose, onReorder }: TopBarProps) {
   const showClock = !!useTheme().theme.style.clock;
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-      keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space"] },
-    }),
-  );
+  // The open tab stays in view when there are more tabs than room (a narrow window, a phone).
+  const strip = useRef<HTMLDivElement>(null);
+  const activeKey = viewKey(active);
+  useEffect(() => {
+    strip.current?.querySelector(".tab.is-active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activeKey, tabs.length]);
+  const sensors = useReorderSensors({
+    coordinateGetter: sortableKeyboardCoordinates,
+    keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space"] },
+  });
   const onDragEnd = ({ active: dragged, over }: DragEndEvent) => {
     if (over && dragged.id !== over.id) onReorder(String(dragged.id), String(over.id));
   };
+  const nameOf = useAreaName();
+  if (usePhone()) return <PhoneTopBar tabs={tabs} active={active} onSelect={onSelect} onClose={onClose} describe={(view) => describe(view, nameOf)} />;
 
   return (
     <header className="topbar">
@@ -57,7 +65,7 @@ export function TopBar({ tabs, active, previewKey, onSelect, onPin, onClose, onR
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}
         accessibility={{ screenReaderInstructions: { draggable: "Press Space to pick up a tab, Left or Right to move it, Space to drop, or Escape to cancel. Press Enter to open a tab." } }}>
-        <div className="tabs" role="tablist" aria-label="Open tabs">
+        <div className="tabs" role="tablist" aria-label="Open tabs" ref={strip}>
           <SortableContext items={tabs.map(viewKey)} strategy={horizontalListSortingStrategy}>
             {tabs.map((view) => <SortableTab key={viewKey(view)} view={view} selected={sameView(view, active)}
               isPreview={viewKey(view) === previewKey} onSelect={onSelect} onPin={onPin} onClose={onClose} />)}

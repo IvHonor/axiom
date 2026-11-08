@@ -24,6 +24,7 @@ export interface SceneState {
   focused: boolean;
   compact: boolean;
   admin: boolean;
+  firstLight: boolean;
   facing?: { x: number; y: number };
   gaze?: { x: number; y: number } | null;
   display?: { text: string; color?: string } | null;
@@ -108,14 +109,14 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
   function rebuild() {
     const glow = resolvedColor("[data-glow]").multiplyScalar(state.brightness), shell = resolvedColor("[data-shell]");
     const { shape, accessory, facewear, neckwear, holding, finish, headwearColor, facewearColor, neckwearColor, jewelColor } = state.look;
-    const next = JSON.stringify([shape, accessory, facewear, neckwear, holding, finish, state.admin, state.brightness, glow.getHexString(), shell.getHexString()]);
+    const next = JSON.stringify([shape, accessory, facewear, neckwear, holding, finish, state.admin, state.firstLight, state.brightness, glow.getHexString(), shell.getHexString()]);
     const colours = JSON.stringify([headwearColor, facewearColor, neckwearColor, jewelColor]);
     if (signature === next) {
       if (painted !== colours) { model.updateColours(state.look, glow); painted = colours; }
       return;
     }
     if (model) { model.face.remove(screen); scene.remove(model.root); disposeModel(model.root); }
-    model = buildCompanion(state.look, glow, shell, state.admin);
+    model = buildCompanion(state.look, glow, shell, state.admin, state.firstLight);
     model.face.add(screen);
     screenColor = `#${glow.clone().lerp(new THREE.Color("#ffffff"), 0.6).getHexString()}`;
     drawn = "";
@@ -125,7 +126,7 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
   }
 
   function idleInput(now: number) {
-    return { now: now / 1000, holding: state.look.holding, admin: state.admin,
+    return { now: now / 1000, holding: state.look.holding, admin: state.admin, firstLight: state.firstLight,
       eligible: !motion.matches && !state.focused && !state.compact && !state.working && !state.display && !["thinking", "preparing", "looking", "listening", "speaking", "patient"].includes(state.mood) && state.movement > 0 && visible && !document.hidden && !lost };
   }
 
@@ -233,6 +234,10 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
     model.neckwear.rotation.z = pose.sway * 0.8 + pose.accessoryLift * 1.5;
     model.held.visible = state.working || state.look.holding !== "none";
     model.prop.visible = !state.working;
+    if (model.lantern) {
+      model.lantern.star.visible = !state.working;
+      model.lantern.sparks.visible &&= !state.working;
+    }
     model.work.visible = state.working;
     if (!routine) {
       model.held.rotation.z = 0.08 + pose.sway * 1.2 + (moving ? Math.sin(t * 1.5) * 0.025 * movement : 0);
@@ -339,7 +344,7 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
 
   return {
     update(next: SceneState) {
-      if (next.look !== state.look || next.admin !== state.admin) itemIdle.reset();
+      if (next.look !== state.look || next.admin !== state.admin || next.firstLight !== state.firstLight) itemIdle.reset();
       state = next; rebuild(); schedule();
     },
     previewIdle() { const started = itemIdle.preview(idleInput(performance.now())); schedule(); return started; },

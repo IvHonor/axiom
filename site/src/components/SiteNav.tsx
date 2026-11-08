@@ -17,7 +17,7 @@ export function SiteNav() {
   return (
     <>
       <nav className="site-nav" aria-label="Main">
-        {links.map(([href, label]) => <Link key={href} href={href}>{label}{href === "/web" && <span className="soon">SOON</span>}</Link>)}
+        {links.map(([href, label]) => <Link key={href} href={href}>{label}{href === "/web" && <span className="soon">NEW</span>}</Link>)}
       </nav>
       <details className="mobile-nav" ref={menu} onKeyDown={(event) => {
         if (event.key === "Escape" && menu.current) {
@@ -29,7 +29,7 @@ export function SiteNav() {
         <nav aria-label="Mobile" onClick={(event) => {
           if ((event.target as HTMLElement).closest("a") && menu.current) menu.current.open = false;
         }}>
-          {links.map(([href, label]) => <Link key={href} href={href}>{label}{href === "/web" && <span className="soon">SOON</span>}</Link>)}
+          {links.map(([href, label]) => <Link key={href} href={href}>{label}{href === "/web" && <span className="soon">NEW</span>}</Link>)}
           <Link href="/account">Your account</Link>
           <Link href="/download">Get Axiom ↗</Link>
         </nav>

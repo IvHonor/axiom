@@ -7,9 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "desktop:styles": "node scripts/desktop-planner-styles.mjs",
-    "predev": "npm run desktop:styles",
-    "prebuild": "npm run desktop:styles"
+    "build:web": "npm --prefix .. run build:web",
+    "prebuild": "npm run build:web"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

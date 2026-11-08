@@ -14,6 +14,34 @@ export function feedUrl(value: string) {
   url.hash = ""; return url;
 }
 
+/**
+ * Any public HTTPS file (a book cover someone typed the address of), with the
+ * same protection as calendar feeds: public IPv4 only, the address pinned,
+ * every redirect checked again, and a size cap. No credentials leave Axiom.
+ */
+export async function readPublicFile(value: string, maxBytes: number, accept: string): Promise<{ bytes: Buffer; type: string }> {
+  let url = feedUrl(value);
+  for (let redirects = 0; redirects < 5; redirects++) {
+    const addresses = await lookup(url.hostname, { family: 4, all: true });
+    if (!addresses.length || addresses.some(item => !publicFeedAddress(item.address))) throw new Error("That address isn't a public website.");
+    const response = await new Promise<{ location?: string; bytes?: Buffer; type?: string }>((resolve, reject) => {
+      const req = request(url, { family: 4, headers: { accept, "accept-encoding": "identity", "user-agent": "Axiom-Web/1" }, lookup: (_host, _options, callback) => callback(null, addresses[0].address, 4), signal: AbortSignal.timeout(15000) }, res => {
+        if ([301, 302, 303, 307, 308].includes(res.statusCode ?? 0)) { res.resume(); resolve({ location: res.headers.location }); return; }
+        if (res.statusCode !== 200 || res.headers["content-encoding"] && res.headers["content-encoding"] !== "identity") { res.resume(); reject(new Error("That file isn't available.")); return; }
+        const chunks: Buffer[] = []; let bytes = 0;
+        res.on("data", (chunk: Buffer) => { bytes += chunk.length; if (bytes > maxBytes) { res.destroy(); reject(new Error("That file is too big.")); } else chunks.push(chunk); });
+        res.on("end", () => resolve({ bytes: Buffer.concat(chunks), type: String(res.headers["content-type"] ?? "") }));
+        res.on("error", () => reject(new Error("The server stopped replying. Try again.")));
+      });
+      req.on("error", () => reject(new Error("That server couldn't be reached."))); req.end();
+    });
+    if (response.bytes) return { bytes: response.bytes, type: response.type ?? "" };
+    if (!response.location) throw new Error("The server returned an invalid redirect.");
+    url = feedUrl(new URL(response.location, url).href);
+  }
+  throw new Error("That address redirects too many times.");
+}
+
 /** Pin the resolved public address for the request; recheck every redirect. No credentials leave Axiom. */
 export async function readFeed(value: string): Promise<string> {
   let url = feedUrl(value);

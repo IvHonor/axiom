@@ -49,5 +49,5 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Pages only: not scripts, styles, images or files.
-  matcher: ["/((?!_next/|favicon.ico|textures/|screenshots/|.*\\.(?:svg|png|webp|jpg|ico|txt|xml)$).*)"],
+  matcher: ["/((?!_next/|favicon.ico|textures/|screenshots/|icons/|app/|sw\\.js|manifest\\.webmanifest|.*\\.(?:svg|png|webp|jpg|ico|txt|xml)$).*)"],
 };

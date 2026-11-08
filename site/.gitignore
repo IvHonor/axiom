@@ -44,3 +44,6 @@ next-env.d.ts
 
 # prisma
 /src/generated/prisma
+
+# Axiom on the web, built from the repository root (npm run build:web)
+/public/app/

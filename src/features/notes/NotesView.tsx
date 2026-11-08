@@ -9,6 +9,7 @@ import { NotePage } from "./NotePage";
 import { notesChanged, setNotesUi, useNoteList, useNotesState, useNotesUi } from "./notesUi";
 import { NoteList, newNote, newSticky, pathOf } from "./parts";
 import { StickyCanvas } from "./StickyCanvas";
+import { PhoneBack } from "../../shell/ui/PhoneBack";
 
 const SORTS: { id: Sort; label: string }[] = [
   { id: "edited", label: "Last edited" },
@@ -95,7 +96,7 @@ function NotesSplit({ folders }: { folders: Folder[] }) {
   const [emptying, setEmptying] = useState<string | null>(null);
 
   return (
-    <div className="nt-split">
+    <div className={`nt-split${ui.note ? " has-note" : ""}`}>
       <aside className="nt-list">
         <div className="nt-search">
           <Search size={14} strokeWidth={1.75} />
@@ -149,7 +150,7 @@ function NotesSplit({ folders }: { folders: Folder[] }) {
           />
         )}
       </aside>
-      <main className="nt-main">{ui.note ? <NotePage key={ui.note} id={ui.note} folders={folders} /> : <Blank folder={ui.folder && ui.folder !== "none" ? ui.folder : null} trash={ui.shelf === "trash"} />}</main>
+      <main className="nt-main">{ui.note && <PhoneBack label="Notes" onBack={() => setNotesUi({ note: null })} />}{ui.note ? <NotePage key={ui.note} id={ui.note} folders={folders} /> : <Blank folder={ui.folder && ui.folder !== "none" ? ui.folder : null} trash={ui.shelf === "trash"} />}</main>
     </div>
   );
 }

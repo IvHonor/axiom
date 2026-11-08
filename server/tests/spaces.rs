@@ -284,3 +284,34 @@ async fn the_owner_stops_sharing_or_deletes_their_account_and_the_board_goes() {
     let (_, spaces) = as_user(&app, &bob, Method::GET, routes::SPACES, None).await;
     assert_eq!(spaces, json!([]));
 }
+
+/// Members check in every minute and the server remembers their boards (see
+/// `src/cache.rs`): a remembered answer must never hide a change.
+#[tokio::test]
+async fn members_checking_in_still_see_new_cards_and_lose_access_at_once() {
+    let app = server().await;
+    let ada = shared_board(&app).await;
+    let cy = join(&app, &ada, "cy@example.com", "editor").await;
+    let pull_at = |since: i64| format!("{}?since={since}", route(routes::SPACE_PULL, &[("id", BOARD)]));
+
+    // Cy's app checks in: the board list, then the board, caught up.
+    assert_eq!(as_user(&app, &cy, Method::GET, routes::SPACES, None).await.0, StatusCode::OK);
+    let (status, first) = as_user(&app, &cy, Method::GET, &pull_at(0), None).await;
+    assert_eq!(status, StatusCode::OK);
+    let cursor = first["cursor"].as_i64().unwrap();
+    assert_eq!(as_user(&app, &cy, Method::GET, &pull_at(cursor), None).await.1["records"], json!([]));
+
+    // Ada adds a card: Cy's next check-in has it.
+    let (status, _) = push_to_board(&app, &ada, json!([row("project_board_tasks", "t2", json!({ "id": "t2", "project_id": BOARD, "title": "New card" }))])).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, next) = as_user(&app, &cy, Method::GET, &pull_at(cursor), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(next["records"][0]["id"], "t2", "{next}");
+
+    // Ada removes Cy: the very next check-in is refused, and the board's gone from the list.
+    let cy_id = member_id(&app, &ada, "cy@example.com").await;
+    let remove = route(routes::SPACE_MEMBER, &[("id", BOARD), ("user_id", &cy_id)]);
+    assert_eq!(as_user(&app, &ada, Method::DELETE, &remove, None).await.0, StatusCode::NO_CONTENT);
+    assert_eq!(as_user(&app, &cy, Method::GET, &pull_at(0), None).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(as_user(&app, &cy, Method::GET, routes::SPACES, None).await.1, json!([]));
+}

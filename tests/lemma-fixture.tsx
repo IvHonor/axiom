@@ -15,7 +15,8 @@ import "../src/styles/shell.css";
 
 // ?fail: the AI can't answer, and the new chat is kept with only the question.
 const failing = new URLSearchParams(location.search).has("fail");
-let fixtureAccount = new URLSearchParams(location.search).has("admin") ? { state: "signed_in", email: "admin@example.test", admin: true } : { state: "signed_in", email: "member@example.test", admin: false };
+const createdAt = new URLSearchParams(location.search).get("joined") ?? "2026-11-08T12:00:00Z";
+let fixtureAccount = new URLSearchParams(location.search).has("admin") ? { state: "signed_in", email: "admin@example.test", admin: true, createdAt } : { state: "signed_in", email: "member@example.test", admin: false, createdAt };
 let asked = false;
 
 mockWindows("main");
@@ -44,8 +45,9 @@ function Fixture() {
         <button className="btn" onClick={() => setWardrobe(true)}>Wardrobe</button>
         <button className="btn" onClick={() => setChat(!chat)}>Toggle chat</button>
         <button className="btn" onClick={() => setMounted(!mounted)}>Toggle companion</button>
-        <button className="btn" onClick={() => { fixtureAccount = { state: "signed_in", email: "member@example.test", admin: false }; void emit("account-changed", fixtureAccount); }}>Use member account</button>
-        <button className="btn" onClick={() => { fixtureAccount = { state: "signed_in", email: "admin@example.test", admin: true }; void emit("account-changed", fixtureAccount); }}>Use admin account</button>
+        <button className="btn" onClick={() => { fixtureAccount = { state: "signed_in", email: "member@example.test", admin: false, createdAt }; void emit("account-changed", fixtureAccount); }}>Use member account</button>
+        <button className="btn" onClick={() => { fixtureAccount = { state: "signed_in", email: "admin@example.test", admin: true, createdAt }; void emit("account-changed", fixtureAccount); }}>Use admin account</button>
+        <button className="btn" onClick={() => { fixtureAccount = { state: "signed_in", email: "later@example.test", admin: false, createdAt: "2027-03-21T00:00:00Z" }; void emit("account-changed", fixtureAccount); }}>Use later account</button>
         <button className="btn" onClick={() => void emit("assistant-progress", { state: "thinking", area: null, text: "Here is my answer", step: 0 })}>Stream answer</button>
         <button className="btn" onClick={() => void emit("assistant-progress", { state: "done", area: null, text: null, step: 0 })}>Finish answer</button>
         {(["idle", "listening", "thinking", "looking", "preparing", "speaking", "happy", "concerned"] as const).map((mood) => <button className="btn" key={mood} onClick={() => setLemma({ activity: ["happy", "concerned"].includes(mood) ? "idle" : mood as Activity, feeling: ["happy", "concerned"].includes(mood) ? mood as Feeling : null, area: mood === "looking" || mood === "preparing" ? "reading" : null, level: mood === "listening" ? 0.8 : 0 })}>{mood}</button>)}

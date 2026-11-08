@@ -748,18 +748,26 @@ mod profile_synced {
         desktop.sync().await;
 
         crate::profile::set(&laptop.db, "theme", &json!({ "fixed": "nord" })).await.unwrap();
-        crate::profile::set(&laptop.db, "lemma.persona", &json!({ "name": "Pip", "personality": "witty" })).await.unwrap();
+        let look = json!({ "holding": "first-light", "glow": "#ffb627" });
+        let preferences = json!({ "outfits": [{ "id": "early-light", "name": "First Light outfit", "look": look }] });
+        crate::profile::set(&laptop.db, "lemma.persona", &json!({ "name": "117", "personality": "witty" })).await.unwrap();
+        crate::profile::set(&laptop.db, "lemma.look", &look).await.unwrap();
+        crate::profile::set(&laptop.db, "lemma.preferences", &preferences).await.unwrap();
         laptop.sync().await;
         desktop.sync().await;
         let there = crate::profile::all(&desktop.db).await.unwrap();
         assert_eq!(there["theme"], json!({ "fixed": "nord" }));
-        assert_eq!(there["lemma.persona"]["name"], "Pip");
+        assert_eq!(there["lemma.persona"]["name"], "117");
+        assert_eq!(there["lemma.look"], look);
+        assert_eq!(there["lemma.preferences"], preferences);
 
         // The newest change wins.
         crate::profile::set(&desktop.db, "theme", &json!({ "fixed": "gruvbox" })).await.unwrap();
+        crate::profile::set(&desktop.db, "lemma.look", &json!({ "holding": "book" })).await.unwrap();
         desktop.sync().await;
         laptop.sync().await;
         assert_eq!(crate::profile::all(&laptop.db).await.unwrap()["theme"], json!({ "fixed": "gruvbox" }));
+        assert_eq!(crate::profile::all(&laptop.db).await.unwrap()["lemma.look"]["holding"], "book");
     }
 
     #[tokio::test]

@@ -25,18 +25,20 @@ motion and very short screens get the plain window with working tabs.
 
 ## Web terminal (early development)
 
-`/terminal` is the signed-in workspace shell. Daily Plan and personal Project Boards use the
-existing desktop sync protocol through an account-bound same-origin proxy,
-with a per-account IndexedDB cache and durable outbox. The remaining areas are
-explicitly unfinished; encrypted areas stay locked. See
+`/terminal` runs the desktop app's own React frontend, built for the browser.
+It uses the desktop sync protocol through an account-bound same-origin proxy,
+with a per-account IndexedDB cache and durable outbox. Custom AI names, looks,
+held items and saved outfits use the same synced profile settings as the desktop.
+First Light eligibility uses the account server's original creation date. See
 [`docs/WEB_TERMINAL.md`](../docs/WEB_TERMINAL.md) for the parity checklist,
 architecture and local browser test. This is separate from the public `/web`
 preview and has not been deployed.
 
-Daily Plan renders the desktop React components and theme definitions directly.
-Run `npm ci` at the repository root as well as in `site`. `predev` and `prebuild`
-regenerate scoped desktop CSS; after changing desktop styles during development,
-run `npm run desktop:styles` in `site` to refresh the generated stylesheet.
+Run `npm ci` at the repository root as well as in `site`. The site's `prebuild`
+runs `npm run build:web` from the repository root into `site/public/app`, so
+every site build includes the current shared components, item descriptions,
+models and animations. For local `next dev`, run that web build first and
+repeat it after editing shared app source.
 
 ## Accounts
 
@@ -54,6 +56,11 @@ production build on port 3000 (`npm run build && npx next start`). Set
 `PLAYWRIGHT_MODULE` to the file URL of an external Playwright installation
 when needed; `SITE_TEST_URL` changes the address. Screenshots go to
 `.qa.local/site`.
+
+After a website production build, `node tests/lemma-web-sync.mjs` checks the
+customisation UI, First Light cutoff, animations, and two-way sync of the name,
+selected holdable and saved outfits across isolated devices. It starts its own
+local website and fictional account server; it never uses a live account.
 
 ## Deploy (Vercel)
 

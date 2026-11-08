@@ -58,9 +58,9 @@ async function Overview() {
         </section>
         <section className={s.tile}>
           <span className={s.tileLabel}><Globe2 size={14} /> AXIOM ON THE WEB</span>
-          <strong>Early access</strong>
-          <p>Your workspace shell and the first Daily Plan tools. More areas are in progress.</p>
-          <Link className={s.tileLink} href="/terminal">Open your terminal <ArrowUpRight size={13} /></Link>
+          <strong>Ready</strong>
+          <p>The whole Axiom workspace in your browser, synced with your desktop. Install it on your phone or computer to use it offline. Encrypted areas unlock there soon.</p>
+          <a className={s.tileLink} href="/terminal">Open your terminal <ArrowUpRight size={13} /></a>
         </section>
       </div>
 

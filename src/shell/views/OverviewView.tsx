@@ -11,6 +11,9 @@ import { useAreaName } from "../../features/lemma/persona";
 import { ResizableTile, TileGrid } from "../ui/ResizableTile";
 import { TileMoveHandle } from "../ui/TileMoveHandle";
 import { useOverviewLayout } from "../useOverviewLayout";
+import { CompactOverview } from "./CompactOverview";
+import { InstallBanner } from "../InstallApp";
+import { useScreen } from "../usePhone";
 
 interface OverviewViewProps {
   areas: ExtensionManifest[];
@@ -46,6 +49,7 @@ export function OverviewView({ areas, onOpen, onBrowse, hiddenIds = [], onVisibi
     [...visible.map(area => area.id), ...extra.map(({ tile }) => tile.id)],
     Object.fromEntries(extra.flatMap(({ tile }) => tile.size ? [[tile.id, tile.size]] : [])),
   );
+  const screen = useScreen();
 
   if (areas.length === 0) {
     return (
@@ -67,8 +71,12 @@ export function OverviewView({ areas, onOpen, onBrowse, hiddenIds = [], onVisibi
     <button className="btn" onClick={() => areas.forEach((ext) => onVisibilityChange?.(ext.id, false))}>Show all areas</button>
   </div>;
 
+  // Phones and tablets: cards sized for the screen (two or four across), in the desktop order.
+  if (screen !== "desktop") return <CompactOverview columns={screen === "phone" ? 2 : 4} areas={visible} extra={extra} positions={positions} onOpen={onOpen} />;
+
   return (
     <div className="overview">
+      <InstallBanner />
       <TileGrid>
         {visible.map((ext) => {
           const Summary = ext.area?.Summary;

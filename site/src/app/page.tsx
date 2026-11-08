@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowDown, ArrowDownRight, ArrowUpRight, CloudOff, Code2, Globe2, LockKeyhole, Mic, MonitorUp, MoveUpRight, Palette, ShieldCheck, Smile, Sparkles, Timer } from "lucide-react";
+import { ArrowDown, ArrowDownRight, ArrowRight, ArrowUpRight, CloudOff, Code2, Globe2, Hand, LayoutGrid, LockKeyhole, Mic, Monitor, MonitorSmartphone, MonitorUp, MoveUpRight, Palette, RefreshCw, ShieldCheck, Smartphone, Smile, Sparkles, Timer, Zap } from "lucide-react";
 import { DownloadButton } from "@/components/Download";
+import { InstallButton } from "@/components/InstallApp";
 import { Mark } from "@/components/Logo";
 import { WorkspaceTour } from "@/components/home/WorkspaceTour";
 import { AREAS } from "@/lib/areas";
@@ -19,15 +20,15 @@ export default function Home() {
           </div>
           <div>
             <p className={styles.lede}>Too many tabs. Too many loose ends. Bring your plans, projects, studies and everyday life into one personal terminal, and find your way forward.</p>
-            <div className={styles.actions}><DownloadButton /><Link className={styles.tourLink} href="#tour">SEE INSIDE <ArrowDown size={14} /></Link></div>
-            <p className={styles.meta}><span>FREE & OPEN SOURCE</span><span>WINDOWS & MACOS</span><span>NO ACCOUNT NEEDED</span></p>
+            <div className={styles.actions}><DownloadButton /><a className="button button-secondary button-lg" href="/terminal">Open in your browser <ArrowRight size={15} /></a><Link className={styles.tourLink} href="#everywhere">ON EVERY SCREEN <ArrowDown size={14} /></Link></div>
+            <p className={styles.meta}><span>FREE & OPEN SOURCE</span><span>WINDOWS & MACOS</span><span>ANY BROWSER</span><span>INSTALLS ON YOUR PHONE</span></p>
           </div>
         </div>
       </section>
 
       <WorkspaceTour />
 
-      <div className="principles-strip"><div className="wrap"><span><LayoutMark /> One connected workspace</span><span><CloudOff size={15} /> Works offline</span><span><LockKeyhole size={15} /> Your data stays yours</span><span><Code2 size={15} /> Free. Open. Yours.</span></div></div>
+      <div className="principles-strip"><div className="wrap"><span><LayoutMark /> One connected workspace</span><span><MonitorSmartphone size={15} /> Desktop, browser and phone</span><span><CloudOff size={15} /> Works offline</span><span><LockKeyhole size={15} /> Your data stays yours</span><span><Code2 size={15} /> Free. Open. Yours.</span></div></div>
 
       <section className="section" id="areas" aria-labelledby="areas-title">
         <div className="section-heading wrap"><div><span className="eyebrow"><span className="section-number">01 /</span> A PLACE FOR EVERY PART OF YOU</span><h2 id="areas-title">One life.<br />One connected workspace.</h2></div><p>Ten areas. One bigger picture. Bring in what you need and shape a space around the way you think.</p></div>
@@ -54,15 +55,52 @@ export default function Home() {
 
       <section className="section privacy-section wrap" id="privacy" aria-labelledby="privacy-title">
         <div className="privacy-seal" aria-hidden="true"><div className="privacy-seal-ring"><ShieldCheck size={60} strokeWidth={0.8} /></div><span>PRIVATE BY DESIGN</span><div className="barcode" /><small>YOUR LIFE IS NOT A DATASET.</small></div>
-        <div className="privacy-copy"><span className="eyebrow"><span className="section-number">03 /</span> PERSONAL MEANS PERSONAL</span><h2 id="privacy-title">Your life.<br />Your data. Your call.</h2><p>Your workspace lives on your computer. Work offline, start without an account, and choose whether to sync. Your most personal areas are encrypted before they leave your device.</p><ul className="privacy-points"><li><CloudOff size={17} /><span>Local first. Ready when you are.</span></li><li><ShieldCheck size={17} /><span>End-to-end encryption for your personal areas.</span></li><li><Code2 size={17} /><span>No ads. No analytics. Open source.</span></li></ul><Link href="/privacy" className="text-link">Read our privacy promise <ArrowUpRight size={16} /></Link></div>
+        <div className="privacy-copy"><span className="eyebrow"><span className="section-number">03 /</span> PERSONAL MEANS PERSONAL</span><h2 id="privacy-title">Your life.<br />Your data. Your call.</h2><p>Your workspace lives on your own devices: your computer, and your phone if you install it there. Work offline, start without an account, and choose whether to sync. Your most personal areas are encrypted before they leave your device.</p><ul className="privacy-points"><li><CloudOff size={17} /><span>Local first. Ready when you are.</span></li><li><ShieldCheck size={17} /><span>End-to-end encryption for your personal areas.</span></li><li><Code2 size={17} /><span>No ads. No analytics. Open source.</span></li></ul><Link href="/privacy" className="text-link">Read our privacy promise <ArrowUpRight size={16} /></Link></div>
       </section>
 
-      <section className="web-section wrap" id="web" aria-labelledby="web-title"><div className="web-icon"><Globe2 size={38} strokeWidth={1} /></div><div><span className="eyebrow">THE NEXT CHAPTER <span className="soon">COMING SOON</span></span><h2 id="web-title">Your life. Wherever it takes you.</h2><p>Axiom on the web is on its way. Your synced workspace, in your browser, for the moments you&apos;re away from your own computer.</p></div><span className="web-coordinate" aria-hidden="true">DESKTOP → EVERYWHERE</span></section>
+      <section className="section" id="everywhere" aria-labelledby="everywhere-title">
+        <div className="section-heading wrap"><div><span className="eyebrow"><span className="section-number">04 /</span> EVERYWHERE YOU ARE <span className="soon">NEW</span></span><h2 id="everywhere-title">One workspace.<br />Every screen you own.</h2></div><p>The same Axiom on your desktop, in your browser and on your phone: not a lighter copy. Your areas, themes and layout follow you, and every change syncs.</p></div>
+        <div className={`${styles.everywhere} wrap`}>
+          <ol className={styles.ways}>
+            {WAYS.map((way, index) => (
+              <li key={way.title} className={styles.way}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <h3><way.icon size={19} strokeWidth={1.4} />{way.title}</h3>
+                <p>{way.text}</p>
+                <div className={styles.wayAction}>{way.action}</div>
+              </li>
+            ))}
+          </ol>
+          <PhoneSketch />
+        </div>
+        <ul className={`${styles.features} wrap`}>
+          {EVERYWHERE.map((feature) => <li key={feature.title}><feature.icon size={16} strokeWidth={1.5} /><div><b>{feature.title}</b><span>{feature.text}</span></div></li>)}
+        </ul>
+        <div className="workspace-foot wrap"><span><LockKeyhole size={12} /> Finance, Notes, Journal, Goals and Birthdays stay end-to-end encrypted. For now they open in the desktop app; the browser unlocks them soon.</span><span>NO APP STORE. NO WAITING.</span></div>
+      </section>
 
-      <section className="closing-section wrap" aria-labelledby="closing-title"><div className="closing-top"><span className="eyebrow">YOUR NEXT CHAPTER STARTS HERE</span><span className="closing-asterisk" aria-hidden="true">✳</span></div><h2 id="closing-title">A little more order.<br /><span>A lot more life.</span></h2><div className="closing-bottom"><div><p>You don&apos;t have to have it all figured out.<br />Just give yourself somewhere to start.</p><span className="eyebrow">FREE FOR WINDOWS AND MAC. YOURS FROM DAY ONE.</span></div><DownloadButton /></div><div className="closing-baseline"><span>YOUR PERSONAL TERMINAL.</span><a href={REPO_URL}>BUILT IN THE OPEN <ArrowUpRight size={13} /></a><span>AXIOM / MAKE ROOM FOR WHAT MATTERS.</span></div></section>
+      <section className="closing-section wrap" aria-labelledby="closing-title"><div className="closing-top"><span className="eyebrow">YOUR NEXT CHAPTER STARTS HERE</span><span className="closing-asterisk" aria-hidden="true">✳</span></div><h2 id="closing-title">A little more order.<br /><span>A lot more life.</span></h2><div className="closing-bottom"><div><p>You don&apos;t have to have it all figured out.<br />Just give yourself somewhere to start.</p><span className="eyebrow">FREE ON WINDOWS, MAC, YOUR BROWSER AND YOUR PHONE. YOURS FROM DAY ONE.</span></div><div className={styles.closingActions}><DownloadButton /><InstallButton secondary /></div></div><div className="closing-baseline"><span>YOUR PERSONAL TERMINAL.</span><a href={REPO_URL}>BUILT IN THE OPEN <ArrowUpRight size={13} /></a><span>AXIOM / MAKE ROOM FOR WHAT MATTERS.</span></div></section>
     </>
   );
 }
+
+/** The ways into Axiom, for the "Everywhere you are" section. */
+const WAYS = [
+  { icon: Monitor, title: "The desktop app", text: "Windows and macOS. Everything on your own computer, Lemma on your desktop, and no account needed to start.", action: <DownloadButton size="md" /> },
+  { icon: Globe2, title: "In your browser", text: "Sign in from any computer and pick up where you left off: the whole workspace, with your themes and layout, in a tab.", action: <a className="button button-secondary button-md" href="/terminal">Open in your browser <ArrowRight size={14} /></a> },
+  { icon: Smartphone, title: "On your phone", text: "Add Axiom to your home screen. It opens full screen with a layout made for your thumb, and keeps working without a signal.", action: <InstallButton size="md" secondary /> },
+  { icon: MonitorUp, title: "Installed from your browser", text: "Chrome and Edge install it on any computer, in its own window with its own icon: handy on a laptop where you can't install software.", action: <span className={styles.wayHint}>Look for Install in the address bar</span> },
+];
+
+/** What's new about using Axiom anywhere. */
+const EVERYWHERE = [
+  { icon: RefreshCw, title: "Settings that follow you", text: "Theme, overview layout, extensions, Lemma's look, even where you put Lemma: change them once, on any device." },
+  { icon: CloudOff, title: "Works offline", text: "Opens without a connection. What you change waits safely on the device and syncs when you're back." },
+  { icon: Zap, title: "No app store", text: "Install it straight from your browser in a few seconds. It updates itself the next time it's online." },
+  { icon: Smartphone, title: "Made for phones", text: "A bottom bar, cards two to a row, menus that rise from the bottom, and a sidebar you swipe in from the edge." },
+  { icon: LayoutGrid, title: "Tablets and landscape", text: "Four cards across, a sidebar that slides over what you're doing, and room to work held either way." },
+  { icon: Hand, title: "Shortcuts on the icon", text: "Press and hold the app icon to jump straight to Today, your Project Board, Reading or University." },
+];
 
 /** What Lemma does, for the home page (in step with the app's own "What's new"). */
 const LEMMA = [
@@ -73,6 +111,27 @@ const LEMMA = [
   { icon: Smile, title: "A personality of its own", text: "Choose its name, look and personality. It talks your way, reacts to what you do, plays about when left alone, and can show the weather where you are." },
   { icon: ShieldCheck, title: "Private by default", text: "Lemma sees nothing until you switch an area on, only uses AI when you ask it something, and your chats stay on your computer, synced end-to-end encrypted." },
 ];
+
+/** A phone running Axiom: the two-up overview and the bottom bar. Drawn, not a screenshot. */
+function PhoneSketch() {
+  return (
+    <figure className={styles.phone} aria-label="Axiom on a phone: cards two to a row, and a bar of areas along the bottom">
+      <div className={styles.phoneScreen} aria-hidden="true">
+        <div className={styles.phoneBar}><Mark size={10} /><span>Overview</span></div>
+        <div className={styles.phoneDate}>SUNDAY 8 NOVEMBER</div>
+        <div className={styles.phoneCards}>
+          <div className={styles.phoneWide}><b>Daily Plan</b><i /><i /><i /></div>
+          <div><b>Reading</b><span className={styles.phoneRing}>62%</span></div>
+          <div><b>University</b><small>2 behind</small></div>
+          <div><b>Learning</b><small>30 min today</small></div>
+          <div><b>Board</b><small>4 open</small></div>
+        </div>
+        <div className={styles.phoneNav}><i /><i /><i /><i /><i /><i /></div>
+      </div>
+      <figcaption>INSTALLED FROM THE BROWSER. NO APP STORE.</figcaption>
+    </figure>
+  );
+}
 
 function LayoutMark() {
   return <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" aria-hidden="true"><rect x="1" y="1" width="5" height="5" /><rect x="9" y="1" width="5" height="5" /><rect x="1" y="9" width="5" height="5" /><rect x="9" y="9" width="5" height="5" /></svg>;

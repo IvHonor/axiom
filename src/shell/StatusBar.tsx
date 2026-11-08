@@ -1,9 +1,11 @@
+import { isWeb } from "../lib/platform";
 import type { SyncStatus } from "../lib/sync";
 import { dbDetail, dbLabel, syncDetail, syncDot, syncLabel } from "./format";
 import { useLabels } from "./theme/ThemeProvider";
 import type { ShellStatus } from "./useAppStatus";
 import type { UpdaterState } from "./useUpdater";
 import { useNow } from "./useSync";
+import { usePhone, useShortScreen } from "./usePhone";
 
 interface StatusBarProps {
   status: ShellStatus;
@@ -18,6 +20,10 @@ export function StatusBar({ status, sync, onOpenSync, updater, onCheckUpdates }:
   const { label, sep } = useLabels();
   const now = useNow();
   const { db } = status;
+  // A phone (or one held sideways) has no room to spare: the bar only shows when something needs you.
+  const phone = usePhone();
+  const short = useShortScreen();
+  if ((phone || short) && db.state === "connected" && sync.state !== "error" && sync.state !== "offline") return null;
 
   return (
     <footer className="statusbar">
@@ -36,6 +42,10 @@ export function StatusBar({ status, sync, onOpenSync, updater, onCheckUpdates }:
         </button>
       )}
       <span className="status-fill" />
+      {/* The website always serves the newest Axiom: nothing to check. */}
+      {isWeb ? (
+        <span className="status-item status-version">Axiom <span className="dim">{sep}</span> {status.version ?? "—"} <span className="dim">{sep}</span> {label("Web")}</span>
+      ) : (
       <button className="status-item status-button" title={updateTitle(updater)} onClick={onCheckUpdates}>
         {updater.state === "checking"
           ? label("Checking for updates")
@@ -47,6 +57,7 @@ export function StatusBar({ status, sync, onOpenSync, updater, onCheckUpdates }:
                 ? label("Couldn't check for updates")
                 : <>Axiom <span className="dim">{sep}</span> {status.version ?? "—"} <span className="dim">{sep}</span> {label("Check for updates")}</>}
       </button>
+      )}
     </footer>
   );
 }

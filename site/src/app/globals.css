@@ -140,11 +140,6 @@ html[data-tour] .site-header { transform: translateY(-100%); }
 .privacy-copy .eyebrow { margin-bottom: 25px; }
 .privacy-points { padding: 0; margin: 26px 0; list-style: none; }
 .privacy-points li { display: flex; align-items: center; gap: 11px; margin-top: 13px; font-size: 11px; color: var(--text-dim); }.privacy-points svg { color: var(--accent); flex: none; }
-.web-section { display: grid; grid-template-columns: 70px 1fr auto; align-items: center; gap: 40px; border-block: 1px solid var(--line); padding: 40px 0; }
-.web-icon { color: var(--text-faint); }
-.web-section h2 { font-size: 26px; margin: 12px 0; letter-spacing: -.035em; }
-.web-section p { max-width: 650px; color: var(--text-dim); font-size: 12px; }
-.web-coordinate { font: 8px var(--mono); color: var(--text-faint); writing-mode: vertical-rl; }
 .closing-section { margin-top: 120px; border: 1px solid var(--line-strong); padding: 39px 48px 0; position: relative; background: #141414; }
 .closing-top { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .closing-asterisk { font-size: 49px; line-height: 1; color: var(--accent); }
@@ -196,7 +191,7 @@ html[data-tour] .site-header { transform: translateY(-100%); }
   .workspace-foot { font-size: 7px; }
   .customise-section { grid-template-columns: 1fr; gap: 50px; padding: 80px 0; }.customise-copy p { font-size: 12px; }.theme-study { width: 95%; max-width: 460px; margin-inline: auto; height: 350px; }.theme-window { width: 87%; }.theme-window-front { top: 70px; }.theme-mini-grid { padding: 13px; }.theme-mini-grid > div { padding: 12px; }.theme-caption { font-size: 6px; }
   .privacy-section { grid-template-columns: 1fr; gap: 45px; padding-bottom: 70px; }.privacy-seal { min-height: 300px; order: 2; }.privacy-seal-ring { width: 110px; height: 110px; margin-bottom: 24px; }.privacy-seal-ring > svg { width: 46px; }.privacy-seal > span { font-size: 10px; }.barcode { margin-top: 18px; height: 25px; }.privacy-copy .eyebrow { font-size: 8px; }.privacy-copy > p { max-width: 100%; font-size: 12px; }.privacy-points li { font-size: 10px; }.text-link { font-size: 12px; }
-  .web-section { grid-template-columns: 1fr; gap: 20px; padding-block: 35px; }.web-icon { display: none; }.web-coordinate { display: none; }.web-section .eyebrow { font-size: 8px; }.soon { font-size: 7px; }.web-section h2 { font-size: 26px; max-width: 350px; }.web-section p { font-size: 12px; }
+  .soon { font-size: 7px; }
   .closing-section { margin-top: 70px; padding: 25px 23px 0; }.closing-top .eyebrow { font-size: 7px; }.closing-asterisk { font-size: 32px; }.closing-section h2 { font-size: clamp(35px, 8vw, 60px); margin-block: 30px; }.closing-bottom { display: block; margin-bottom: 30px; }.closing-bottom p { font-size: 12px; }.closing-bottom .eyebrow { font-size: 6px; }.closing-bottom .button { margin-top: 25px; }.closing-baseline { gap: 10px; font-size: 6px; }.closing-baseline > span:last-child { display: none; }
   .site-footer { margin-top: 70px; padding-top: 40px; }.site-footer-grid { grid-template-columns: 1fr 1fr; gap: 35px 25px; }.site-footer-brand { grid-column: 1 / -1; }.site-footer-brand p { margin-block: 15px; }.site-footer-grid nav a { font-size: 11px; }.site-footer-base { margin-top: 40px; font-size: 8px; flex-direction: column; gap: 12px; }
   .page { padding-top: 45px; }.page::before { font-size: 8px; }.page h1 { font-size: 42px; }.page .page-lede { font-size: 16px; }.page p, .page li { font-size: 13px; }.page .button-note { display: none; }.note { padding: 17px; }.faq summary { font-size: 13px; }
@@ -211,3 +206,12 @@ html[data-tour] .site-header { transform: translateY(-100%); }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Installing Axiom from the website (components/InstallApp.tsx): the iPhone steps. */
+.install-wrap { position: relative; display: inline-flex; }
+.install-steps { position: absolute; z-index: 20; bottom: calc(100% + 10px); left: 0; display: flex; flex-direction: column; gap: 10px; width: min(300px, 80vw); padding: 16px 16px 14px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface-2); box-shadow: 0 20px 40px #0008; color: var(--text-dim); font-size: 12px; line-height: 1.5; }
+.install-steps > span { display: flex; align-items: flex-start; gap: 10px; }
+.install-steps > span svg { flex: none; color: var(--text); }
+.install-steps b { color: var(--text); }
+.install-steps small { color: var(--text-faint); font: 9px/1.6 var(--mono); }
+.install-close { position: absolute; top: 8px; right: 8px; border: 0; background: none; color: var(--text-faint); cursor: pointer; }

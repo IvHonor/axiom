@@ -1,7 +1,10 @@
 //! The two tokens a signed-in app holds.
 //!
-//! - The **access token** is a JWT that proves who's asking. It lasts 15
-//!   minutes, so a leaked one is soon useless.
+//! - The **access token** is a JWT that proves who's asking. It lasts 6
+//!   hours. That doesn't keep a signed-out device in: every request also
+//!   checks the session is still signed in (`auth::signed_in`), and signing
+//!   out forgets it at once. A short life only made every open app refresh
+//!   (and wake the database) every 15 minutes.
 //! - The **refresh token** is a random string the app swaps for a new pair.
 //!   Each one works once; the server stores only its SHA-256 hash.
 
@@ -13,7 +16,7 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-pub const ACCESS_TTL: Duration = Duration::from_secs(15 * 60);
+pub const ACCESS_TTL: Duration = Duration::from_secs(6 * 60 * 60);
 /// A device that doesn't connect for this long has to sign in again.
 pub const REFRESH_TTL_DAYS: i64 = 60;
 

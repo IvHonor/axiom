@@ -17,6 +17,7 @@ export function performItem(m: CompanionModel, frame: IdleFrame | null, time: nu
   m.held.rotation.set(0.08, -0.25, 0.08);
   m.prop.rotation.set(0, 0, 0);
   m.sprout.scale.setScalar(1); m.sprout.rotation.z = 0;
+  m.bookCover.rotation.y = 0;
   m.page.visible = false; m.page.rotation.y = 0;
   m.steam.scale.setScalar(1);
   m.hat.position.copy(m.hatOrigin);
@@ -30,9 +31,45 @@ export function performItem(m: CompanionModel, frame: IdleFrame | null, time: nu
     m.code.coreMaterial.uniforms.alpha.value = 1;
     m.code.rainMaterial.uniforms.time.value = time;
   }
+  if (m.lantern) {
+    m.held.updateMatrix();
+    m.lantern.star.position.set(0, Math.sin(time * 1.8) * 0.018, 0).applyMatrix4(m.held.matrix);
+    m.lantern.star.rotation.set(0, Math.sin(time * 0.8) * 0.3, Math.sin(time) * 0.06);
+    m.lantern.star.scale.setScalar(1);
+    m.lantern.starMaterial.emissiveIntensity = 1.25;
+    m.lantern.haloMaterial.opacity = 0.10;
+    m.lantern.light.intensity = 0.45;
+    m.lantern.sparks.visible = false;
+  }
   if (!frame) return null;
   const p = frame.progress;
   switch (frame.kind) {
+    case "first-light": {
+      if (!m.lantern) return null;
+      const lantern = m.lantern;
+      const lift = pulse(0, 0.16, 0.84, 1, p);
+      m.held.position.lerp(new THREE.Vector3(0.80, Math.max(m.heldOrigin.y + 0.22, m.face.position.y - 0.22), m.face.position.z + 0.28), lift);
+      m.held.rotation.z -= lift * 0.08;
+      m.held.updateMatrix();
+      const origin = new THREE.Vector3().applyMatrix4(m.held.matrix);
+      lanternFlight(p, origin, lantern.star.position);
+      lantern.star.rotation.y = Math.sin(time * 2) * 0.3;
+      const flare = pulse(0.84, 0.89, 0.93, 1, p);
+      lantern.star.scale.setScalar(1 + flare * 0.15);
+      lantern.starMaterial.emissiveIntensity = 1.25 + flare * 1.5;
+      lantern.haloMaterial.opacity = 0.10 + flare * 0.13;
+      lantern.light.intensity = 0.45 + flare * 0.65;
+      const trail = pulse(0.18, 0.28, 0.76, 0.87, p);
+      lantern.sparks.visible = trail > 0;
+      lantern.sparkMaterial.opacity = trail * 0.8;
+      lantern.sparks.children.forEach((spark, i) => {
+        lanternFlight(Math.max(0.16, p - (i + 1) * 0.006), origin, spark.position);
+        spark.scale.setScalar((1 - i / lantern.sparks.children.length) * trail);
+        spark.rotation.z = time * 2 + i;
+      });
+      const watching = p > 0.16 && p < 0.84;
+      return { eyes: watching ? [1.2, 1.2] : [0.95, 0.95], mouth: p > 0.84 ? "smile" : watching ? "round" : "smile", gaze: watching ? [lantern.star.position.x * 0.045, lantern.star.position.y * 0.035] : [0.035, -0.025], happy: p > 0.84 };
+    }
     case "coffee": {
       const lift = pulse(0.08, 0.28, 0.50, 0.68, p);
       m.held.position.lerp(new THREE.Vector3(0.23, m.face.position.y - 0.20, m.face.position.z + 0.27), lift);
@@ -45,20 +82,21 @@ export function performItem(m: CompanionModel, frame: IdleFrame | null, time: nu
     }
     case "book": {
       const lift = pulse(0, 0.15, 0.82, 1, p);
-      m.held.position.lerp(new THREE.Vector3(0.12, m.face.position.y - 0.34, m.face.position.z + 0.36), lift);
-      const flip = pulse(0.32, 0.48, 0.64, 0.82, p);
-      m.held.rotation.z += Math.PI * flip;
-      m.page.visible = p > 0.15 && p < 0.32;
-      m.page.rotation.y = -ease(0.15, 0.32, p) * Math.PI;
-      const surprise = p > 0.48 && p < 0.68;
-      return { eyes: surprise ? [1.4, 1.4] : [0.8, 0.8], mouth: surprise ? "round" : p > 0.82 ? "smile" : "flat", gaze: [-0.025 + Math.sin(p * 35) * 0.025, -0.045] };
+      const open = pulse(0.08, 0.26, 0.78, 0.96, p);
+      m.held.position.lerp(new THREE.Vector3(0.14, m.face.position.y - 0.50, m.face.position.z + 0.36), lift);
+      m.held.rotation.x -= open * 0.18;
+      m.held.rotation.y += lift * 0.25;
+      m.bookCover.rotation.y = -Math.PI * 0.84 * open;
+      m.page.visible = p > 0.32 && p < 0.58;
+      m.page.rotation.y = -ease(0.32, 0.58, p) * Math.PI * 0.84;
+      return { eyes: [0.85, 0.85], mouth: p > 0.78 ? "smile" : "flat", gaze: [-0.025 + Math.sin(p * 35) * 0.025, -0.045] };
     }
     case "plant": {
       const growing = pulse(0.22, 0.58, 0.78, 1, p);
       m.sprout.scale.y = 1 + growing * 1.8;
-      m.sprout.rotation.z = growing * 0.6;
-      m.held.position.x -= growing * 0.35;
-      m.held.position.z += growing * 0.35;
+      m.sprout.rotation.z = -growing * 0.32;
+      m.held.position.x += growing * 0.25;
+      m.held.position.z += growing * 0.18;
       if (p > 0.08 && p < 0.30) {
         const fall = ease(0.08, 0.30, p);
         m.drop.visible = true;
@@ -94,4 +132,11 @@ export function performItem(m: CompanionModel, frame: IdleFrame | null, time: nu
       return { eyes: [1.25, 1.25], mouth: p > 0.85 ? "smile" : "round", gaze: [Math.sin(p * 14) * 0.04, 0] };
     }
   }
+}
+
+function lanternFlight(progress: number, origin: THREE.Vector3, target: THREE.Vector3) {
+  const angle = ease(0.28, 0.72, progress) * Math.PI * 2;
+  target.set(Math.cos(angle) * 1.12, 0.32 + Math.sin(angle) * 1.04, 1.05);
+  if (progress < 0.28) target.lerpVectors(origin, target, ease(0.16, 0.28, progress));
+  else if (progress > 0.72) target.lerp(origin, ease(0.72, 0.86, progress));
 }

@@ -59,6 +59,7 @@ pub async fn sign_up(State(s): State<AppState>, ip: ClientIp, Json(body): Json<C
             active.terms_version = Set(terms);
             active.terms_accepted_at = Set(accepted.then_some(now));
             let user = active.update(&s.db).await?;
+            s.cache.forget_user(&user.id);
             send_confirmation_code(&s, &user).await?;
             return Ok(pending(user.email, true));
         }
@@ -147,6 +148,7 @@ pub async fn confirm_email(State(s): State<AppState>, ip: ClientIp, Json(body): 
     let mut active: user::ActiveModel = user.into();
     active.email_confirmed_at = Set(Some(Utc::now()));
     let user = active.update(&s.db).await?;
+    s.cache.forget_user(&user.id);
     if !s.is_approved(&user) {
         tell_admins(&s, &user.email);
     }
@@ -258,6 +260,8 @@ pub async fn refresh(State(s): State<AppState>, Json(body): Json<RefreshRequest>
     active.expires_at = Set(now + chrono::Duration::days(REFRESH_TTL_DAYS));
     active.confirmed = Set(false);
     let session = active.update(&s.db).await?;
+    // Unconfirmed again: the next request (with the new token) confirms it.
+    s.cache.forget_user(&session.user_id);
 
     Ok(Json(issue(&s, user, &session.id, refresh_token)))
 }
@@ -368,6 +372,7 @@ pub async fn reset_password(State(s): State<AppState>, ip: ClientIp, Json(body):
     let user = active.update(&txn).await?;
     revoke_sessions(&txn, &user.id, None).await?;
     txn.commit().await?;
+    s.cache.forget_user(&user.id);
 
     s.limits.failed_sign_ins.clear(&email);
     if !s.is_approved(&user) {
@@ -415,7 +420,9 @@ async fn upgrade(s: &AppState, user: user::Model, login_key: Option<String>) -> 
             let mut active: user::ActiveModel = user.into();
             active.password_hash = Set(password::hash(key).await?);
             active.login_key = Set(true);
-            Ok(active.update(&s.db).await?)
+            let user = active.update(&s.db).await?;
+            s.cache.forget_user(&user.id);
+            Ok(user)
         }
         _ => Ok(user),
     }
@@ -445,10 +452,7 @@ pub(crate) fn new_reset_code() -> String {
 }
 
 pub async fn me(State(s): State<AppState>, auth: AuthUser) -> Result<Json<User>, ApiError> {
-    let user = user::Entity::find_by_id(&auth.user_id)
-        .one(&s.db)
-        .await?
-        .ok_or_else(|| ApiError::unauthorized(SIGNED_OUT))?;
+    let user = crate::admin::account(&s, &auth.user_id).await?;
     Ok(Json(s.user_view(user)))
 }
 
@@ -478,17 +482,32 @@ pub(crate) async fn signed_in(s: &AppState, headers: &HeaderMap) -> Result<Optio
         .ok_or_else(|| ApiError::unauthorized("Sign in to continue."))?;
     let claims = s.keys.verify(token).ok_or_else(|| ApiError::unauthorized("Your session has expired."))?;
 
+    // Known to be signed in (signing out, or any change to the session,
+    // forgets it at once): no need to ask the database.
+    if s.cache.session(&claims.sid).is_some_and(|owner| owner == claims.sub) {
+        return Ok(Some(AuthUser { user_id: claims.sub, session_id: claims.sid }));
+    }
+
     // The token is genuine, but the device may have been signed out since.
+    let generation = s.cache.generation();
     let session = session::Entity::find_by_id(&claims.sid)
         .filter(session::Column::RevokedAt.is_null())
         .one(&s.db)
         .await?
         .ok_or_else(|| ApiError::unauthorized(SIGNED_OUT))?;
+    let owner = session.user_id.clone();
     // A token from the last refresh proves the device got its answer (see `refresh`).
-    if !session.confirmed && claims.iat >= session.last_used_at.timestamp().max(0) as u64 {
+    let confirmed = if !session.confirmed && claims.iat >= session.last_used_at.timestamp().max(0) as u64 {
         let mut active: session::ActiveModel = session.into();
         active.confirmed = Set(true);
         active.update(&s.db).await?;
+        true
+    } else {
+        session.confirmed
+    };
+    // Only a confirmed session is remembered: until then, each request may be the one that confirms it.
+    if confirmed {
+        s.cache.keep_session(generation, &claims.sid, &owner);
     }
     Ok(Some(AuthUser { user_id: claims.sub, session_id: claims.sid }))
 }
@@ -528,8 +547,10 @@ fn issue(s: &AppState, user: user::Model, session_id: &str, refresh_token: Strin
 }
 
 async fn revoke(s: &AppState, session: session::Model) -> Result<(), ApiError> {
+    let user_id = session.user_id.clone();
     let mut active: session::ActiveModel = session.into();
     active.revoked_at = Set(Some(Utc::now()));
     active.update(&s.db).await?;
+    s.cache.forget_user(&user_id);
     Ok(())
 }

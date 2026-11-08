@@ -8,6 +8,7 @@ pub mod admin;
 mod ai;
 mod digest_mail;
 pub mod auth;
+pub mod cache;
 mod codes;
 pub mod config;
 pub mod db;
@@ -84,6 +85,12 @@ pub struct Shared {
     pub ai_daily_limit: Option<u32>,
     /// The admin panel's settings, read from the database at startup.
     pub settings: RwLock<admin::Settings>,
+    /// Sessions, accounts and shared boards remembered between requests, so
+    /// apps checking in don't keep the database awake (see `cache`).
+    pub cache: cache::Cache,
+    /// Told when an email plan changes, so the sender looks again at when its
+    /// next email is due (see `notify::run`).
+    pub email_wake: tokio::sync::Notify,
 }
 
 impl Shared {
@@ -107,6 +114,8 @@ impl Shared {
             ai_keys: axiom_ai::Keys::default(),
             ai_daily_limit: None,
             settings: RwLock::new(admin::Settings::default()),
+            cache: cache::Cache::default(),
+            email_wake: tokio::sync::Notify::new(),
         }
     }
 
@@ -225,8 +234,26 @@ pub fn app(state: AppState) -> Router {
         // A minute of audio, base64-encoded, is more than the usual 2 MB.
         .route(routes::AI_TRANSCRIBE, post(ai::transcribe).layer(axum::extract::DefaultBodyLimit::max(4 * 1024 * 1024)))
         .route(routes::NOTIFY_UNSUBSCRIBE, get(notify::unsubscribe_page).post(notify::unsubscribe_now))
+        .layer(axum::middleware::from_fn_with_state(state.clone(), boards_changed))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// After any change to a shared board, its members or invitations, what's
+/// remembered about boards is forgotten (see `cache`). Done here, around
+/// every such route, so a new one can't forget to.
+async fn boards_changed(
+    axum::extract::State(s): axum::extract::State<AppState>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let path = request.uri().path();
+    let changes = request.method() != axum::http::Method::GET && (path.starts_with("/v1/spaces") || path.starts_with("/v1/invites"));
+    let response = next.run(request).await;
+    if changes {
+        s.cache.forget_spaces();
+    }
+    response
 }
 
 /// Serves requests on `listener` until the task is dropped or the process stops.

@@ -5,7 +5,8 @@ function database(accountId: string) {
   let opened = databases.get(accountId);
   if (!opened) {
     opened = new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open(`axiom-terminal-${accountId}`, 5);
+      // 6: the whole app on the web (profile, notifications, Reading, University, Learning).
+      const request = indexedDB.open(`axiom-terminal-${accountId}`, 6);
       request.onupgradeneeded = () => {
         if (!request.result.objectStoreNames.contains("records")) {
           request.result.createObjectStore("records", { keyPath: ["table", "id"] });

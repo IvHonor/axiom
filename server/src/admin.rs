@@ -136,6 +136,7 @@ pub async fn update(
         active.permissions = Set(checked(list)?);
     }
     let saved = active.update(&s.db).await?;
+    s.cache.forget_user(&saved.id);
     tracing::info!("Changed an account's role or permissions");
     Ok(Json(view(&s, saved, &HashMap::new())))
 }
@@ -149,7 +150,8 @@ pub async fn approve(State(s): State<AppState>, _admin: AdminUser, Path(id): Pat
     let email = account.email.clone();
     let mut active: user::ActiveModel = account.into();
     active.approved_at = Set(Some(Utc::now()));
-    active.update(&s.db).await?;
+    let saved = active.update(&s.db).await?;
+    s.cache.forget_user(&saved.id);
     tracing::info!("Approved an account from the waiting list");
 
     let state = s.clone();
@@ -172,8 +174,10 @@ pub async fn decline(State(s): State<AppState>, _admin: AdminUser, Path(id): Pat
     password_reset::Entity::delete_many().filter(password_reset::Column::UserId.eq(&account.id)).exec(&txn).await?;
     email_code::Entity::delete_many().filter(email_code::Column::UserId.eq(&account.id)).exec(&txn).await?;
     session::Entity::delete_many().filter(session::Column::UserId.eq(&account.id)).exec(&txn).await?;
+    let id = account.id.clone();
     account.delete(&txn).await?;
     txn.commit().await?;
+    s.cache.forget_user(&id);
     tracing::info!("Turned down an account on the waiting list");
     Ok(StatusCode::NO_CONTENT)
 }
@@ -195,6 +199,7 @@ pub async fn revoke(State(s): State<AppState>, admin: AdminUser, Path(id): Path<
     active.update(&txn).await?;
     revoke_sessions(&txn, &user_id, None).await?;
     txn.commit().await?;
+    s.cache.forget_user(&user_id);
     tracing::info!("Took an account's access away");
     Ok(StatusCode::NO_CONTENT)
 }
@@ -230,11 +235,23 @@ async fn find(s: &AppState, id: &str) -> Result<user::Model, ApiError> {
 
 /// The signed-in account, if it may use `permission`; otherwise a message
 /// saying it's switched off and who can switch it on.
-pub async fn require(s: &AppState, user_id: &str, permission: &str) -> Result<user::Model, ApiError> {
+/// The signed-in user's account row, remembered between requests (every
+/// write to it forgets it, see `cache`).
+pub async fn account(s: &AppState, user_id: &str) -> Result<user::Model, ApiError> {
+    if let Some(account) = s.cache.account(user_id) {
+        return Ok(account);
+    }
+    let generation = s.cache.generation();
     let account = user::Entity::find_by_id(user_id)
         .one(&s.db)
         .await?
         .ok_or_else(|| ApiError::unauthorized("You've been signed out. Sign in again to continue."))?;
+    s.cache.keep_account(generation, &account);
+    Ok(account)
+}
+
+pub async fn require(s: &AppState, user_id: &str, permission: &str) -> Result<user::Model, ApiError> {
+    let account = account(s, user_id).await?;
     if s.may(&account, permission) {
         return Ok(account);
     }

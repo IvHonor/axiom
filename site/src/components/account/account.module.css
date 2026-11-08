@@ -113,6 +113,8 @@
 .notify input { flex: 1 1 200px; height: 36px; }
 .notify .error { flex-basis: 100%; text-align: left; }
 .small { font-size: 11px !important; }
+.webNote { max-width: 720px; margin-top: 28px; color: var(--text-dim); font-size: 12px; line-height: 1.8; }
+.webNote a { color: var(--text); text-underline-offset: 3px; }
 
 @media (max-width: 1100px) {
   .auth { gap: 48px; }

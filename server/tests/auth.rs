@@ -14,7 +14,7 @@ async fn sign_up_sign_in_and_me() {
     let (status, session) = post(&app, routes::SIGN_UP, credentials(" Ada@Example.com ", "correct horse")).await;
     assert_eq!(status, StatusCode::OK, "{session}");
     assert_eq!(session["user"]["email"], "ada@example.com", "emails are normalised");
-    assert_eq!(session["expires_in"], 900);
+    assert_eq!(session["expires_in"], 6 * 60 * 60);
 
     let (status, me) = call(&app, Method::GET, routes::ME, session["access_token"].as_str(), None).await;
     assert_eq!(status, StatusCode::OK);

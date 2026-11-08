@@ -1,14 +1,15 @@
 // How Lemma looks: colours, shell, an accessory and something to hold. Part
 // of the profile, so it syncs, and shared by every face. "theme" colours
 // follow the colour theme, so the standard Lemma always fits.
-import { Binary, Book, Coffee, Gamepad2, Heart, Music, Rocket, Sprout, Star, type LucideIcon } from "lucide-react";
+import { Binary, Book, Coffee, Gamepad2, Heart, Lamp, Music, Rocket, Sprout, Star, type LucideIcon } from "lucide-react";
+import type { AccountStatus } from "../../lib/account";
 import { useSyncExternalStore } from "react";
 import { onSettingSynced, readSetting, saveSetting } from "../../lib/settings";
 
 export type Shell = "orb" | "prism" | "pyramid" | "drop";
 export type Accessory = "none" | "headphones" | "halo" | "cap" | "beanie" | "crown";
 export type Finish = "hologram" | "glass" | "metal" | "matte";
-export type Holding = "none" | "coffee" | "book" | "plant" | "star" | "heart" | "rocket" | "music" | "game" | "glitch";
+export type Holding = "none" | "coffee" | "book" | "plant" | "star" | "heart" | "rocket" | "music" | "game" | "glitch" | "first-light";
 
 export interface Look {
   /** The eyes, crest and side panels. "theme" is the theme's accent. */
@@ -70,23 +71,29 @@ export const ACCESSORIES: { id: Accessory; name: string }[] = [
   { id: "crown", name: "Crown" },
 ];
 
-export const HOLDINGS: { id: Holding; name: string; icon: LucideIcon | null; adminOnly?: boolean; future?: boolean }[] = [
-  { id: "none", name: "Nothing", icon: null },
-  { id: "coffee", name: "Coffee", icon: Coffee },
-  { id: "book", name: "Book", icon: Book },
-  { id: "plant", name: "Plant", icon: Sprout },
-  { id: "glitch", name: "Glitch core", icon: Binary, adminOnly: true },
-  { id: "star", name: "Star", icon: Star, future: true },
-  { id: "heart", name: "Heart", icon: Heart, future: true },
-  { id: "rocket", name: "Rocket", icon: Rocket, future: true },
-  { id: "music", name: "Music", icon: Music, future: true },
-  { id: "game", name: "Game", icon: Gamepad2, future: true },
+export const HOLDINGS: { id: Holding; name: string; source: string; icon: LucideIcon | null; adminOnly?: boolean; earlyOnly?: boolean; future?: boolean }[] = [
+  { id: "none", name: "Nothing", source: "No item equipped.", icon: null },
+  { id: "coffee", name: "Coffee", source: "Available to everyone.", icon: Coffee },
+  { id: "book", name: "Book", source: "Available to everyone.", icon: Book },
+  { id: "plant", name: "Plant", source: "Available to everyone.", icon: Sprout },
+  { id: "first-light", name: "First Light", source: "Given to users who created an account before 21 March 2027.", icon: Lamp, earlyOnly: true },
+  { id: "glitch", name: "Glitch core", source: "Given to admins.", icon: Binary, adminOnly: true },
+  { id: "star", name: "Star", source: "Not yet available.", icon: Star, future: true },
+  { id: "heart", name: "Heart", source: "Not yet available.", icon: Heart, future: true },
+  { id: "rocket", name: "Rocket", source: "Not yet available.", icon: Rocket, future: true },
+  { id: "music", name: "Music", source: "Not yet available.", icon: Music, future: true },
+  { id: "game", name: "Game", source: "Not yet available.", icon: Gamepad2, future: true },
 ];
 
+/** Eligibility follows the server's account creation time, never this device's clock or saved wardrobe. */
+export function hasFirstLight(account: AccountStatus | null): boolean {
+  return account?.state === "signed_in" && !!account.createdAt && Date.parse(account.createdAt) < Date.parse("2027-03-21T00:00:00Z");
+}
+
 /** Check the active account at display/apply time, including synced outfits. */
-export function lookForRole(look: Look, admin: boolean): Look {
+export function lookForRole(look: Look, admin: boolean, firstLight = false): Look {
   const item = HOLDINGS.find(h => h.id === look.holding);
-  return item && !item.future && (!item.adminOnly || admin) ? look : { ...look, holding: "none" };
+  return item && !item.future && (!item.adminOnly || admin) && (!item.earlyOnly || firstLight) ? look : { ...look, holding: "none" };
 }
 
 const KEY = "axiom.lemma.look";

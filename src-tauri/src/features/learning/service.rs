@@ -27,19 +27,19 @@ const HISTORY_DAYS: u64 = 14;
 const MAX_UNITS_PER_SOURCE: usize = 3000;
 const MAX_TITLE: usize = 300;
 
-fn skills() -> Select<skill::Entity> {
+pub(super) fn skills() -> Select<skill::Entity> {
     skill::Entity::find().filter(skill::Column::DeletedAt.is_null())
 }
 
-fn sources() -> Select<source::Entity> {
+pub(super) fn sources() -> Select<source::Entity> {
     source::Entity::find().filter(source::Column::DeletedAt.is_null())
 }
 
-fn units() -> Select<unit::Entity> {
+pub(super) fn units() -> Select<unit::Entity> {
     unit::Entity::find().filter(unit::Column::DeletedAt.is_null())
 }
 
-fn sessions() -> Select<session::Entity> {
+pub(super) fn sessions() -> Select<session::Entity> {
     session::Entity::find().filter(session::Column::DeletedAt.is_null())
 }
 

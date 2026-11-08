@@ -940,7 +940,7 @@ pub async fn summary(db: &DatabaseConnection) -> Result<Summary> {
 
 // ---------- Queries that skip deleted rows ----------
 
-fn projects() -> Select<project::Entity> {
+pub(super) fn projects() -> Select<project::Entity> {
     project::Entity::find().filter(project::Column::DeletedAt.is_null())
 }
 
@@ -948,7 +948,7 @@ fn columns() -> Select<column::Entity> {
     column::Entity::find().filter(column::Column::DeletedAt.is_null())
 }
 
-fn tasks() -> Select<task::Entity> {
+pub(super) fn tasks() -> Select<task::Entity> {
     task::Entity::find().filter(task::Column::DeletedAt.is_null())
 }
 

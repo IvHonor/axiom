@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { BarChart3, Calendar, CalendarDays, CalendarRange, Check, ChevronLeft, ChevronRight, Moon, Plus, Repeat, RotateCcw, Settings2, Sun, Sunrise, X } from "lucide-react";
+import { readSetting, saveSetting } from "../../lib/settings";
 import { useDataChanged } from "../../lib/sync";
 import { Dropdown } from "../../shell/ui/Dropdown";
 import { api, errorMessage, nudgeCalendars, type CalendarSetup, type DayPlan, type PlanTask, type Settings } from "./api";
@@ -363,22 +364,13 @@ export function DailyPlanView({ initialDay, calendarExtras }: { initialDay?: str
 
 /** Until a calendar is connected: one click to connect Google, Outlook or iCloud. */
 function ConnectCard({ setup }: { setup: CalendarSetup }) {
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return localStorage.getItem(CONNECT_HINT_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  // Saved as "1" by older versions; dismissing it on one computer dismisses it on all.
+  const [hidden, setHidden] = useState(() => String(readSetting(CONNECT_HINT_KEY)) === "1");
   if (hidden || setup.accounts.length > 0 || setup.calendars.length > 0) return null;
   const start = (provider: "google" | "microsoft" | "caldav") => setPlanUi({ dialog: { kind: "calendars", start: provider } });
   const dismiss = () => {
     setHidden(true);
-    try {
-      localStorage.setItem(CONNECT_HINT_KEY, "1");
-    } catch {
-      // Without storage the card comes back next time; that's all.
-    }
+    saveSetting(CONNECT_HINT_KEY, "1");
   };
 
   return (

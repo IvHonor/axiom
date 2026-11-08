@@ -4,6 +4,7 @@ import type { ExtensionManifest } from "../../extensions/types";
 import { GoalsSidebar } from "./GoalsSidebar";
 import { GoalsSummary } from "./GoalsSummary";
 import { GoalsView } from "./GoalsView";
+import { goalsAnalytics } from "./analytics";
 
 export const goals: ExtensionManifest = {
   id: "goals",
@@ -29,5 +30,5 @@ export const goals: ExtensionManifest = {
   builtIn: true,
   icon: Target,
   color: "var(--area-goals)",
-  area: { View: GoalsView, Summary: GoalsSummary, Sidebar: GoalsSidebar, fittedSummary: true },
+  area: { View: GoalsView, Summary: GoalsSummary, Sidebar: GoalsSidebar, fittedSummary: true, analytics: goalsAnalytics },
 };

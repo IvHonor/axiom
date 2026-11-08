@@ -379,6 +379,11 @@ input.rd-num {
   margin: 4px 0 0;
 }
 
+/* Start reading / Stop and log, under the author. */
+.rd-book-title .btn {
+  margin-top: 10px;
+}
+
 .rd-status {
   width: 100%;
   display: grid;

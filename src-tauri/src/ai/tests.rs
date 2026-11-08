@@ -4,6 +4,7 @@ use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
+use axiom_ai::Ai;
 use crate::account::store::Memory as SessionMemory;
 use crate::vault::store::Memory;
 
@@ -27,32 +28,28 @@ async fn gemini() -> MockServer {
 }
 
 #[test]
-fn own_keys_are_kept_and_forgotten() {
+fn keys_saved_when_people_could_bring_their_own_are_forgotten() {
     let store = Memory::default();
-    let assistant = Assistant::new(Ai::default(), Box::new(store.clone()));
-    assert_eq!(assistant.key_status(), KeyStatus { gemini: false, groq: false });
-
-    assert_eq!(assistant.set_key(Provider::Gemini, Some(&format!("  {KEY}\n"))).unwrap(), KeyStatus { gemini: true, groq: false });
-    assert!(store.load().unwrap().contains(KEY), "trimmed and saved");
-    assert!(assistant.set_key(Provider::Groq, Some("not a key")).is_err());
-
-    assistant.set_key(Provider::Gemini, None).unwrap();
-    assert!(store.load().is_none(), "nothing left to keep");
+    store.save(&format!(r#"{{"gemini":"{KEY}"}}"#)).unwrap();
+    Assistant::forget_own_keys(&store);
+    assert!(store.load().is_none());
 }
 
 #[tokio::test]
-async fn own_key_answers_without_an_account() {
-    let gemini = gemini().await;
-    let assistant = Assistant::new(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), Box::new(Memory::default()));
+async fn lemma_needs_an_account() {
     let account = Account::new("", Box::new(SessionMemory::default()));
+    let err = Assistant::default().chat(&account, &hello()).await.unwrap_err();
+    assert_eq!(err.to_string(), "Sign in to use Lemma.");
+    let err = Assistant::default().transcribe(&account, "AAAA", "audio/wav").await.unwrap_err();
+    assert_eq!(err.to_string(), "Sign in to use Lemma.");
+}
 
-    let err = assistant.chat(&account, &hello()).await.unwrap_err();
-    assert!(err.to_string().starts_with("Sign in to use Axiom's assistant"), "{err}");
-
-    assistant.set_key(Provider::Gemini, Some(KEY)).unwrap();
-    let reply = assistant.chat(&account, &hello()).await.unwrap();
-    assert_eq!(reply.reply.text.as_deref(), Some("Hello!"));
-    assert!(reply.own_key);
+#[tokio::test]
+async fn answers_through_the_ai() {
+    let gemini = gemini().await;
+    let assistant = Assistant::direct(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), KEY);
+    let account = Account::new("", Box::new(SessionMemory::default()));
+    assert_eq!(assistant.chat(&account, &hello()).await.unwrap().text.as_deref(), Some("Hello!"));
 }
 
 mod conversation {
@@ -89,8 +86,7 @@ mod conversation {
         ] {
             Mock::given(method("POST")).respond_with(gemini_says(parts)).up_to_n_times(1).mount(&gemini).await;
         }
-        let assistant = Assistant::new(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), Box::new(Memory::default()));
-        assistant.set_key(Provider::Gemini, Some(KEY)).unwrap();
+        let assistant = Assistant::direct(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), KEY);
         let account = Account::new("", Box::new(SessionMemory::default()));
         let db = db().await;
         let turn = Turn { db: &db, assistant: &assistant, account: &account, areas: vec!["birthdays".into()], name: Some("Danial".into()), persona: Default::default(), stop: agent::Stop::never() };
@@ -146,8 +142,7 @@ mod conversation {
         for parts in [add.clone(), json!([{ "text": "Ready for you to check." }]), add, json!([{ "text": "It's already waiting above." }])] {
             Mock::given(method("POST")).respond_with(gemini_says(parts)).up_to_n_times(1).mount(&gemini).await;
         }
-        let assistant = Assistant::new(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), Box::new(Memory::default()));
-        assistant.set_key(Provider::Gemini, Some(KEY)).unwrap();
+        let assistant = Assistant::direct(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), KEY);
         let account = Account::new("", Box::new(SessionMemory::default()));
         let db = db().await;
         let turn = Turn { db: &db, assistant: &assistant, account: &account, areas: vec!["birthdays".into()], name: None, persona: Default::default(), stop: agent::Stop::never() };
@@ -186,8 +181,7 @@ mod conversation {
         ] {
             Mock::given(method("POST")).respond_with(with_usage(parts, 1000, 50)).up_to_n_times(1).mount(&gemini).await;
         }
-        let assistant = Assistant::new(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), Box::new(Memory::default()));
-        assistant.set_key(Provider::Gemini, Some(KEY)).unwrap();
+        let assistant = Assistant::direct(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), KEY);
         let account = Account::new("", Box::new(SessionMemory::default()));
         let db = db().await;
         let everything: Vec<String> = ["birthdays", "daily_plan", "goals", "reading", "finance"].map(String::from).to_vec();
@@ -213,8 +207,7 @@ mod conversation {
         let gemini = MockServer::start().await;
         let slow = gemini_says(json!([{ "text": "Too late." }])).set_delay(std::time::Duration::from_secs(20));
         Mock::given(method("POST")).respond_with(slow).mount(&gemini).await;
-        let assistant = Assistant::new(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), Box::new(Memory::default()));
-        assistant.set_key(Provider::Gemini, Some(KEY)).unwrap();
+        let assistant = Assistant::direct(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), KEY);
         let account = Account::new("", Box::new(SessionMemory::default()));
         let db = db().await;
         let (stopper, stop) = agent::Stop::new();
@@ -236,8 +229,7 @@ mod conversation {
         let gemini = MockServer::start().await;
         Mock::given(method("POST")).respond_with(gemini_says(json!([{ "functionCall": { "name": "birthdays_add", "args": { "name": "Ada", "month": 1, "day": 1 } } }]))).up_to_n_times(1).mount(&gemini).await;
         Mock::given(method("POST")).respond_with(gemini_says(json!([{ "text": "Birthdays is switched off." }]))).mount(&gemini).await;
-        let assistant = Assistant::new(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), Box::new(Memory::default()));
-        assistant.set_key(Provider::Gemini, Some(KEY)).unwrap();
+        let assistant = Assistant::direct(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), KEY);
         let account = Account::new("", Box::new(SessionMemory::default()));
         let db = db().await;
         let turn = Turn { db: &db, assistant: &assistant, account: &account, areas: vec![], name: None, persona: Default::default(), stop: agent::Stop::never() };
@@ -247,6 +239,51 @@ mod conversation {
         let sent: Vec<Value> = gemini.received_requests().await.unwrap().iter().map(|r| r.body_json().unwrap()).collect();
         assert!(sent[0].get("tools").is_none());
         assert!(sent[1]["contents"][2]["parts"][0]["functionResponse"]["response"]["error"].as_str().unwrap().contains("switched off"));
+    }
+
+    #[tokio::test]
+    async fn the_day_is_looked_at_first_the_time_goes_last_and_a_look_isnt_repeated() {
+        let gemini = MockServer::start().await;
+        // Looks at the day again, though it has it, then answers.
+        let again = json!([{ "functionCall": { "name": "plan_day", "args": {} }, "thoughtSignature": "sig-1" }]);
+        for parts in [again, json!([{ "text": "Your day is clear." }])] {
+            Mock::given(method("POST")).respond_with(gemini_says(parts)).up_to_n_times(1).mount(&gemini).await;
+        }
+        let assistant = Assistant::direct(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), KEY);
+        let account = Account::new("", Box::new(SessionMemory::default()));
+        let db = db().await;
+        let turn = Turn { db: &db, assistant: &assistant, account: &account, areas: vec!["daily_plan".into()], name: None, persona: Default::default(), stop: agent::Stop::never() };
+
+        let seen = Mutex::new(Vec::new());
+        let chat = agent::send(&turn, None, Some("Plan my day please".into()), |p| seen.lock().unwrap().push(p.state)).await.unwrap();
+        assert_eq!(chat.entries.iter().map(kind).collect::<Vec<_>>(), ["user", "looked", "assistant"]);
+        assert_eq!(seen.lock().unwrap()[0], "looking", "before the AI is asked");
+
+        let sent: Vec<Value> = gemini.received_requests().await.unwrap().iter().map(|r| r.body_json().unwrap()).collect();
+        assert_eq!(sent.len(), 2);
+        // The first call already has the day.
+        assert_eq!(sent[0]["contents"][1]["parts"][0]["functionCall"]["name"], "plan_day");
+        assert!(sent[0]["contents"][2]["parts"][0]["functionResponse"]["response"]["working_hours"].is_string());
+        // When it is goes with the message, not in the instructions, so they stay the same.
+        let instructions = sent[0]["systemInstruction"]["parts"][0]["text"].as_str().unwrap();
+        let weekday = chrono::Local::now().format("%A").to_string();
+        assert!(!instructions.contains(&weekday), "{instructions}");
+        let message = sent[0]["contents"][0]["parts"][0]["text"].as_str().unwrap();
+        assert!(message.starts_with(&format!("[{weekday} ")) && message.ends_with("] Plan my day please"), "{message}");
+        assert_eq!(sent[1]["contents"][0], sent[0]["contents"][0], "the same all turn");
+        // Asked again, it's told it already has it.
+        let note = &sent[1]["contents"][4]["parts"][0]["functionResponse"]["response"]["note"];
+        assert!(note.as_str().unwrap().contains("already looked this up"), "{note}");
+    }
+
+    #[test]
+    fn only_a_day_being_planned_is_looked_at_first() {
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 11, 1).unwrap();
+        assert_eq!(agent::day_planned("Can you plan my day?", today), Some(json!({})));
+        assert_eq!(agent::day_planned("Schedule tomorrow for me", today), Some(json!({ "day": "2026-11-02" })));
+        for text in ["Plan the project", "What's on today?", "Add a task"] {
+            assert_eq!(agent::day_planned(text, today), None, "{text}");
+        }
     }
 }
 
@@ -391,5 +428,170 @@ mod confirming {
         agent::undo(&db, &id).await.unwrap();
         let filter = crate::features::journal::types::EntryFilter::default();
         assert!(crate::features::journal::service::list(&db, filter).await.unwrap().is_empty());
+    }
+}
+
+/// A question about everything looks everywhere, but brings in the change
+/// tools only of the areas it names: the free plans count every token sent.
+#[test]
+fn a_broad_question_can_look_everywhere_but_change_only_what_it_names() {
+    let allowed: Vec<String> = ["daily_plan", "reading", "finance"].map(String::from).to_vec();
+    let names = |tools: Vec<axiom_protocol::ai::Tool>| tools.into_iter().map(|t| t.name).collect::<Vec<_>>();
+
+    let narrow = names(agent::tools_for(&["daily_plan".into()], &allowed, false));
+    assert!(narrow.contains(&"plan_add".into()) && narrow.contains(&"use_area".into()));
+    assert!(!narrow.iter().any(|n| n.starts_with("reading_") || n.starts_with("finance_")), "nothing of areas it isn't about");
+
+    let broad = names(agent::tools_for(&["daily_plan".into()], &allowed, true));
+    assert!(broad.contains(&"plan_add".into()), "the area it names, whole");
+    assert!(broad.contains(&"reading_books".into()), "a look at the others");
+    assert!(!broad.contains(&"reading_add".into()) && !broad.iter().any(|n| n.starts_with("finance_add")), "but not their changes");
+    assert!(broad.contains(&"use_area".into()), "which use_area brings in");
+}
+
+mod quick {
+    use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+    use serde_json::{Value, json};
+    use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer};
+
+    use super::*;
+    use crate::ai::quick::{ask, undo_all};
+
+    async fn db() -> DatabaseConnection {
+        let mut options = ConnectOptions::new("sqlite::memory:");
+        options.max_connections(1).sqlx_logging(false);
+        let db = Database::connect(options).await.unwrap();
+        crate::db::prepare(&db).await.unwrap();
+        db
+    }
+
+    /// A stand-in Gemini that answers with each of `turns`' parts, in turn.
+    async fn gemini_saying(turns: Vec<Value>) -> MockServer {
+        let gemini = MockServer::start().await;
+        for parts in turns {
+            Mock::given(method("POST")).respond_with(streamed(json!({ "candidates": [{ "content": { "role": "model", "parts": parts } }] }))).up_to_n_times(1).mount(&gemini).await;
+        }
+        gemini
+    }
+
+    fn lemma(gemini: &MockServer) -> (Assistant, Account) {
+        (Assistant::direct(Ai::default().with_urls(&gemini.uri(), "http://127.0.0.1:9"), KEY), Account::new("", Box::new(SessionMemory::default())))
+    }
+
+    fn tools(sent: &Value) -> Vec<String> {
+        sent["tools"][0]["functionDeclarations"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_owned()).collect()
+    }
+
+    #[tokio::test]
+    async fn a_timer_starts_straight_away_can_be_undone_and_nothing_is_kept() {
+        let gemini = gemini_saying(vec![
+            json!([{ "functionCall": { "name": "plan_timer", "args": { "action": "start", "title": "Essay", "minutes": 30 } } }]),
+            json!([{ "text": "On it: timing your **essay** now." }]),
+        ])
+        .await;
+        let (assistant, account) = lemma(&gemini);
+        let db = db().await;
+        let today = chrono::Local::now().date_naive();
+
+        let reply = ask(&db, &assistant, &account, "start a timer for my essay", &["daily_plan".into()], Some("Ada"), &Default::default()).await.unwrap();
+        assert_eq!(reply.said.as_deref(), Some("On it: timing your essay now."));
+        assert_eq!(reply.did.as_deref(), Some("Start a timer on \"Essay\""));
+        assert!(!reply.open_chat);
+        assert_eq!(reply.undo.len(), 1);
+        let plan = crate::features::daily_plan::service::get_day(&db, today, today).await.unwrap();
+        assert_eq!(plan.running.map(|t| t.title), Some("Essay".into()));
+        assert!(crate::ai::agent::list(&db).await.unwrap().is_empty(), "no chat is kept");
+
+        // Undo, from the bubble: the task it made goes, timer and all.
+        undo_all(&db, &reply.undo).await.unwrap();
+        let plan = crate::features::daily_plan::service::get_day(&db, today, today).await.unwrap();
+        assert!(plan.running.is_none());
+        assert!(plan.tasks.is_empty());
+
+        // Told what it can do here, and to be brief.
+        let sent: Vec<Value> = gemini.received_requests().await.unwrap().iter().map(|r| r.body_json().unwrap()).collect();
+        let prompt = sent[0]["systemInstruction"]["parts"][0]["text"].as_str().unwrap();
+        assert!(prompt.contains("speech bubble") && prompt.contains("open_chat") && prompt.contains("Ada"), "{prompt}");
+        assert_eq!(tools(&sent[0]), ["plan_day", "plan_add", "plan_update_task", "plan_schedule", "plan_timer", "remind", "open_chat"]);
+    }
+
+    #[tokio::test]
+    async fn a_reminder_is_handed_back_to_keep() {
+        let gemini = gemini_saying(vec![
+            json!([{ "functionCall": { "name": "remind", "args": { "text": "Stand up and stretch", "in_minutes": 30 } } }]),
+            json!([{ "text": "I'll remind you in 30 minutes." }]),
+        ])
+        .await;
+        let (assistant, account) = lemma(&gemini);
+        let db = db().await;
+        let reply = ask(&db, &assistant, &account, "remind me to stretch in half an hour", &[], None, &Default::default()).await.unwrap();
+        let reminder = reply.reminder.expect("a reminder");
+        assert_eq!(reminder.text, "Stand up and stretch");
+        let in_minutes = (reminder.at - chrono::Local::now().timestamp_millis()) as f64 / 60_000.0;
+        assert!((29.0..=30.5).contains(&in_minutes), "{in_minutes}");
+        assert!(reply.undo.is_empty() && reply.did.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_reminder_can_wait_until_theyre_back() {
+        let gemini = gemini_saying(vec![
+            json!([{ "functionCall": { "name": "remind", "args": { "text": "Call Sam", "when_back": true } } }]),
+            json!([{ "text": "I'll remind you when you're back." }]),
+        ])
+        .await;
+        let (assistant, account) = lemma(&gemini);
+        let db = db().await;
+        let reply = ask(&db, &assistant, &account, "remind me to call Sam when I'm back", &[], None, &Default::default()).await.unwrap();
+        let reminder = reply.reminder.expect("a reminder");
+        assert_eq!((reminder.text.as_str(), reminder.on_return), ("Call Sam", true));
+    }
+
+    #[tokio::test]
+    async fn anything_bigger_goes_on_to_a_chat() {
+        let gemini = gemini_saying(vec![json!([{ "text": "Let's plan that in Axiom." }, { "functionCall": { "name": "open_chat", "args": {} } }])]).await;
+        let (assistant, account) = lemma(&gemini);
+        let db = db().await;
+        let reply = ask(&db, &assistant, &account, "plan my whole week", &["daily_plan".into()], None, &Default::default()).await.unwrap();
+        assert!(reply.open_chat);
+        assert_eq!(reply.did, None);
+        assert!(crate::ai::agent::list(&db).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn without_any_areas_it_only_reminds_and_hands_on() {
+        let gemini = gemini_saying(vec![json!([{ "text": "Switch an area on in my settings first." }])]).await;
+        let (assistant, account) = lemma(&gemini);
+        let db = db().await;
+        ask(&db, &assistant, &account, "start a timer", &[], None, &Default::default()).await.unwrap();
+        let sent: Value = gemini.received_requests().await.unwrap()[0].body_json().unwrap();
+        assert_eq!(tools(&sent), ["remind", "open_chat"]);
+    }
+
+    #[tokio::test]
+    async fn done_by_hand_on_the_desktop_straight_away_with_an_undo() {
+        use crate::ai::quick::act;
+        let db = db().await;
+        let today = chrono::Local::now().date_naive();
+
+        // Text dropped on him: a task for today.
+        let reply = act(&db, "plan_add", &json!({ "items": [{ "title": "Call the bank" }] })).await.unwrap();
+        assert!(reply.did.is_some() && reply.undo.len() == 1, "{reply:?}");
+        let plan = crate::features::daily_plan::service::get_day(&db, today, today).await.unwrap();
+        assert_eq!(plan.tasks.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), ["Call the bank"]);
+        undo_all(&db, &reply.undo).await.unwrap();
+        assert!(crate::features::daily_plan::service::get_day(&db, today, today).await.unwrap().tasks.is_empty());
+
+        // The evening check-in: an entry with the mood.
+        let reply = act(&db, "journal_write", &json!({ "title": "Evening check-in", "text": "Today felt good.", "mood": 4 })).await.unwrap();
+        let entries = crate::features::journal::service::list(&db, Default::default()).await.unwrap();
+        assert_eq!((entries.len(), entries[0].mood, entries[0].title.as_str()), (1, Some(4), "Evening check-in"));
+        undo_all(&db, &reply.undo).await.unwrap();
+        assert!(crate::features::journal::service::list(&db, Default::default()).await.unwrap().is_empty());
+
+        // Only what the desktop does: nothing else, and nothing that doesn't check out.
+        assert!(act(&db, "plan_delete_task", &json!({ "id": "x" })).await.is_err());
+        assert!(act(&db, "journal_write", &json!({ "text": "  " })).await.is_err());
+        assert!(crate::ai::agent::list(&db).await.unwrap().is_empty(), "no chat is kept");
     }
 }

@@ -2791,6 +2791,48 @@
   gap: 4px;
 }
 
+.admin-usage-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+  gap: 14px;
+}
+
+.admin-usage-charts .chart-card.is-wide {
+  grid-column: 1 / -1;
+}
+
+.admin-usage-period button {
+  white-space: nowrap;
+}
+
+.admin-usage-row {
+  grid-template-columns: minmax(240px, 1fr) 84px 84px 84px 96px 120px;
+}
+
+.admin-usage-error {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  font-size: 11.5px;
+  color: var(--danger);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-usage-error svg {
+  flex: none;
+}
+
+.admin-usage-bad {
+  color: var(--danger);
+}
+
+.admin-usage-trend .chart-spark {
+  width: 100%;
+  height: 26px;
+}
+
 .admin-none {
   margin: 12px 4px 0;
   font-size: 13px;
@@ -3100,27 +3142,6 @@
   gap: 2px;
 }
 
-.assistant-key {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.assistant-key .row {
-  align-items: center;
-}
-
-.assistant-saved {
-  flex: 1;
-  font-size: 12.5px;
-  color: var(--text-dim);
-}
-
-.assistant-get-key {
-  align-self: flex-start;
-  font-size: 12px;
-}
-
 /* A view that crashed, kept inside its tab (see ErrorBoundary). */
 .view-crash {
   display: flex;
@@ -3138,4 +3159,266 @@
 .view-crash p {
   margin: 0;
   color: var(--text-dim);
+}
+
+/* ---------- The sidebar: its corner (settings, pin), its edge (drag to
+   resize), peeking out while closed, and its settings ---------- */
+
+.workbench {
+  position: relative;
+}
+
+.sidebar-frame {
+  position: relative;
+}
+
+/* Dragging the edge: the width follows the pointer, without easing. */
+.sidebar-frame.is-resizing,
+.sidebar-frame.is-resizing > .sidebar-frame-content {
+  transition: none;
+}
+
+.sidebar-frame.is-resizing {
+  user-select: none;
+}
+
+.sidebar-frame-content {
+  position: relative;
+}
+
+/* Settings and the pin, in the top corner: quiet until pointed at (or pinned). */
+.sidebar-corner {
+  position: absolute;
+  top: 9px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+}
+
+.sidebar-corner-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.sidebar-frame-content:hover .sidebar-corner-btn,
+.sidebar-corner-btn:focus-visible,
+.sidebar-corner-btn.is-on,
+.sidebar-pin.is-pinned {
+  opacity: 1;
+}
+
+.sidebar-corner-btn:hover,
+.sidebar-corner-btn.is-on {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.sidebar-pin.is-pinned {
+  color: var(--accent);
+}
+
+/* The edge: drag to resize, double-click for the usual width. */
+.sidebar-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.sidebar-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.15s ease 0.1s;
+}
+
+.sidebar-resize:hover::after,
+.sidebar-resize:focus-visible::after,
+.sidebar-frame.is-resizing .sidebar-resize::after {
+  opacity: 0.8;
+}
+
+/* Peeking out over what's open, while the sidebar's closed. */
+.sidebar-peek {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 52px;
+  z-index: 20;
+  display: flex;
+  width: var(--sidebar-width);
+  background: var(--surface);
+  box-shadow: 8px 0 24px rgb(0 0 0 / 0.18);
+  animation: sidebar-peek-in var(--motion-enter, 0.18s) var(--motion-ease, ease-out);
+}
+
+.sidebar-peek > .sidebar {
+  width: 100%;
+}
+
+@keyframes sidebar-peek-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+/* Its settings: a small card under the corner. */
+.sidebar-settings {
+  position: absolute;
+  top: 38px;
+  right: 8px;
+  z-index: 4;
+  width: min(280px, calc(100% - 16px));
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+.sidebar-settings-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sidebar-settings ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sidebar-settings li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.sidebar-settings li small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.sidebar-settings-foot {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* What's waiting in an area, on its icon: a count, or a dot. */
+.activity-count {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 15px;
+  color: #fff;
+  text-align: center;
+  background: var(--accent);
+  border: 1.5px solid var(--surface);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.activity-count.is-dot {
+  top: 5px;
+  right: 5px;
+  min-width: 0;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  background: var(--success);
+  animation: activity-pulse 2s ease-in-out infinite;
+}
+
+@keyframes activity-pulse {
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 30%, transparent);
+  }
+}
+
+/* Ctrl+P: jump anywhere. */
+.quick-switcher-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 38px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  outline: none;
+}
+
+.quick-switcher-list {
+  max-height: 320px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.quick-switcher-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.quick-switcher-list button.is-chosen {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.quick-switcher-none {
+  padding: 10px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-peek,
+  .activity-count.is-dot {
+    animation: none;
+  }
 }

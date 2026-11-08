@@ -20,7 +20,7 @@ pub use crate::features::doc_edits::CHUNK;
 const EXCERPT: usize = 280;
 const MAX_TAGS: usize = 20;
 
-fn entries() -> Select<entry::Entity> {
+pub(super) fn entries() -> Select<entry::Entity> {
     entry::Entity::find().filter(entry::Column::DeletedAt.is_null())
 }
 

@@ -21,15 +21,15 @@ const MAX_WEEKS: i32 = 52;
 /// How far ahead "coming up" looks.
 const UPCOMING_DAYS: i64 = 7;
 
-fn terms() -> Select<term::Entity> {
+pub(super) fn terms() -> Select<term::Entity> {
     term::Entity::find().filter(term::Column::DeletedAt.is_null())
 }
 
-fn modules() -> Select<module::Entity> {
+pub(super) fn modules() -> Select<module::Entity> {
     module::Entity::find().filter(module::Column::DeletedAt.is_null())
 }
 
-fn lectures() -> Select<lecture::Entity> {
+pub(super) fn lectures() -> Select<lecture::Entity> {
     lecture::Entity::find().filter(lecture::Column::DeletedAt.is_null())
 }
 
@@ -91,12 +91,12 @@ fn term_card(t: term::Model, today: Date) -> TermCard {
 
 /// When a lecture should be done by: its day, or failing that the Sunday of
 /// its week. None when neither is known.
-fn due(l: &lecture::Model, t: &term::Model) -> Option<Date> {
+pub(super) fn due(l: &lecture::Model, t: &term::Model) -> Option<Date> {
     l.day.or_else(|| l.week.map(|w| day_in_week(t, w, 6)))
 }
 
 /// Been and gone without being caught up on.
-fn is_behind(l: &lecture::Model, t: &term::Model, today: Date) -> bool {
+pub(super) fn is_behind(l: &lecture::Model, t: &term::Model, today: Date) -> bool {
     l.caught_up_on.is_none() && due(l, t).is_some_and(|d| d < today)
 }
 

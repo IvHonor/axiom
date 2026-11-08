@@ -6,6 +6,7 @@ import { NotesSidebar } from "./NotesSidebar";
 import { NotesSummary } from "./NotesSummary";
 import { NotesView } from "./NotesView";
 import { stickyTiles } from "./overviewStickies";
+import { notesAnalytics } from "./analytics";
 
 export const notes: ExtensionManifest = {
   id: "notes",
@@ -32,7 +33,7 @@ export const notes: ExtensionManifest = {
   builtIn: true,
   icon: NotebookText,
   color: "var(--area-notes)",
-  area: { View: NotesView, Summary: NotesSummary, Sidebar: NotesSidebar, fittedSummary: true, tiles: stickyTiles },
+  area: { View: NotesView, Summary: NotesSummary, Sidebar: NotesSidebar, fittedSummary: true, tiles: stickyTiles, analytics: notesAnalytics },
 };
 
 

@@ -1,3 +1,5 @@
+import { getCompanionPrefs } from "../features/lemma/preferences";
+
 // Talking to Lemma: recording what's said (stopping by itself once the
 // speaker pauses), and reading replies aloud with the computer's own voices.
 // Recordings are turned into 16 kHz mono WAV here, which every AI accepts.
@@ -183,7 +185,9 @@ export function speak(text: string, onEnd?: () => void) {
   const plain = text.replace(/\*\*/g, "").replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, "").replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "");
   const utterance = new SpeechSynthesisUtterance(plain);
   const voices = speechSynthesis.getVoices();
-  utterance.voice = voices.find((v) => v.lang === navigator.language && v.localService) ?? voices.find((v) => v.lang.startsWith("en") && v.localService) ?? null;
+  const preferences = getCompanionPrefs();
+  utterance.voice = voices.find(v => v.voiceURI === preferences.voice) ?? voices.find((v) => v.lang === navigator.language && v.localService) ?? voices.find((v) => v.lang.startsWith("en") && v.localService) ?? null;
+  utterance.rate = preferences.rate;
   if (onEnd) {
     utterance.onend = onEnd;
     utterance.onerror = onEnd;

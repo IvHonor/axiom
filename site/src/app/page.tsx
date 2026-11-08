@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDown, ArrowDownRight, ArrowUpRight, CloudOff, Code2, Globe2, LockKeyhole, MoveUpRight, Palette, ShieldCheck } from "lucide-react";
+import { ArrowDown, ArrowDownRight, ArrowUpRight, CloudOff, Code2, Globe2, LockKeyhole, Mic, MonitorUp, MoveUpRight, Palette, ShieldCheck, Smile, Sparkles, Timer } from "lucide-react";
 import { DownloadButton } from "@/components/Download";
 import { Mark } from "@/components/Logo";
 import { WorkspaceTour } from "@/components/home/WorkspaceTour";
@@ -37,6 +37,14 @@ export default function Home() {
         <div className="workspace-foot wrap"><span><LockKeyhole size={12} /> Finance, Notes, Journal, Goals and Birthdays are end-to-end encrypted when synced.</span><span>YOUR LIFE DOESN&apos;T FIT IN ONE CATEGORY. NEITHER DO WE.</span></div>
       </section>
 
+      <section className="section" id="lemma" aria-labelledby="lemma-title">
+        <div className="section-heading wrap"><div><span className="eyebrow"><span className="section-number">02 /</span> MEET LEMMA, YOUR ASSISTANT</span><h2 id="lemma-title">A hand when you want one.<br />Out of the way when you don&apos;t.</h2></div><p>Lemma knows the areas you let it see, and nothing more. Ask in your own words, confirm what it suggests, and let it sit on your desktop to keep time and keep you on track.</p></div>
+        <ol className={`${styles.areaList} wrap`}>
+          {LEMMA.map((point, index) => <li key={point.title} className={styles.area}><span>{String(index + 1).padStart(2, "0")}</span><h3><point.icon size={19} strokeWidth={1.4} />{point.title}</h3><p>{point.text}</p><i aria-hidden="true">↗</i></li>)}
+        </ol>
+        <div className="workspace-foot wrap"><span><Sparkles size={12} /> Lemma on your desktop is optional: turn it on, or off, in Lemma&apos;s settings.</span><span>FREE WITH YOUR AXIOM ACCOUNT.</span></div>
+      </section>
+
       <section className="manifesto wrap" id="perspective" aria-labelledby="manifesto-title"><div className="section-tag"><span className="eyebrow">A CHANGE OF PERSPECTIVE</span><ArrowDownRight size={28} strokeWidth={1} /></div><div><h2 id="manifesto-title">You don&apos;t need a new life.<br /><span>Just a clearer view of this one.</span></h2><p>The deadline. The book you meant to finish. That idea you don&apos;t want to lose. Axiom gives it all a home, so you can spend less energy keeping up and more energy moving forward.</p></div></section>
 
       <section className="customise-section wrap" aria-labelledby="customise-title">
@@ -46,7 +54,7 @@ export default function Home() {
 
       <section className="section privacy-section wrap" id="privacy" aria-labelledby="privacy-title">
         <div className="privacy-seal" aria-hidden="true"><div className="privacy-seal-ring"><ShieldCheck size={60} strokeWidth={0.8} /></div><span>PRIVATE BY DESIGN</span><div className="barcode" /><small>YOUR LIFE IS NOT A DATASET.</small></div>
-        <div className="privacy-copy"><span className="eyebrow"><span className="section-number">02 /</span> PERSONAL MEANS PERSONAL</span><h2 id="privacy-title">Your life.<br />Your data. Your call.</h2><p>Your workspace lives on your computer. Work offline, start without an account, and choose whether to sync. Your most personal areas are encrypted before they leave your device.</p><ul className="privacy-points"><li><CloudOff size={17} /><span>Local first. Ready when you are.</span></li><li><ShieldCheck size={17} /><span>End-to-end encryption for your personal areas.</span></li><li><Code2 size={17} /><span>No ads. No analytics. Open source.</span></li></ul><Link href="/privacy" className="text-link">Read our privacy promise <ArrowUpRight size={16} /></Link></div>
+        <div className="privacy-copy"><span className="eyebrow"><span className="section-number">03 /</span> PERSONAL MEANS PERSONAL</span><h2 id="privacy-title">Your life.<br />Your data. Your call.</h2><p>Your workspace lives on your computer. Work offline, start without an account, and choose whether to sync. Your most personal areas are encrypted before they leave your device.</p><ul className="privacy-points"><li><CloudOff size={17} /><span>Local first. Ready when you are.</span></li><li><ShieldCheck size={17} /><span>End-to-end encryption for your personal areas.</span></li><li><Code2 size={17} /><span>No ads. No analytics. Open source.</span></li></ul><Link href="/privacy" className="text-link">Read our privacy promise <ArrowUpRight size={16} /></Link></div>
       </section>
 
       <section className="web-section wrap" id="web" aria-labelledby="web-title"><div className="web-icon"><Globe2 size={38} strokeWidth={1} /></div><div><span className="eyebrow">THE NEXT CHAPTER <span className="soon">COMING SOON</span></span><h2 id="web-title">Your life. Wherever it takes you.</h2><p>Axiom on the web is on its way. Your synced workspace, in your browser, for the moments you&apos;re away from your own computer.</p></div><span className="web-coordinate" aria-hidden="true">DESKTOP → EVERYWHERE</span></section>
@@ -55,6 +63,16 @@ export default function Home() {
     </>
   );
 }
+
+/** What Lemma does, for the home page (in step with the app's own "What's new"). */
+const LEMMA = [
+  { icon: Sparkles, title: "Ask in your own words", text: "Plan your day, add a birthday, log a book or see where your money went. Every change waits for your OK, and can be undone." },
+  { icon: MonitorUp, title: "On your desktop", text: "A small companion over your other apps, or tucked into the edge of your screen: your timer, your next meeting with Join, your reminders. It stays when Axiom closes." },
+  { icon: Mic, title: "Talk or type", text: "Double-click to talk, or type. Small things happen straight away, each with an Undo, and nothing you say there is kept. Drop a link or a note on it to keep it." },
+  { icon: Timer, title: "Focus, looked after", text: "Focus rounds and breaks, a nudge when time's up, a quiet word when you've been away, and it keeps out of the way during full-screen apps and calls." },
+  { icon: Smile, title: "A personality of its own", text: "Choose its name, look and personality. It talks your way, reacts to what you do, plays about when left alone, and can show the weather where you are." },
+  { icon: ShieldCheck, title: "Private by default", text: "Lemma sees nothing until you switch an area on, only uses AI when you ask it something, and your chats stay on your computer, synced end-to-end encrypted." },
+];
 
 function LayoutMark() {
   return <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" aria-hidden="true"><rect x="1" y="1" width="5" height="5" /><rect x="9" y="1" width="5" height="5" /><rect x="1" y="9" width="5" height="5" /><rect x="9" y="9" width="5" height="5" /></svg>;

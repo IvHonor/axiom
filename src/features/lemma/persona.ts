@@ -1,7 +1,8 @@
-// Who Lemma is: the name it goes by and how it talks. Kept on this computer
+// Who Lemma is: the name it goes by and how it talks. Part of the profile
 // beside its look, and sent with each message so the AI plays the part.
 // "Lemma" with the standard personality is the default.
 import { useSyncExternalStore } from "react";
+import { onSettingSynced, readSetting, saveSetting } from "../../lib/settings";
 
 export type Personality = "standard" | "cheerful" | "calm" | "direct" | "witty" | "coach";
 
@@ -27,16 +28,13 @@ export const PERSONALITIES: { id: Personality; name: string; description: string
 
 const KEY = "axiom.lemma.persona";
 
-let persona: Persona = load();
+let persona: Persona = normalisePersona(readSetting(KEY));
 const listeners = new Set<() => void>();
 
-function load(): Persona {
-  try {
-    return normalisePersona(JSON.parse(localStorage.getItem(KEY) ?? "null"));
-  } catch {
-    return STANDARD_PERSONA;
-  }
-}
+onSettingSynced(KEY, (saved) => {
+  persona = normalisePersona(saved);
+  listeners.forEach((listener) => listener());
+});
 
 export function normalisePersona(saved: unknown): Persona {
   if (!saved || typeof saved !== "object" || Array.isArray(saved)) return { ...STANDARD_PERSONA };
@@ -49,11 +47,7 @@ export function normalisePersona(saved: unknown): Persona {
 
 export function setPersona(change: Partial<Persona>) {
   persona = normalisePersona({ ...persona, ...change });
-  try {
-    localStorage.setItem(KEY, JSON.stringify(persona));
-  } catch {
-    // Storage unavailable: the persona lasts for this session only.
-  }
+  saveSetting(KEY, persona);
   listeners.forEach((listener) => listener());
 }
 

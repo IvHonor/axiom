@@ -43,7 +43,7 @@ async fn main() {
         tracing::warn!("GEMINI_API_KEY is set but GEMINI_PAID isn't: Gemini isn't used, as Google allows only its paid service for apps used in the UK, EEA and Switzerland. Turn on billing for the key's project, then set GEMINI_PAID=yes");
     }
     if !config.ai_keys.any() {
-        tracing::warn!("GEMINI_API_KEY and GROQ_API_KEY aren't set: the assistant works only for people with their own key");
+        tracing::warn!("GROQ_API_KEY isn't set (nor a paid GEMINI_API_KEY): the assistant is off");
     }
     shared.ai = axiom_ai::Ai::new(config.ai_models);
     shared.ai_keys = config.ai_keys;

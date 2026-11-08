@@ -225,6 +225,12 @@ pub async fn account_admin_settings(account: State<'_, Account>) -> Result<Admin
     account.admin_settings().await
 }
 
+/// What each account's assistant used over the last `days` days.
+#[tauri::command]
+pub async fn account_admin_ai_usage(account: State<'_, Account>, days: u32) -> Result<axiom_protocol::AdminAiUsage> {
+    account.admin_ai_usage(days).await
+}
+
 #[tauri::command]
 pub async fn account_admin_save_settings(account: State<'_, Account>, settings: AdminSettingsView) -> Result<AdminSettingsView> {
     account.save_admin_settings(settings).await

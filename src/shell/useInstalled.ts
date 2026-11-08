@@ -3,8 +3,7 @@ import { currentId, findExtension, isComingSoon } from "../extensions";
 import type { ExtensionManifest } from "../extensions/types";
 import { usePersistentState } from "./usePersistentState";
 
-// Which extensions are on is a UI preference kept in local storage for now.
-// It can move to Rust once settings need to sync.
+// Which extensions are on is part of the profile, so it syncs (see lib/settings).
 //
 // - Built-in extensions ship with Axiom and are always installed; they're on
 //   unless switched off (`disabledIds`), apart from required ones.

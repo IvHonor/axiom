@@ -17,15 +17,15 @@ pub const AREAS: &[&str] = &["health", "career", "money", "learning", "relations
 pub const KINDS: &[&str] = &["target", "milestones", "once"];
 pub const STATUSES: &[&str] = &["active", "paused", "done", "dropped"];
 
-fn goals() -> Select<goal::Entity> {
+pub(super) fn goals() -> Select<goal::Entity> {
     goal::Entity::find().filter(goal::Column::DeletedAt.is_null())
 }
 
-fn logs() -> Select<log::Entity> {
+pub(super) fn logs() -> Select<log::Entity> {
     log::Entity::find().filter(log::Column::DeletedAt.is_null())
 }
 
-fn milestones() -> Select<milestone::Entity> {
+pub(super) fn milestones() -> Select<milestone::Entity> {
     milestone::Entity::find().filter(milestone::Column::DeletedAt.is_null())
 }
 

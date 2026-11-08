@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { horizontalListSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Blocks, LayoutDashboard, ShieldCheck, X, type LucideIcon } from "lucide-react";
+import { Blocks, ChartColumn, LayoutDashboard, ShieldCheck, X, type LucideIcon } from "lucide-react";
 import { findExtension } from "../extensions";
 import { useAreaName } from "../features/lemma/persona";
 import { NotificationBell } from "./notifications/NotificationBell";
@@ -27,6 +27,7 @@ interface TopBarProps {
 function describe(view: View, nameOf: (ext: { id: string; name: string }) => string): { label: string; icon: LucideIcon } {
   if (view.kind === "overview") return { label: "Overview", icon: LayoutDashboard };
   if (view.kind === "admin") return { label: "Admin", icon: ShieldCheck };
+  if (view.kind === "analytics") return { label: "Analytics", icon: ChartColumn };
   const ext = findExtension(view.id);
   if (view.kind === "extension-info") return { label: `Extension: ${ext ? nameOf(ext) : view.id}`, icon: Blocks };
   return { label: ext ? nameOf(ext) : view.id, icon: ext?.icon ?? Blocks };

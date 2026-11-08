@@ -11,6 +11,7 @@ import {
   stopTurn,
   transcribe,
   undoChange,
+  wakeServer,
   type ChatSummary,
   type ChatView,
   type Entry,
@@ -23,10 +24,12 @@ import { nudgeCalendars } from "../../features/daily_plan/api";
 import { today } from "../../features/daily_plan/time";
 import type { ExtensionManifest } from "../../extensions/types";
 import { AssistantSettings } from "../AssistantSettings";
+import { takeHandoff, useHandoff } from "../desk/handoff";
 import { ago } from "../format";
 import { useAssistantAreas } from "../useAssistantAreas";
 import { usePersistentState } from "../usePersistentState";
 import { Face, moodOf } from "../../features/lemma/Face";
+import { askToTalk, useTalkRequests } from "../../features/lemma/talk";
 import { feel, setLemma, useLemma } from "../../features/lemma/state";
 import { doing, toolOf } from "../../features/lemma/parts";
 import { Customise } from "../../features/lemma/Customise";
@@ -40,6 +43,7 @@ import "./assistant.css";
 /** Ideas to start with, for the areas Lemma may use. */
 const SUGGESTIONS: [string, string][] = [
   ["daily_plan", "Plan my day"],
+  ["daily_plan", "Start a timer on my next task"],
   ["birthdays", "Whose birthday is next?"],
   ["goals", "How are my goals going?"],
   ["reading", "What should I read next?"],
@@ -67,14 +71,23 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
   const [customising, setCustomising] = useState(false);
   const [aloud, setAloud] = usePersistentState<boolean>("axiom.assistant.aloud", (saved) => saved === true);
   const [stopped, setStopped] = useState(false);
+  const [reading, setReading] = useState(false);
+  const speechTurn = useRef(0);
+  const stopReading = () => { speechTurn.current++; setReading(false); stopSpeaking(); };
+  useEffect(() => () => { speechTurn.current++; stopSpeaking(); }, []);
   const turn = useRef<string | null>(null);
   const busyRef = useRef(false);
   busyRef.current = busy;
 
   const refreshList = () => listChats().then(setList, () => {});
-  useEffect(() => void refreshList(), []);
   useEffect(() => {
-    setError(null);
+    void refreshList();
+    // Asleep, the server takes about a minute to start: wake it while the question's being typed.
+    wakeServer().catch(() => {});
+  }, []);
+  // The error isn't cleared here: a new chat that couldn't be answered is
+  // switched to after its error is set, and the error must stay in view.
+  useEffect(() => {
     if (!chatId) return setChat(null);
     // A load that's no longer wanted (another chat was picked, or a new one
     // started) mustn't land over it.
@@ -98,7 +111,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
   });
 
   const ask = async (text: string | null, into: string | null = chatId) => {
-    stopSpeaking();
+    stopReading();
     const id = crypto.randomUUID();
     turn.current = id;
     setBusy(true);
@@ -106,14 +119,19 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
     setDrafts([]);
     setError(null);
     setStopped(false);
+    setLemma({ activity: "thinking", feeling: null });
     try {
       const view = await send(id, into, text, allowed, name, persona);
       setChat(view);
       setChatId(view.id);
       const reply = view.entries[view.entries.length - 1];
       if (reply?.kind === "assistant" && turn.current === id) {
-        feel("happy");
-        if (aloud) speak(reply.text);
+        feel("acknowledged");
+        if (aloud) {
+          const speech = ++speechTurn.current;
+          setReading(true);
+          speak(reply.text, () => { if (speechTurn.current === speech) setReading(false); });
+        }
       }
     } catch (e) {
       setError(String(e));
@@ -131,9 +149,23 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
       setAsking(null);
       setProgress(null);
       setDrafts([]);
+      setLemma({ activity: "idle", area: null });
       void refreshList();
     }
   };
+
+  // Asked out loud on the desktop, but it needs a chat: it's asked here, in a new one.
+  const handoff = useHandoff();
+  useEffect(() => {
+    if (!handoff || busyRef.current) return;
+    const text = takeHandoff();
+    if (!text) return;
+    setChatId(null);
+    setChat(null);
+    void ask(text, null);
+    // `ask` is recreated each render; a new request is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoff, busy]);
 
   /** Stops Lemma part-way: what it had done stays, and nothing more happens. */
   const stop = () => {
@@ -141,10 +173,12 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
     void stopTurn(turn.current);
     turn.current = null;
     setStopped(true);
-    stopSpeaking();
+    setLemma({ activity: "idle", area: null });
+    stopReading();
   };
 
   const lemma = useLemma();
+  const faceMood = reading || (busy && !stopped && progress?.text?.trim()) ? "speaking" : busy && !stopped && lemma.activity === "idle" ? "thinking" : moodOf(lemma);
 
   // Changes waiting for you: Lemma raises an eyebrow until they're dealt with.
   const waiting = chat?.entries.filter((e) => e.kind === "proposal" && e.status === "pending").length ?? 0;
@@ -164,7 +198,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
     <div className="lemma-view">
       <aside className="lemma-chats" aria-label="Chats">
         <div className="lemma-chat-companion">
-          <Face mood={moodOf(lemma)} size={200} level={lemma.level} tool={toolOf(lemma)} interactive />
+          <Face mood={faceMood} size={200} level={lemma.level} tool={toolOf(lemma)} interactive onTalk={askToTalk} />
           <p aria-live="polite">{doing(lemma) ?? "Here with you. Ready when you are."}</p>
           <button className="btn btn-sm btn-ghost" onClick={() => setCustomising(true)}><Palette size={12} /> Customise {nameOf(persona)}</button>
         </div>
@@ -174,7 +208,10 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
         <ul>
           {list.map((c) => (
             <li key={c.id} className={c.id === chatId ? "is-active" : undefined}>
-              <button className="lemma-chat-link" onClick={() => setChatId(c.id)} disabled={busy}>
+              <button className="lemma-chat-link" onClick={() => {
+                  setError(null);
+                  setChatId(c.id);
+                }} disabled={busy}>
                 <span className="lemma-chat-title">{c.title}</span>
                 <span className="lemma-chat-when">{ago(c.updatedAt)}</span>
               </button>
@@ -196,12 +233,12 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
 
       <section className="lemma-main">
         <header className="lemma-head">
-          <Face mood={moodOf(lemma)} size={34} level={lemma.level} alive={false} />
+          <Face mood={faceMood} size={34} level={lemma.level} alive={false} />
           <h2>{chat?.title ?? nameOf(persona)}</h2>
           <button
             className={`icon-btn${aloud ? " is-on" : ""}`}
             onClick={() => {
-              if (aloud) stopSpeaking();
+              if (aloud) stopReading();
               setAloud(!aloud);
             }}
             title={aloud ? "Stop reading replies aloud" : "Read replies aloud"}
@@ -232,7 +269,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
           stopped={stopped && !busy}
         />
 
-        <Composer busy={busy} onSend={(text) => void ask(text)} onStop={stop} onListening={stopSpeaking} />
+        <Composer busy={busy} onSend={(text) => void ask(text)} onStop={stop} onListening={stopReading} />
       </section>
 
       {settings && (
@@ -339,8 +376,17 @@ function Welcome({ name, allowed, onSuggest, onOpenSettings }: { name: string | 
 
 function Status({ progress, areaOf }: { progress: Progress | null; areaOf: (id: string) => ExtensionManifest | undefined }) {
   const me = useAssistantName();
+  const state = useLemma();
   const area = progress?.area ? areaOf(progress.area)?.name ?? progress.area : null;
-  const text = progress?.state === "looking" && area ? `Looking at ${area}…` : progress?.state === "preparing" && area ? `Preparing changes in ${area}…` : `${me} is thinking…`;
+  const left = useCountdown(progress?.state === "waiting" ? progress.wait : null, progress);
+  const text =
+    progress?.state === "waiting" && left
+      ? `The AI's free plan is busy. Trying again in ${left}s…`
+      : state.slow ? "Still working on it…" : progress?.state === "looking" && area
+        ? `Looking at ${area}…`
+        : progress?.state === "preparing" && area
+          ? `Preparing changes in ${area}…`
+          : `${me} is thinking…`;
   return (
     <div className="lemma-status" aria-live="polite">
       <Loader2 size={14} strokeWidth={1.75} className="lemma-spin" /> {text}
@@ -354,7 +400,7 @@ function EntryView({ entry, areaOf, onChanged }: { entry: Entry; areaOf: (id: st
       return <div className="lemma-bubble is-user">{entry.text}</div>;
     case "assistant":
       return (
-        <div className="lemma-bubble is-lemma" title={answeredBy(entry.provider, entry.tokens)}>
+        <div className="lemma-bubble is-lemma" title={answeredBy(entry.provider, entry.tokens, entry.cached)}>
           <Rich text={entry.text} />
         </div>
       );
@@ -396,11 +442,15 @@ function ConfirmAll({ chat, count, onChanged }: { chat: ChatView; count: number;
     setBusy(true);
     setError(null);
     try {
-      onChanged(await confirmAll(chat.id));
+      const result = await confirmAll(chat.id);
+      onChanged(result);
+      if (result.entries.some(e => e.kind === "proposal" && e.status === "failed")) feel("concerned");
+      else if (result.entries.filter(e => e.kind === "proposal" && e.status === "confirmed").length > chat.entries.filter(e => e.kind === "proposal" && e.status === "confirmed").length) feel("encouraging");
       // The plan goes out to the person's calendar, once edits settle.
       if (plan) nudgeCalendars(today());
     } catch (e) {
       setError(String(e));
+      feel("concerned");
     } finally {
       setBusy(false);
     }
@@ -417,8 +467,22 @@ function ConfirmAll({ chat, count, onChanged }: { chat: ChatView; count: number;
 }
 
 /** "Gemini · 3,150 tokens", for a reply's tooltip. */
-function answeredBy(provider: string | null, tokens: number | null): string | undefined {
-  const parts = [provider, tokens ? `${tokens.toLocaleString()} tokens` : null].filter(Boolean);
+/** Seconds left of `seconds`, counted down from when they're given (a new `from` starts again). */
+function useCountdown(seconds: number | null | undefined, from: unknown): number {
+  const [left, setLeft] = useState(seconds ?? 0);
+  useEffect(() => {
+    if (!seconds) return setLeft(0);
+    const until = Date.now() + seconds * 1000;
+    setLeft(seconds);
+    const timer = window.setInterval(() => setLeft(Math.max(0, Math.ceil((until - Date.now()) / 1000))), 250);
+    return () => window.clearInterval(timer);
+  }, [seconds, from]);
+  return left;
+}
+
+function answeredBy(provider: string | null, tokens: number | null, cached = 0): string | undefined {
+  const used = tokens ? `${tokens.toLocaleString()} tokens${cached ? ` (${cached.toLocaleString()} cached)` : ""}` : null;
+  const parts = [provider, used].filter(Boolean);
   return parts.length ? parts.join(" · ") : undefined;
 }
 
@@ -429,11 +493,16 @@ function ProposalCard({ entry, ext, onChanged }: { entry: Extract<Entry, { kind:
     setBusy(true);
     setError(null);
     try {
-      onChanged(await action(entry.id));
+      const result = await action(entry.id);
+      onChanged(result);
+      if (result.entries.some(e => e.kind === "proposal" && e.id === entry.id && e.status === "failed")) feel("concerned");
+      else if (action === confirmChange) feel("encouraging");
+      else if (action === undoChange) feel("acknowledged");
       // The plan goes out to the person's calendar, once edits settle.
       if (entry.area === "daily_plan") nudgeCalendars(today());
     } catch (e) {
       setError(String(e));
+      feel("concerned");
     } finally {
       setBusy(false);
     }
@@ -510,6 +579,8 @@ function Composer({ busy, onSend, onStop, onListening }: { busy: boolean; onSend
   const recording = useRef<Recording | null>(null);
   const cancelled = useRef(false);
 
+  // Double-clicking his face (here, or the companion anywhere) talks too.
+  useTalkRequests(() => void talk());
   // Click to talk: it stops by itself when you pause, and what you said goes
   // into the box to check (and change) before sending.
   const talk = async () => {
@@ -530,18 +601,21 @@ function Composer({ busy, onSend, onStop, onListening }: { busy: boolean; onSend
       recording.current = null;
       setLemma({ activity: audio ? "thinking" : "idle", level: 0 });
       if (!audio) {
-        if (!cancelled.current) setNote(`${me} didn't hear anything. Check the microphone chosen with the arrow beside the button, and that it isn't muted.`);
+        if (!cancelled.current) { feel("puzzled"); setNote(`${me} didn't hear anything. Check the microphone chosen with the arrow beside the button, and that it isn't muted.`); }
         return setVoice("idle");
       }
+      if (!cancelled.current) feel("acknowledged");
       setVoice("writing");
       const heard = await transcribe(audio.audio, audio.mime);
       if (heard.text) {
         setText((typed) => (typed.trim() ? `${typed.trimEnd()} ${heard.text}` : heard.text));
         box.current?.focus();
       } else {
+        feel("puzzled");
         setNote(`${me} didn't catch that. Try again a little closer to the microphone.`);
       }
     } catch (e) {
+      if (!cancelled.current) feel("concerned");
       setNote(String(e).replace(/^Error: /, ""));
     } finally {
       recording.current = null;
@@ -551,6 +625,7 @@ function Composer({ busy, onSend, onStop, onListening }: { busy: boolean; onSend
   };
   useEffect(
     () => () => {
+      cancelled.current = true;
       recording.current?.cancel();
       setLemma({ activity: "idle", level: 0 });
     },

@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
+import type { Period } from "../shell/analytics/period";
 
 /** Everything the shell needs to know about one extension. */
 export interface ExtensionManifest {
@@ -42,8 +43,42 @@ export interface AreaContribution {
    * (under Extensions). The shell draws the frame and title; this is the body. */
   Sidebar?: ComponentType<AreaSidebarProps>;
   /** More tiles for the overview beside the area's own: one per sticky note,
-   * say. Hidden along with the area. */
+   * say. Stay visible when the area's summary tile is hidden. */
   tiles?: TileSource;
+  /** The area's part of the Analytics view: a week or month of it. */
+  analytics?: AnalyticsContribution;
+}
+
+/** A number now and at the same point of the period before. Mirrors
+ * `Compare` in src-tauri/src/features/period.rs. */
+export interface Compare {
+  now: number | null;
+  before: number | null;
+}
+
+/** The area's one number for the scorecard, with one value a period for
+ * its trend line, oldest first, ending with this one. */
+export interface Headline extends Compare {
+  trend: (number | null)[];
+}
+
+/** How a number reads: the text for it, and which way is good. */
+export interface Measure {
+  format: (value: number) => string;
+  /** "up": more is better; "down": less is; "neutral": neither. */
+  better: "up" | "down" | "neutral";
+  /** A share (0 to 100): its changes are points, not percentages. */
+  percent?: boolean;
+}
+
+/** An area's analytics: how to load a period's report, its headline for the
+ * scorecard, and the section drawing the rest. Build it with
+ * `defineAnalytics` so the three agree on the report's shape. */
+export interface AnalyticsContribution<R = any> {
+  load: (period: Period) => Promise<R>;
+  /** What the headline measures, e.g. "Pages read". */
+  headline: (report: R) => { label: string; value: Headline; measure: Measure };
+  Section: ComponentType<{ report: R; period: Period; onOpen: () => void }>;
 }
 
 /** A tile an area adds to the overview, which it draws whole, frame and all

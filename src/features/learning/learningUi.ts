@@ -89,6 +89,17 @@ export function stopTimer() {
   setLearningUi({ timer: null, dialog: { kind: "session", sourceId: t.sourceId, minutes } });
 }
 
+/** Stops the timer without asking how it went: Lemma on the desktop logs it himself. */
+export function dropTimer() {
+  if (state.timer) setLearningUi({ timer: null });
+}
+
+/** Takes `minutes` away from the computer off the running timer, as if it started later. */
+export function shiftTimer(minutes: number) {
+  const t = state.timer;
+  if (t) setLearningUi({ timer: { ...t, startedAt: Math.min(Date.now(), t.startedAt + minutes * 60_000) } });
+}
+
 export function useLearningUi(): LearningUi {
   return useSyncExternalStore(
     (listener) => {

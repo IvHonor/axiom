@@ -16,6 +16,7 @@ mod m013_terms;
 mod m014_web_updates;
 mod m015_session_confirmed;
 mod m016_ai_usage;
+mod m017_ai_usage_detail;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
 use sea_orm_migration::prelude::*;
@@ -42,6 +43,7 @@ impl MigratorTrait for Migrator {
             Box::new(m014_web_updates::Migration),
             Box::new(m015_session_confirmed::Migration),
             Box::new(m016_ai_usage::Migration),
+            Box::new(m017_ai_usage_detail::Migration),
         ]
     }
 

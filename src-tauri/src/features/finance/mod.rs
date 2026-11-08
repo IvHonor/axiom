@@ -10,6 +10,7 @@
 //! - `rates.rs` gets exchange rates from Frankfurter and keeps them
 //! - `commands.rs` exposes it all to React
 
+pub(crate) mod analytics;
 pub mod commands;
 pub(crate) mod entities;
 pub mod import;

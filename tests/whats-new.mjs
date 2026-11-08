@@ -17,7 +17,7 @@ try {
   await page.evaluate(() => localStorage.setItem("axiom.whatsNew.seen", JSON.stringify("0.6.1")));
   await page.reload();
   await dialog().waitFor();
-  assert.deepEqual(await page.evaluate(() => window.cases), { fromOld: 1, sameVersion: 0, laterMinor: 1, alreadySeenLater: 0, fresh: 1 });
+  assert.deepEqual(await page.evaluate(() => window.cases), { fromOld: 1, sameVersion: 0, laterMinor: 1, alreadySeenLater: 0, fresh: 1, toEight: 1, oldToEight: 2 });
   await page.screenshot({ path: `${out}/dark.png`, animations: "disabled" });
 
   // Opening Lemma closes it for good.

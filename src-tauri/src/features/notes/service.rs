@@ -22,7 +22,7 @@ pub const MAX_ON_OVERVIEW: usize = 24;
 /// Sticky note colours, as the app draws them.
 pub const COLORS: &[&str] = &["yellow", "orange", "pink", "purple", "blue", "green", "grey"];
 
-fn notes() -> Select<note::Entity> {
+pub(super) fn notes() -> Select<note::Entity> {
     note::Entity::find().filter(note::Column::DeletedAt.is_null())
 }
 

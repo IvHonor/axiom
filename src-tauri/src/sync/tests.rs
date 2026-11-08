@@ -216,7 +216,8 @@ async fn export_has_every_live_row_and_no_deleted_ones() {
     assert_eq!(projects[0]["name"], "Kept");
     assert_eq!(projects[0]["id"], kept.id.as_str());
     assert_eq!(tables["project_board_columns"].as_array().unwrap().len(), 4, "the kept project's columns");
-    assert_eq!(tables.len(), TABLES.len(), "every synced table is included");
+    let not_exported = crate::features::daily_plan::NOT_EXPORTED.len();
+    assert_eq!(tables.len(), TABLES.len() - not_exported, "every synced table is included, but sign-ins");
 }
 
 #[tokio::test]
@@ -728,5 +729,79 @@ mod calendars_synced {
         desktop.sign_in().await;
         desktop.sync().await;
         assert_eq!(calendars::list_calendars(&desktop.db).await.unwrap().len(), 1);
+    }
+}
+
+mod profile_synced {
+    use serde_json::json;
+
+    use super::*;
+    use crate::features::daily_plan::calendars::secrets::{self, Secret, Synced};
+
+    #[tokio::test]
+    async fn settings_follow_the_account_to_another_computer() {
+        let server = start_server().await;
+        let (laptop, desktop) = (Computer::new(&server).await, Computer::new(&server).await);
+        laptop.sign_in().await;
+        desktop.sign_in().await;
+        laptop.sync().await;
+        desktop.sync().await;
+
+        crate::profile::set(&laptop.db, "theme", &json!({ "fixed": "nord" })).await.unwrap();
+        crate::profile::set(&laptop.db, "lemma.persona", &json!({ "name": "Pip", "personality": "witty" })).await.unwrap();
+        laptop.sync().await;
+        desktop.sync().await;
+        let there = crate::profile::all(&desktop.db).await.unwrap();
+        assert_eq!(there["theme"], json!({ "fixed": "nord" }));
+        assert_eq!(there["lemma.persona"]["name"], "Pip");
+
+        // The newest change wins.
+        crate::profile::set(&desktop.db, "theme", &json!({ "fixed": "gruvbox" })).await.unwrap();
+        desktop.sync().await;
+        laptop.sync().await;
+        assert_eq!(crate::profile::all(&laptop.db).await.unwrap()["theme"], json!({ "fixed": "gruvbox" }));
+    }
+
+    #[tokio::test]
+    async fn settings_alone_do_not_ask_what_to_do_with_this_computers_data() {
+        let server = start_server().await;
+        let laptop = Computer::new(&server).await;
+        crate::profile::set(&laptop.db, "theme", &json!({ "fixed": "nord" })).await.unwrap();
+        laptop.sign_in().await;
+        assert_eq!(laptop.sync().await, Outcome::Synced { applied: 0 });
+    }
+
+    #[tokio::test]
+    async fn calendar_sign_ins_sync_sealed_and_their_removal_too() {
+        let server = start_server().await;
+        let (laptop, desktop) = (Computer::new(&server).await, Computer::new(&server).await);
+        laptop.sign_in().await;
+        desktop.sign_in().await;
+        laptop.sync().await;
+        desktop.sync().await;
+
+        let secret = Secret::OAuth { refresh_token: "refresh-me-please".into(), scope: None };
+        secrets::share(&laptop.db, "acct", &secret).await.unwrap();
+        laptop.sync().await;
+        let raw = serde_json::to_string(&laptop.account.pull(0).await.unwrap().records).unwrap();
+        assert!(!raw.contains("refresh-me-please"), "sealed: {raw}");
+
+        desktop.sync().await;
+        assert_eq!(secrets::synced(&desktop.db, "acct").await.unwrap(), Synced::Saved(secret));
+
+        secrets::unshare(&desktop.db, "acct").await.unwrap();
+        desktop.sync().await;
+        laptop.sync().await;
+        assert_eq!(secrets::synced(&laptop.db, "acct").await.unwrap(), Synced::Removed);
+    }
+
+    #[tokio::test]
+    async fn exports_leave_out_sign_ins() {
+        let server = start_server().await;
+        let laptop = Computer::new(&server).await;
+        secrets::share(&laptop.db, "acct", &Secret::Password { username: "a".into(), password: "b".into() }).await.unwrap();
+        let exported = local::export(&laptop.db).await.unwrap();
+        assert!(!exported.contains_key("daily_plan_calendar_secrets"));
+        assert!(exported.contains_key("profile_settings"));
     }
 }

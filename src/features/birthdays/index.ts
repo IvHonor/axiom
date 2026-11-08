@@ -4,6 +4,7 @@ import type { ExtensionManifest } from "../../extensions/types";
 import { BirthdaysSidebar } from "./BirthdaysSidebar";
 import { BirthdaysSummary } from "./BirthdaysSummary";
 import { BirthdaysView } from "./BirthdaysView";
+import { birthdaysAnalytics } from "./analytics";
 
 export const birthdays: ExtensionManifest = {
   id: "birthdays",
@@ -29,5 +30,5 @@ export const birthdays: ExtensionManifest = {
   builtIn: true,
   icon: Cake,
   color: "var(--area-birthdays)",
-  area: { View: BirthdaysView, Summary: BirthdaysSummary, Sidebar: BirthdaysSidebar },
+  area: { View: BirthdaysView, Summary: BirthdaysSummary, Sidebar: BirthdaysSidebar, analytics: birthdaysAnalytics },
 };

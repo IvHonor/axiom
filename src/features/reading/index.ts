@@ -5,6 +5,7 @@ import { ReadingSidebar } from "./ReadingSidebar";
 import { ReadingSummary } from "./ReadingSummary";
 import { ReadingSummaryTitle } from "./overview/ReadingOverviewMenu";
 import { ReadingView } from "./ReadingView";
+import { readingAnalytics } from "./analytics";
 
 export const reading: ExtensionManifest = {
   id: "reading",
@@ -30,5 +31,5 @@ export const reading: ExtensionManifest = {
   builtIn: true,
   icon: BookOpen,
   color: "var(--area-reading)",
-  area: { View: ReadingView, Summary: ReadingSummary, SummaryTitle: ReadingSummaryTitle, fittedSummary: true, Sidebar: ReadingSidebar },
+  area: { View: ReadingView, Summary: ReadingSummary, SummaryTitle: ReadingSummaryTitle, fittedSummary: true, Sidebar: ReadingSidebar, analytics: readingAnalytics },
 };

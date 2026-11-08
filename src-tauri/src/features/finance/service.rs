@@ -56,11 +56,11 @@ fn accounts() -> Select<account::Entity> {
     account::Entity::find().filter(account::Column::DeletedAt.is_null())
 }
 
-fn categories() -> Select<category::Entity> {
+pub(super) fn categories() -> Select<category::Entity> {
     category::Entity::find().filter(category::Column::DeletedAt.is_null())
 }
 
-fn transactions() -> Select<transaction::Entity> {
+pub(super) fn transactions() -> Select<transaction::Entity> {
     transaction::Entity::find().filter(transaction::Column::DeletedAt.is_null())
 }
 

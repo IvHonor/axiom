@@ -4,12 +4,14 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 interface SectionProps {
   title: string;
   count?: number;
+  /** Starts folded (e.g. More, the areas hardly used). */
+  folded?: boolean;
   children: ReactNode;
 }
 
 /** A collapsible sidebar group, like VS Code's "INSTALLED" / "RECOMMENDED". */
-export function Section({ title, count, children }: SectionProps) {
-  const [open, setOpen] = useState(true);
+export function Section({ title, count, folded = false, children }: SectionProps) {
+  const [open, setOpen] = useState(!folded);
   const Chevron = open ? ChevronDown : ChevronRight;
 
   return (

@@ -76,11 +76,12 @@ pub struct Shared {
     pub operator_name: Option<String>,
     /// Talks to the AI models behind the assistant.
     pub ai: axiom_ai::Ai,
-    /// Axiom's own AI keys (`GEMINI_API_KEY`, `GROQ_API_KEY`). Without any,
-    /// the assistant works only for people who add their own in the app.
+    /// Axiom's AI keys (`GEMINI_API_KEY`, `GROQ_API_KEY`). Without Gemini's,
+    /// there's no assistant.
     pub ai_keys: axiom_ai::Keys,
-    /// Model calls per day across every account (`AI_DAILY_LIMIT`).
-    pub ai_daily_limit: u32,
+    /// An emergency brake on model calls per day across every account
+    /// (`AI_DAILY_LIMIT`). None: no limit.
+    pub ai_daily_limit: Option<u32>,
     /// The admin panel's settings, read from the database at startup.
     pub settings: RwLock<admin::Settings>,
 }
@@ -104,7 +105,7 @@ impl Shared {
             operator_name: None,
             ai: axiom_ai::Ai::default(),
             ai_keys: axiom_ai::Keys::default(),
-            ai_daily_limit: ai::EVERYONE_PER_DAY,
+            ai_daily_limit: None,
             settings: RwLock::new(admin::Settings::default()),
         }
     }
@@ -211,6 +212,7 @@ pub fn app(state: AppState) -> Router {
         .route(routes::ADMIN_ACCOUNTS, get(admin::accounts))
         .route(routes::ADMIN_ACCOUNT, delete(admin::decline).patch(admin::update))
         .route(routes::ADMIN_SETTINGS, get(admin::settings).put(admin::save_settings))
+        .route(routes::ADMIN_AI_USAGE, get(ai::usage))
         .route(routes::SUPPORT, post(support::create))
         .route(routes::ADMIN_TICKETS, get(support::list))
         .route(routes::ADMIN_TICKET, patch(support::update))

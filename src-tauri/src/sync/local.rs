@@ -169,7 +169,7 @@ pub async fn unlink(db: &impl ConnectionTrait) -> Result<(), DbErr> {
 pub async fn export(db: &impl ConnectionTrait) -> Result<Map<String, Value>, DbErr> {
     let mut columns = Columns::default();
     let mut tables = Map::new();
-    for table in TABLES.iter() {
+    for table in TABLES.iter().filter(|t| !crate::features::daily_plan::NOT_EXPORTED.contains(t)) {
         let pairs: Vec<String> = columns.of(db, table).await?.iter().map(|c| format!(r#"'{c}', "{c}""#)).collect();
         let query = format!(r#"SELECT json_object({}) AS j FROM "{table}" WHERE deleted_at IS NULL"#, pairs.join(", "));
         let rows = db

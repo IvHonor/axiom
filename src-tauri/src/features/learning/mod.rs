@@ -8,6 +8,7 @@
 //! - `outline.rs` reads contents lists, EPUBs and PDFs; `youtube.rs` playlists
 //! - `commands.rs` exposes the logic to React
 
+pub(crate) mod analytics;
 pub mod commands;
 pub(crate) mod entities;
 pub mod migrations;

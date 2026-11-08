@@ -20,9 +20,9 @@ Axiom brings the things you usually keep in separate apps into one desktop works
 
 Start with the areas you need. Arrange their summaries on your overview, hide the ones you don't want to see, and open the full tools in tabs when you need more detail. Your work is saved to a local SQLite database; an account is optional for using the local tools.
 
-**This README describes the current source tree.** Packaged releases may lag behind ongoing development. Windows is the current release target; macOS and Linux installers are not published by the release workflow.
+**This README describes the current source tree.** Packaged releases may lag behind ongoing development. Releases are built for Windows and macOS (one app for Apple silicon and Intel Macs); Linux installers are not published.
 
-[Explore the areas](#nine-areas-one-workspace) · [Customize your workspace](#an-overview-that-fits-you) · [Themes](#make-it-feel-like-yours) · [Data and privacy](#your-data-and-privacy) · [Development](#run-locally) · [Contributing](#extensions-and-contributing)
+[Explore the areas](#ten-areas-one-workspace) · [Meet Lemma](#meet-lemma-your-assistant) · [Customize your workspace](#an-overview-that-fits-you) · [Themes](#make-it-feel-like-yours) · [Data and privacy](#your-data-and-privacy) · [Development](#run-locally) · [Contributing](#extensions-and-contributing)
 
 ## An overview that fits you
 
@@ -34,11 +34,12 @@ Start with the areas you need. Arrange their summaries on your overview, hide th
 - **Choose the right amount of detail.** Daily Plan, Project Board, Reading and University offer multiple overview layouts that adapt to the space available, from compact summaries to larger dashboards.
 - **Keep only what matters in view.** Hide an area from the overview without deleting its data, then bring it back from the left navigation. Extensions can also be switched off.
 - **Keep thoughts close.** Add individual sticky notes to the overview, then move, resize and edit them there.
-- **Move between tools naturally.** Preview areas in tabs, keep the ones you're using open, and collapse the sidebar when you want more room. Motion respects the system's reduced-motion preference.
+- **See how your week or month went.** Analytics opens on an overview of every area's headline number with its trend, and each area has its own tab of charts. Each number is compared with the period before, counting the same number of days while a week or month is still going.
+- **Move between tools naturally.** Preview areas in tabs and keep the ones you're using open. The sidebar follows what you have open, remembers whether you like it open in each area, and peeks out when you point at an icon while it's closed. Badges on the icons show what's waiting (reviews due, birthdays, bills, a running timer). It can tuck itself away in a narrow window, in areas that need the room, or while you write, and you can pin it, resize it by its edge, or press `Ctrl+P` to jump anywhere. Motion respects the system's reduced-motion preference.
 
-## Nine areas, one workspace
+## Ten areas, one workspace
 
-All nine areas below are implemented and bundled with the app.
+All ten areas below are implemented and bundled with the app.
 
 | Area | What you can do |
 | --- | --- |
@@ -66,6 +67,24 @@ All nine areas below are implemented and bundled with the app.
 
 Your overview can be a quick check-in or a place to spend a little longer. Reading combines the current book, progress, yearly target and next reads; resize the tile and its layout changes with it.
 
+## Meet Lemma, your assistant
+
+Lemma is Axiom's assistant. It looks at the areas you switch on in its settings, and nothing else.
+
+- **Ask in your own words.** Plan your day, add a birthday, log a book or ask where your money went. Replies appear as they're written, and every change comes as a card to confirm (or confirm all), with Undo afterwards.
+- **Talk to it.** Click the microphone, or double-click Lemma; replies can be read aloud.
+- **Make it yours.** Choose its name, personality (Standard, Cheerful, Calm, Direct, Witty or Coach) and a 3D look: body, finish, colours, hats and things to hold.
+
+**Lemma on your desktop.** Lemma can also live on your desktop, floating over your other apps or tucked into the edge of the screen (the default), and it stays there when you close Axiom's window. Right-click it to open Axiom again, or to quit.
+
+- **Your timer.** It becomes the timer for a Daily Plan task, study or reading, with a halo that fills as you go, a heartbeat in the last minute and a nudge when time's up. Focus rounds with breaks are optional.
+- **What's coming up.** Tucked into the edge, it counts down to your next meeting from the calendar (with Join for online ones) or a reminder.
+- **Quick things, straight away.** Double-click to talk, middle-click to type, or hold it down for a quick task, reminder, note or 25/50-minute focus. Small things (timing, adding or moving a task, logging reading, study or spending, a reminder) happen at once, each with an Undo; anything bigger goes on to a chat. Drop text, a link or a file on it to keep it.
+- **Looking after you.** It notices time away from the computer and asks whether to count it, can nudge you to take a break, asks how the day went in the evening if you'd like, and keeps out of the way during full-screen apps and calls (Windows) and online meetings.
+- **Alive.** It talks the way its personality does, reacts to what you do, plays about when left alone, and can show the weather where you are in its halo.
+
+Everything it does on the desktop is in **Lemma's settings**, each with a switch, and the whole thing can be turned off.
+
 ## Make it feel like yours
 
 <img src="docs/screenshots/theme-library.png" alt="Extensions list with coloured icons, theme palette previews, metadata and on/off switches" width="280" align="right">
@@ -92,7 +111,7 @@ The default Modern theme stays available. Other built-in extensions and theme pa
 ## Get Axiom
 
 1. Open the **[latest release](https://github.com/IvHonor/axiom/releases/latest)**.
-2. Download the Windows installer ending in **`_x64-setup.exe`**.
+2. Download the Windows installer ending in **`_x64-setup.exe`**, or on a Mac the disk image ending in **`_universal.dmg`**.
 3. Install and open Axiom. Choose your areas and start locally; sign in when you want account sync.
 
 Installed builds check for updates and offer them in the app. Update packages are signed for Axiom's updater. The Windows installer is not currently Authenticode-signed, so Windows may show a publisher warning; use the release linked above and check the download's source before proceeding.
@@ -104,6 +123,9 @@ Account registration can require email confirmation and administrator approval, 
 | Shortcut | Action |
 | --- | --- |
 | `Ctrl+B` | Toggle the sidebar |
+| `Ctrl+P` | Jump to an area, the overview or Analytics |
+| `Ctrl+Alt+Space` (`⌃⌥Space` on a Mac) | From any app: Lemma on your desktop listens |
+| `Ctrl+Alt+P` / `Ctrl+Alt+D` | From any app: pause, carry on or start today's next task / finish it |
 | `Ctrl+Shift+X` | Open Extensions |
 | `Ctrl+K`, then `Ctrl+T` | Open Themes |
 | `Ctrl+W` | Close the current tab |
@@ -117,6 +139,8 @@ Account registration can require email confirmation and administrator approval, 
 **Sync is optional.** Sign in to synchronize supported data between devices. Ordinary records merge changes field by field; Notes and Journal use collaborative document updates for writing. Project boards can also be shared with other accounts. Same-field edits can still conflict—sync is not a replacement for a backup.
 
 **Sensitive areas have end-to-end encrypted sync.** Finance, Notes, Journal, Birthdays and Goals are encrypted on the device before their feature records are sent to the sync server. Keep the recovery code: it may be needed after a password reset. Other synced areas and account metadata are not covered by this feature-data encryption. Optional email reminders may send the reminder information needed for delivery.
+
+**Lemma only uses AI when you ask it something.** It sees only the areas you switch on. Then it sends your message and the conversation so far, what it looks up in those areas, your first name and the date (and a recording, if you talk) through Axiom's server, which counts how much it's used but keeps nothing, to Groq. Your chats stay on your computer and sync end-to-end encrypted. On your desktop, what you say is never kept. To stay out of the way and notice time away, Lemma checks on your computer whether a full-screen app or call is on and when you last used the keyboard or mouse; none of that leaves your computer. The weather in its halo is off until you turn it on; then a place you type, or your location rounded to about 10 km, goes to Open-Meteo. The [privacy notice](https://axiomterminal.app/privacy) has the details.
 
 **A PIN protects access to the app.** The optional PIN lock can activate at launch and after inactivity. It does not encrypt the local database or exported files.
 

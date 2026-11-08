@@ -98,6 +98,21 @@ pub fn specs() -> Vec<Spec> {
         },
         Spec {
             area: "daily_plan",
+            name: "plan_timer",
+            description: "Proposes starting or stopping a timer, to time a task. Start: on a task by id, or by title (a task of that name on today's list, or else a new task for today). Only one timer runs at a time: starting one stops any other. Stop: stops whichever runs.",
+            parameters: object(
+                json!({
+                    "action": { "type": "string", "enum": ["start", "stop"] },
+                    "id": { "type": "string" },
+                    "title": { "type": "string" },
+                    "minutes": { "type": "integer", "description": "An estimate, for a new task." },
+                }),
+                &["action"],
+            ),
+            change: true,
+        },
+        Spec {
+            area: "daily_plan",
             name: "plan_delete_task",
             description: "Proposes deleting a task, by id.",
             parameters: object(json!({ "id": { "type": "string" } }), &["id"]),
@@ -403,11 +418,96 @@ async fn apply_routine(ctx: &Ctx<'_>, tool: &str, change: RoutineChange) -> Resu
     }
 }
 
+// ---------- Timers ----------
+
+#[derive(Deserialize)]
+struct TimerArgs {
+    action: String,
+    id: Option<String>,
+    title: Option<String>,
+    minutes: Option<i32>,
+}
+
+/// What a timer starts on: a task there is, or a new one for today.
+enum Timed {
+    Task(task::Model),
+    New(String),
+}
+
+async fn timed(ctx: &Ctx<'_>, a: &TimerArgs) -> Result<Timed> {
+    if let Some(id) = a.id.as_deref() {
+        return Ok(Timed::Task(service::find_task(ctx.db, id).await?));
+    }
+    let title = a.title.as_deref().map(str::trim).filter(|t| !t.is_empty()).ok_or_else(|| Error::Invalid("Say which task to time: its id or its title.".into()))?;
+    let today = service::get_day(ctx.db, ctx.today, ctx.today).await?;
+    let open = today.tasks.into_iter().chain(today.earlier).filter(|t| t.done_at.is_none());
+    Ok(match open.into_iter().find(|t| t.title.eq_ignore_ascii_case(title)) {
+        Some(found) => Timed::Task(found),
+        None => Timed::New(title.to_owned()),
+    })
+}
+
+/// The task whose timer runs, if one does.
+async fn running(ctx: &Ctx<'_>) -> Result<Option<task::Model>> {
+    Ok(service::get_day(ctx.db, ctx.today, ctx.today).await?.running)
+}
+
+async fn preview_timer(ctx: &Ctx<'_>, a: TimerArgs) -> Result<Preview> {
+    let now = running(ctx).await?;
+    match a.action.as_str() {
+        "start" => {
+            let (title, item) = match timed(ctx, &a).await? {
+                Timed::Task(t) if t.timer_started_at.is_some() => return Err(Error::Invalid(format!("\"{}\" is already being timed.", t.title))),
+                Timed::Task(t) => (t.title.clone(), Item::new("Task", t.title)),
+                Timed::New(title) => {
+                    let mut text = format!("{title} · new, for today");
+                    if let Some(minutes) = a.minutes {
+                        text.push_str(&format!(" · {minutes} min"));
+                    }
+                    (title, Item::new("Task", text))
+                }
+            };
+            let mut items = vec![item];
+            if let Some(other) = now {
+                items.push(Item::change("Timer", format!("running on {}", other.title), "stopped"));
+            }
+            Ok(Preview { title: format!("Start a timer on \"{title}\""), items })
+        }
+        "stop" => {
+            let other = now.ok_or_else(|| Error::Invalid("No timer is running.".into()))?;
+            Ok(Preview { title: format!("Stop the timer on \"{}\"", other.title), items: vec![Item::change("Timer", "running", "stopped")] })
+        }
+        _ => Err(Error::Invalid("A timer can be started or stopped.".into())),
+    }
+}
+
+async fn apply_timer(ctx: &Ctx<'_>, a: TimerArgs) -> Result<Value> {
+    match a.action.as_str() {
+        "start" => {
+            let task = match timed(ctx, &a).await? {
+                Timed::Task(t) => t,
+                Timed::New(title) => service::create_task(ctx.db, &title, Some(ctx.today), a.minutes).await?,
+            };
+            let started = service::start_timer(ctx.db, &task.id).await?;
+            Ok(json!({ "timing": started.title, "task_id": started.id }))
+        }
+        "stop" => {
+            let Some(other) = running(ctx).await? else { return Ok(json!({ "stopped": "nothing was running" })) };
+            let stopped = service::stop_timer(ctx.db, &other.id).await?;
+            Ok(json!({ "stopped": stopped.title, "tracked_minutes": stopped.actual_minutes }))
+        }
+        _ => Err(Error::Invalid("A timer can be started or stopped.".into())),
+    }
+}
+
 // ---------- Tasks and blocks ----------
 
 pub async fn preview(ctx: &Ctx<'_>, tool: &str, raw: &Value) -> Result<Preview> {
     if tool.ends_with("_routine") {
         return preview_routine(ctx, tool, args(raw)?).await;
+    }
+    if tool == "plan_timer" {
+        return preview_timer(ctx, args(raw)?).await;
     }
     match tool {
         "plan_add" => {
@@ -495,6 +595,9 @@ fn schedule_of(change: &Change, task: &task::Model, today: Date) -> Result<(Date
 pub async fn apply(ctx: &Ctx<'_>, tool: &str, raw: &Value) -> Result<Value> {
     if tool.ends_with("_routine") {
         return apply_routine(ctx, tool, args(raw)?).await;
+    }
+    if tool == "plan_timer" {
+        return apply_timer(ctx, args(raw)?).await;
     }
     match tool {
         "plan_add" => {

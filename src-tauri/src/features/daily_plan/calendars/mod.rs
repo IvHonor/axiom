@@ -57,15 +57,11 @@ pub struct CalendarSetup {
 }
 
 pub async fn setup(db: &DatabaseConnection, hub: &accounts::CalendarHub) -> Result<CalendarSetup> {
-    // An account connected on another computer needs signing in here too.
-    let accounts = accounts::list_accounts(db)
-        .await?
-        .into_iter()
-        .map(|mut account| {
-            account.signed_out |= !hub.signed_in_here(&account.id);
-            account
-        })
-        .collect();
+    // An account whose sign-in hasn't reached this computer (yet) needs signing in here.
+    let mut accounts = accounts::list_accounts(db).await?;
+    for account in &mut accounts {
+        account.signed_out |= !hub.signed_in_here(db, &account.id).await?;
+    }
     Ok(CalendarSetup { accounts, calendars: list_calendars(db).await?, available: hub.available() })
 }
 

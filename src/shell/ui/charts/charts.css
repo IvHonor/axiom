@@ -1,0 +1,403 @@
+/* ---------- Charts for a week or month (see Charts.tsx) ---------- */
+
+/* Marks draw in --series: the area's colour, set by its section. */
+.chart-card {
+  min-width: 0;
+  padding: 14px 18px 16px;
+}
+
+.chart-card.is-wide {
+  grid-column: 1 / -1;
+}
+
+.chart-card > header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.chart-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: calc(0.06em * var(--tracking));
+  text-transform: var(--label-case);
+}
+
+.chart-body {
+  position: relative;
+}
+
+.chart-empty {
+  margin: 0;
+  padding: 24px 0;
+  font-size: 13px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+/* ---------- Legend and keys ---------- */
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.chart-legend span,
+.chart-tooltip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-key {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  display: inline-block;
+  border-radius: 3px;
+  background: var(--key);
+}
+
+.chart-key.is-dashed {
+  height: 0;
+  border-top: 2px dashed var(--key);
+  border-radius: 0;
+  background: none;
+}
+
+/* ---------- Axes, marks, hover ---------- */
+
+.chart-gridline,
+.chart-baseline {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.chart-baseline {
+  stroke: var(--line-strong);
+}
+
+.chart-axis {
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  fill: var(--text-faint);
+}
+
+.chart-axis.is-today {
+  font-weight: 700;
+  fill: var(--text-dim);
+}
+
+.chart-direct {
+  font-family: var(--font-label);
+  font-size: 11px;
+  fill: var(--text-dim);
+}
+
+.chart-hit {
+  fill: transparent;
+}
+
+.chart-day.is-future > :is(path, rect:not(.chart-hit)) {
+  opacity: 0.4;
+}
+
+.chart-day.is-hover > :is(path, rect:not(.chart-hit)) {
+  opacity: 0.8;
+}
+
+.chart-day.is-hover .chart-hit {
+  fill: var(--hover);
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--stroke);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-line.is-dashed {
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+
+.chart-dot {
+  fill: var(--stroke);
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.chart-crosshair {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 30px;
+  z-index: 2;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.chart-tooltip b {
+  margin-left: auto;
+  padding-left: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Metrics ---------- */
+
+.chart-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.chart-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.chart-metric-value {
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.chart-metric-label {
+  font-family: var(--font-label);
+  font-size: 11px;
+  text-transform: var(--label-case);
+  letter-spacing: calc(0.06em * var(--tracking));
+  color: var(--text-dim);
+}
+
+.chart-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-delta-vs {
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.chart-delta.is-good {
+  color: var(--success);
+}
+
+.chart-delta.is-bad {
+  color: var(--danger);
+}
+
+.chart-delta.is-neutral {
+  color: var(--text-dim);
+}
+
+.chart-delta.is-none {
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.chart-spark {
+  width: 100%;
+  height: 30px;
+  display: block;
+  overflow: visible;
+}
+
+.chart-spark path {
+  fill: none;
+  stroke: var(--series, var(--accent));
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-spark circle {
+  fill: var(--series, var(--accent));
+  stroke: var(--panel);
+  stroke-width: 1.5;
+}
+
+/* ---------- Ranked bars ---------- */
+
+/* One grid for every row, so the tracks start and end together. */
+.chart-barlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 140px) minmax(60px, 1fr) auto;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.chart-barlist li {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.chart-barlist-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chart-barlist-track {
+  position: relative;
+  height: 8px;
+  background: var(--line);
+  border-radius: 4px;
+}
+
+.chart-barlist-track > span {
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  background: var(--series, var(--accent));
+  border-radius: 4px;
+}
+
+.chart-barlist-track > span.is-over {
+  background: var(--danger);
+}
+
+.chart-barlist-target {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+  border-radius: 1px;
+}
+
+.chart-barlist-value {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-barlist-value :is(.is-over, .is-bad) {
+  color: var(--danger);
+}
+
+.chart-barlist-value .is-good {
+  color: var(--success);
+}
+
+/* ---------- Days as a calendar ---------- */
+
+.chart-daygrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  max-width: 340px;
+}
+
+.chart-daygrid-head {
+  font-family: var(--font-label);
+  font-size: 10px;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.chart-daygrid-cell {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  background: var(--line);
+  border-radius: 4px;
+}
+
+.chart-daygrid-cell.is-strong {
+  color: var(--panel);
+  font-weight: 600;
+}
+
+.chart-daygrid-cell.is-future {
+  color: var(--text-faint);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.chart-daygrid-cell.is-today {
+  box-shadow: inset 0 0 0 2px var(--text-dim);
+}
+
+/* ---------- Dot rows ---------- */
+
+.chart-dotrows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chart-dotrow {
+  display: grid;
+  grid-template-columns: minmax(0, 110px) 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.chart-dotrow-dots {
+  display: grid;
+  grid-template-columns: repeat(var(--days), minmax(0, 14px));
+  gap: 3px;
+}
+
+.chart-dotrow-dots i {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+}
+
+.chart-dotrow-dots i.is-on {
+  background: var(--series, var(--accent));
+  box-shadow: none;
+}
+
+.chart-dotrow-dots i.is-future {
+  box-shadow: inset 0 0 0 1px var(--line);
+}

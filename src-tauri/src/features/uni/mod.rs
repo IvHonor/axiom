@@ -6,6 +6,7 @@
 //! - `service.rs` holds the logic, `types.rs` the shapes sent to React
 //! - `commands.rs` exposes the logic to React
 
+pub(crate) mod analytics;
 pub mod commands;
 pub(crate) mod entities;
 pub mod migrations;

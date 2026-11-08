@@ -1,10 +1,11 @@
-//! The AI models behind Axiom's assistant. Google's Gemini answers first;
-//! Groq answers when Gemini can't (its free limit is used up, it's down, or
-//! there's no key for it). Both take the same `ChatRequest` and give the same
-//! `ChatReply` (see `axiom_protocol::ai`), so a conversation can move between
-//! them mid-way.
+//! The AI models behind Axiom's assistant. One answers every question:
+//! Groq, on its free plan, unless there's a Gemini key (Axiom's only uses
+//! Google's paid service), then Gemini. When the AI is busy for a moment
+//! it's asked again after a short wait. Groq's Whisper writes down what's
+//! said to the microphone, with Gemini standing in when it can't. Both
+//! speak `axiom_protocol::ai`.
 //!
-//! The server uses this with Axiom's keys; the app with someone's own.
+//! The server uses this with Axiom's keys.
 
 mod gemini;
 mod groq;
@@ -13,9 +14,17 @@ use std::time::Duration;
 
 use axiom_protocol::ai::{ChatReply, ChatRequest, Transcript};
 
-/// A good answer takes a few seconds; a provider that's busier than this is
-/// overloaded (free tiers often are), so the next one gets asked instead.
+/// A good answer takes a few seconds; one that takes longer than this has
+/// gone wrong somewhere.
 const TIMEOUT: Duration = Duration::from_secs(25);
+
+/// When the AI is busy (overloaded, or over its limit a minute) it's asked
+/// again, up to `RETRIES` times: after the wait it asks for, if it says and
+/// that's no longer than `MAX_WAIT` (a longer one means a daily limit), or
+/// else after `BACKOFF`.
+const RETRIES: usize = 2;
+const MAX_WAIT: Duration = Duration::from_secs(30);
+const BACKOFF: [Duration; RETRIES] = [Duration::from_secs(2), Duration::from_secs(5)];
 
 /// The most one answer may write, thinking included: plenty for a reply or a
 /// day's plan, and a ceiling on what a call can cost.
@@ -29,8 +38,47 @@ pub struct Keys {
 }
 
 impl Keys {
+    /// Whether the assistant can answer.
     pub fn any(&self) -> bool {
         self.gemini.is_some() || self.groq.is_some()
+    }
+}
+
+/// The AI that answers, with its key.
+#[derive(Clone, Copy)]
+enum Answerer<'a> {
+    Gemini(&'a str),
+    Groq(&'a str),
+}
+
+impl Answerer<'_> {
+    fn name(self) -> &'static str {
+        match self {
+            Answerer::Gemini(_) => "Gemini",
+            Answerer::Groq(_) => "Groq",
+        }
+    }
+}
+
+/// A streamed answer being put together, in its provider's way.
+enum Gathered {
+    Gemini(gemini::Gathered),
+    Groq(groq::Gathered),
+}
+
+impl Gathered {
+    fn add(&mut self, event: serde_json::Value) -> String {
+        match self {
+            Gathered::Gemini(g) => g.add(event),
+            Gathered::Groq(g) => g.add(event),
+        }
+    }
+
+    fn reply(self) -> Result<ChatReply, ProviderError> {
+        match self {
+            Gathered::Gemini(g) => g.reply(),
+            Gathered::Groq(g) => g.reply(),
+        }
     }
 }
 
@@ -39,18 +87,20 @@ impl Keys {
 pub enum Delta<'a> {
     /// More of its words.
     Text(&'a str),
-    /// Forget the words so far: that AI failed part-way, and the next one
-    /// is answering from the start.
+    /// Forget the words so far: the AI failed part-way, and is answering
+    /// again from the start.
     Restart,
+    /// The AI is busy for a moment and will be asked again after this long.
+    Waiting(Duration),
 }
 
 /// Which model each provider runs.
 #[derive(Clone)]
 pub struct Models {
-    /// Google's alias for its newest Flash-Lite model: answers in about a
-    /// second, where the full Flash is often overloaded on the free tier
-    /// (minutes, or refused). `GEMINI_MODEL` on the server changes it.
+    /// Google's alias for its newest Flash-Lite model: quick, and cheap
+    /// enough to answer everyone. `GEMINI_MODEL` on the server changes it.
     pub gemini: String,
+    /// `GROQ_MODEL` on the server changes it.
     pub groq: String,
     /// Groq's speech-to-text model.
     pub whisper: String,
@@ -67,12 +117,13 @@ pub struct Ai {
     models: Models,
     gemini_url: String,
     groq_url: String,
+    backoff: [Duration; RETRIES],
 }
 
 /// Why no provider answered. The message is ready to show.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AiError {
-    /// No key for any provider.
+    /// No key for the AI.
     NoKeys,
     /// Each provider tried, and why it didn't answer.
     Failed(Vec<(&'static str, ProviderError)>),
@@ -91,7 +142,7 @@ pub enum ProviderError {
 impl AiError {
     pub fn message(&self) -> String {
         match self {
-            AiError::NoKeys => "The assistant has no AI to talk to: there's no key for Gemini or Groq.".into(),
+            AiError::NoKeys => "The assistant has no AI to talk to: there's no key for Groq or Gemini.".into(),
             AiError::Failed(failures) => {
                 let reasons: Vec<String> = failures.iter().map(|(name, err)| format!("{name} {}", err.reason())).collect();
                 format!("The assistant couldn't answer: {}.", reasons.join("; "))
@@ -99,7 +150,7 @@ impl AiError {
         }
     }
 
-    /// Every provider was out of free requests (or busy), so trying again later should work.
+    /// Every provider was busy, so trying again later should work.
     pub fn is_busy(&self) -> bool {
         matches!(self, AiError::Failed(failures) if failures.iter().all(|(_, err)| matches!(err, ProviderError::Rejected { status: 429, .. })))
     }
@@ -110,15 +161,21 @@ impl ProviderError {
         match self {
             ProviderError::Offline => "couldn't be reached".into(),
             ProviderError::Rejected { status, message } => match status {
-                429 => "is busy or has used up its free requests for now".into(),
+                429 => "is busy right now. Try again in a moment".into(),
                 // Gemini answers a bad key with 400 and says so.
                 401 | 403 => "refused the key".into(),
+                413 => "can't take a question this big. Try a new chat, or ask about fewer things at once".into(),
                 _ if message.contains("API_KEY_INVALID") || message.contains("API key not valid") => "refused the key".into(),
                 500.. => "is having problems".into(),
                 _ => format!("said no ({status}: {})", short(message)),
             },
             ProviderError::NoAnswer(why) => why.clone(),
         }
+    }
+
+    /// Busy for a moment, so worth asking again.
+    fn is_passing(&self) -> bool {
+        matches!(self, ProviderError::Rejected { status: 429 | 500 | 502 | 503 | 504, .. })
     }
 }
 
@@ -140,47 +197,98 @@ impl Ai {
             models,
             gemini_url: "https://generativelanguage.googleapis.com/v1beta".into(),
             groq_url: "https://api.groq.com/openai/v1".into(),
+            backoff: BACKOFF,
         }
     }
 
-    /// Points at stand-ins for the providers, for tests.
+    /// Points at stand-ins for the providers, for tests, which needn't wait
+    /// long before asking again.
     pub fn with_urls(mut self, gemini: &str, groq: &str) -> Self {
         self.gemini_url = gemini.trim_end_matches('/').into();
         self.groq_url = groq.trim_end_matches('/').into();
+        self.backoff = [Duration::from_millis(10); RETRIES];
         self
     }
 
-    /// Asks Gemini, then Groq, and returns the first answer.
+    /// How long to wait before asking again after try `tries` (from 0)
+    /// failed with `err`, `asked` being the wait the AI asked for. None
+    /// gives up.
+    fn again(&self, err: &ProviderError, asked: Option<Duration>, tries: usize) -> Option<Duration> {
+        if tries >= RETRIES || !err.is_passing() {
+            return None;
+        }
+        match asked {
+            Some(wait) if wait > MAX_WAIT => None,
+            Some(wait) => Some(wait.max(Duration::from_millis(500))),
+            None => Some(self.backoff[tries]),
+        }
+    }
+
+    /// Gemini when there's a key for it, or else Groq.
+    fn answerer<'a>(keys: &'a Keys) -> Result<Answerer<'a>, AiError> {
+        match (&keys.gemini, &keys.groq) {
+            (Some(key), _) => Ok(Answerer::Gemini(key)),
+            (None, Some(key)) => Ok(Answerer::Groq(key)),
+            (None, None) => Err(AiError::NoKeys),
+        }
+    }
+
+    /// Sends `request` to the AI, to answer all at once or (`stream`) as
+    /// it's written.
+    async fn send(&self, who: Answerer<'_>, request: &ChatRequest, stream: bool) -> reqwest::Result<reqwest::Response> {
+        match who {
+            Answerer::Gemini(key) => {
+                let how = if stream { "streamGenerateContent?alt=sse" } else { "generateContent" };
+                let url = format!("{}/models/{}:{how}", self.gemini_url, self.models.gemini);
+                self.http.post(url).header("x-goog-api-key", key).json(&gemini::body(request)).send().await
+            }
+            Answerer::Groq(key) => {
+                let mut body = groq::body(&self.models.groq, request);
+                if stream {
+                    body["stream"] = true.into();
+                }
+                self.http.post(format!("{}/chat/completions", self.groq_url)).bearer_auth(key).json(&body).send().await
+            }
+        }
+    }
+
+    /// Asks the AI.
     pub async fn chat(&self, keys: &Keys, request: &ChatRequest) -> Result<ChatReply, AiError> {
-        let mut failures = Vec::new();
-        if let Some(key) = &keys.gemini {
-            let url = format!("{}/models/{}:generateContent", self.gemini_url, self.models.gemini);
-            let sent = self.http.post(url).header("x-goog-api-key", key).json(&gemini::body(request)).send().await;
-            match answer(sent).await.and_then(|body| gemini::reply(&body)) {
+        let who = Self::answerer(keys)?;
+        let mut tries = 0;
+        loop {
+            let sent = self.send(who, request, false).await;
+            let asked = sent.as_ref().ok().and_then(wait_asked);
+            let answered = answer(sent).await.and_then(|body| match who {
+                Answerer::Gemini(_) => gemini::reply(&body),
+                Answerer::Groq(_) => groq::reply(&body),
+            });
+            match answered {
                 Ok(reply) => return Ok(reply),
-                Err(err) => failures.push(("Gemini", err)),
+                Err(err) => match self.again(&err, asked, tries) {
+                    Some(wait) => {
+                        tries += 1;
+                        tokio::time::sleep(wait).await;
+                    }
+                    None => return Err(AiError::Failed(vec![(who.name(), err)])),
+                },
             }
         }
-        if let Some(key) = &keys.groq {
-            let url = format!("{}/chat/completions", self.groq_url);
-            let sent = self.http.post(url).bearer_auth(key).json(&groq::body(&self.models.groq, request)).send().await;
-            match answer(sent).await.and_then(|body| groq::reply(&body)) {
-                Ok(reply) => return Ok(reply),
-                Err(err) => failures.push(("Groq", err)),
-            }
-        }
-        if failures.is_empty() { Err(AiError::NoKeys) } else { Err(AiError::Failed(failures)) }
     }
 
     /// Like `chat`, but the reply's words go to `on` as they're written.
     pub async fn chat_stream(&self, keys: &Keys, request: &ChatRequest, on: &(dyn Fn(Delta) + Sync)) -> Result<ChatReply, AiError> {
-        let mut failures = Vec::new();
-        // Words already shown, to take back if the next AI starts again.
-        let mut wrote = false;
-        if let Some(key) = &keys.gemini {
-            let url = format!("{}/models/{}:streamGenerateContent?alt=sse", self.gemini_url, self.models.gemini);
-            let sent = self.http.post(url).header("x-goog-api-key", key).json(&gemini::body(request)).send().await;
-            let mut gathered = gemini::Gathered::default();
+        let who = Self::answerer(keys)?;
+        let mut tries = 0;
+        loop {
+            let sent = self.send(who, request, true).await;
+            let asked = sent.as_ref().ok().and_then(wait_asked);
+            // Words already shown, to take back if it starts again.
+            let mut wrote = false;
+            let mut gathered = match who {
+                Answerer::Gemini(_) => Gathered::Gemini(gemini::Gathered::default()),
+                Answerer::Groq(_) => Gathered::Groq(groq::Gathered::default()),
+            };
             let streamed = events(sent, |event| {
                 let words = gathered.add(event);
                 if !words.is_empty() {
@@ -191,31 +299,19 @@ impl Ai {
             .await;
             match streamed.and_then(|()| gathered.reply()) {
                 Ok(reply) => return Ok(reply),
-                Err(err) => failures.push(("Gemini", err)),
+                Err(err) => match self.again(&err, asked, tries) {
+                    Some(wait) => {
+                        tries += 1;
+                        if wrote {
+                            on(Delta::Restart);
+                        }
+                        on(Delta::Waiting(wait));
+                        tokio::time::sleep(wait).await;
+                    }
+                    None => return Err(AiError::Failed(vec![(who.name(), err)])),
+                },
             }
         }
-        if let Some(key) = &keys.groq {
-            if wrote {
-                on(Delta::Restart);
-            }
-            let url = format!("{}/chat/completions", self.groq_url);
-            let mut body = groq::body(&self.models.groq, request);
-            body["stream"] = true.into();
-            let sent = self.http.post(url).bearer_auth(key).json(&body).send().await;
-            let mut gathered = groq::Gathered::default();
-            let streamed = events(sent, |event| {
-                let words = gathered.add(event);
-                if !words.is_empty() {
-                    on(Delta::Text(&words));
-                }
-            })
-            .await;
-            match streamed.and_then(|()| gathered.reply()) {
-                Ok(reply) => return Ok(reply),
-                Err(err) => failures.push(("Groq", err)),
-            }
-        }
-        if failures.is_empty() { Err(AiError::NoKeys) } else { Err(AiError::Failed(failures)) }
     }
 
     /// Turns speech into text: Groq's Whisper (made for it, and fast) first,
@@ -288,8 +384,8 @@ async fn answer(sent: reqwest::Result<reqwest::Response>) -> Result<serde_json::
     serde_json::from_str(&text).map_err(|_| ProviderError::NoAnswer("sent an answer that isn't JSON".into()))
 }
 
-/// Reads a stream of server-sent events (both providers stream this way),
-/// giving each event's data to `each` as it comes.
+/// Reads a stream of server-sent events, giving each event's data to
+/// `each` as it comes.
 async fn events(sent: reqwest::Result<reqwest::Response>, mut each: impl FnMut(serde_json::Value)) -> Result<(), ProviderError> {
     let mut response = sent.map_err(|_| ProviderError::Offline)?;
     let status = response.status();
@@ -317,6 +413,15 @@ async fn events(sent: reqwest::Result<reqwest::Response>, mut each: impl FnMut(s
         }
     }
     Ok(())
+}
+
+/// How long a busy AI asks to wait (its `retry-after`, in seconds), if it says.
+fn wait_asked(response: &reqwest::Response) -> Option<Duration> {
+    if !matches!(response.status().as_u16(), 429 | 503) {
+        return None;
+    }
+    let seconds: f64 = response.headers().get("retry-after")?.to_str().ok()?.trim().parse().ok()?;
+    Duration::try_from_secs_f64(seconds.max(0.0)).ok()
 }
 
 /// An error status, with the reason the provider gave.

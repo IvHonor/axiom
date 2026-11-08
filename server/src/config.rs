@@ -36,17 +36,21 @@ pub struct Config {
     /// `OPERATOR_NAME`: who runs this server, named in the privacy notice
     /// and terms as the one responsible for people's data.
     pub operator_name: Option<String>,
-    /// `GEMINI_API_KEY` and `GROQ_API_KEY`: the assistant's AI, Gemini first.
-    /// Keys from aistudio.google.com/apikey and console.groq.com/keys. Gemini
-    /// is only used with `GEMINI_PAID=yes`: Google's terms allow only its paid
-    /// service for apps used in the UK, EEA and Switzerland.
+    /// `GROQ_API_KEY` and `GEMINI_API_KEY`: Groq answers the assistant on its
+    /// free plan (and its Whisper writes down what's said to it), unless
+    /// there's a paid Gemini key, which answers instead. Keys from
+    /// console.groq.com/keys and aistudio.google.com/apikey. Gemini is only
+    /// used with `GEMINI_PAID=yes`:
+    /// Google's terms allow only its paid service for apps used in the UK,
+    /// EEA and Switzerland.
     pub ai_keys: axiom_ai::Keys,
     /// A `GEMINI_API_KEY` set without `GEMINI_PAID`, and so left unused.
     pub gemini_unpaid: bool,
-    /// `GEMINI_MODEL`, `GROQ_MODEL` and `WHISPER_MODEL`, to override the models used.
+    /// `GROQ_MODEL`, `GEMINI_MODEL` and `WHISPER_MODEL`, to override the models used.
     pub ai_models: axiom_ai::Models,
-    /// `AI_DAILY_LIMIT`: the assistant's model calls per day across every account.
-    pub ai_daily_limit: u32,
+    /// `AI_DAILY_LIMIT`: an emergency brake on the assistant's model calls per
+    /// day across every account. Unset, there's no limit.
+    pub ai_daily_limit: Option<u32>,
 }
 
 impl Config {
@@ -106,10 +110,7 @@ impl Config {
             groq: var("GROQ_MODEL").unwrap_or(defaults.groq),
             whisper: var("WHISPER_MODEL").unwrap_or(defaults.whisper),
         };
-        let ai_daily_limit = match var("AI_DAILY_LIMIT") {
-            Some(limit) => limit.trim().parse().map_err(|_| format!("AI_DAILY_LIMIT must be a whole number, got {limit}"))?,
-            None => crate::ai::EVERYONE_PER_DAY,
-        };
+        let ai_daily_limit = var("AI_DAILY_LIMIT").map(|limit| limit.trim().parse::<u32>().map_err(|_| format!("AI_DAILY_LIMIT must be a whole number, got {limit}"))).transpose()?;
 
         Ok(Self {
             database_url,

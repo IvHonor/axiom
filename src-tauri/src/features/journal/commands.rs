@@ -76,3 +76,8 @@ pub async fn journal_export(app: AppHandle, markdown: String) -> Result<String> 
 pub fn journal_prompts(today: Date) -> (Vec<&'static str>, &'static str) {
     (service::PROMPTS.to_vec(), service::prompt_for(today))
 }
+
+#[tauri::command]
+pub async fn journal_analytics(db: State<'_, Db>, unit: String, day: sea_orm::prelude::Date, today: sea_orm::prelude::Date) -> Result<super::analytics::JournalAnalytics> {
+    super::analytics::report(&db.conn().await?, crate::features::period::Period::new(&unit, day, today)?).await
+}

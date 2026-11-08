@@ -117,6 +117,35 @@ async fn a_day_is_planned_onto_the_timeline() {
 }
 
 #[tokio::test]
+async fn timers_start_on_a_task_by_name_and_stop() {
+    let db = db().await;
+    let ctx = ctx(&db);
+
+    // A task that isn't on the list yet is made for today, then timed.
+    let (p, done) = change(&ctx, "plan_timer", json!({ "action": "start", "title": "Write report", "minutes": 45 })).await;
+    assert_eq!(p.title, "Start a timer on \"Write report\"");
+    assert_eq!(p.items, vec![Item::new("Task", "Write report · new, for today · 45 min")]);
+    let report = done["task_id"].as_str().unwrap().to_owned();
+    let today = look(&ctx, "plan_day", json!({})).await;
+    assert_eq!(today["tasks"].as_array().unwrap().len(), 1, "made once");
+    assert!(crate::features::daily_plan::service::find_task(&db, &report).await.unwrap().timer_started_at.is_some());
+    assert!(preview(&ctx, &spec("plan_timer"), &json!({ "action": "start", "title": "write REPORT" })).await.is_err(), "already being timed");
+
+    // Starting another, by name, finds it on the list and says the first stops.
+    crate::features::daily_plan::service::create_task(&db, "Email Bob", Some(ctx.today), None).await.unwrap();
+    let (p, _) = change(&ctx, "plan_timer", json!({ "action": "start", "title": "email bob" })).await;
+    assert_eq!(p.items, vec![Item::new("Task", "Email Bob"), Item::change("Timer", "running on Write report", "stopped")]);
+    assert_eq!(look(&ctx, "plan_day", json!({})).await["tasks"].as_array().unwrap().len(), 2, "no second Email Bob");
+    assert!(crate::features::daily_plan::service::find_task(&db, &report).await.unwrap().timer_started_at.is_none());
+
+    // Stopping stops whichever runs; with none, there's nothing to stop.
+    let (p, done) = change(&ctx, "plan_timer", json!({ "action": "stop" })).await;
+    assert_eq!(p.title, "Stop the timer on \"Email Bob\"");
+    assert_eq!(done["stopped"], "Email Bob");
+    assert!(preview(&ctx, &spec("plan_timer"), &json!({ "action": "stop" })).await.is_err());
+}
+
+#[tokio::test]
 async fn goals_are_added_and_checked_in_on() {
     let db = db().await;
     let ctx = ctx(&db);

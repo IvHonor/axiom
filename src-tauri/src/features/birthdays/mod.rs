@@ -8,6 +8,7 @@
 //! - `vcard.rs` reads contacts files, `ics.rs` writes calendar files
 //! - `commands.rs` exposes it all to React
 
+pub(crate) mod analytics;
 pub mod commands;
 pub(crate) mod entities;
 mod ics;

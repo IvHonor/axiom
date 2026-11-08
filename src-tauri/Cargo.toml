@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -45,6 +45,9 @@ getrandom = "0.3"
 lopdf = { version = "0.46", default-features = false }
 flate2 = "1.1"
 yrs = "0.28.0"
+# The computer's time zone (Europe/London), for the weather where it is when
+# location services are off.
+iana-time-zone = "0.1"
 
 
 [dev-dependencies]
@@ -53,8 +56,19 @@ tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread"] }
 wiremock = "0.6"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-global-shortcut = "2"
+# Starting Axiom while it runs in the background (Lemma on the desktop)
+# brings that one back rather than opening a second.
+tauri-plugin-single-instance = "2"
 tauri-plugin-process = "2"
 # Without the default `zip` feature: our updates are the signed setup .exe
 # (and .app.tar.gz on macOS, which doesn't need it), never zip archives, and
 # the `zip` crate it pulls in has open advisories (RUSTSEC-2026-0367..0369).
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
+
+# Lemma on the desktop keeps quiet while a full-screen app or a call is on,
+# notices time away from the computer (see `desk::desk_state`), chimes, and
+# finds roughly where it is for the weather (`desk::desk_weather`).
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_UI_Shell", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_SystemInformation", "Win32_Media_Audio", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_Com", "Foundation", "Devices_Geolocation"] }
+windows-registry = "0.6"

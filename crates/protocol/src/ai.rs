@@ -74,6 +74,14 @@ pub struct ChatReply {
 pub struct Usage {
     pub input: u32,
     pub output: u32,
+    /// Of `input`, how much the AI had seen lately and kept (the same start
+    /// of a conversation): cheaper, and not counted against Groq's limit a minute.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub cached: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 impl ChatReply {
@@ -97,7 +105,14 @@ pub enum Streamed {
     Reply { reply: ChatReply },
     /// No AI could answer. `status` is the one `AI_CHAT` would have sent.
     Error { status: u16, message: String },
+    /// The AI is busy for a moment (a free plan's limit a minute), so it'll
+    /// be asked again in `seconds`. Sent only to an app that sends `SHOWS_WAITS`,
+    /// as older ones don't know it.
+    Waiting { seconds: u32 },
 }
+
+/// The header an app sends with `AI_CHAT_STREAM` when it can show a `Streamed::Waiting`.
+pub const SHOWS_WAITS: &str = "x-axiom-shows-waits";
 
 /// Longest recording `AI_TRANSCRIBE` takes, in bytes of audio: a minute of
 /// 16 kHz mono WAV.

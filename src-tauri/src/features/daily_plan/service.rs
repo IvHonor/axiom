@@ -32,7 +32,7 @@ const MIN_BLOCK_MINUTES: i32 = 5;
 const DEFAULT_BLOCK_MINUTES: i32 = 30;
 pub const COLORS: &[&str] = &["blue", "green", "purple", "orange", "red", "pink", "yellow", "gray"];
 
-fn tasks() -> Select<task::Entity> {
+pub(super) fn tasks() -> Select<task::Entity> {
     task::Entity::find().filter(task::Column::DeletedAt.is_null())
 }
 
@@ -44,7 +44,7 @@ fn routines() -> Select<routine::Entity> {
     routine::Entity::find().filter(routine::Column::DeletedAt.is_null())
 }
 
-fn days() -> Select<day::Entity> {
+pub(super) fn days() -> Select<day::Entity> {
     day::Entity::find().filter(day::Column::DeletedAt.is_null())
 }
 
@@ -357,6 +357,26 @@ pub async fn stop_timer(db: &DatabaseConnection, id: &str) -> Result<task::Model
     let mut task: task::ActiveModel = task.into();
     task.actual_minutes = Set(total);
     task.timer_started_at = Set(None);
+    Ok(task.update(db).await?)
+}
+
+/// Takes `minutes` (time away from the computer) off a task's tracked time:
+/// off the running timer, as if it started later, and whatever's left off
+/// what it had tracked before. Never below nothing.
+pub async fn take_off(db: &DatabaseConnection, id: &str, minutes: i32) -> Result<task::Model> {
+    let task = find_task(db, id).await?;
+    let mut left = minutes.max(0);
+    let mut started = task.timer_started_at;
+    if let Some(at) = started {
+        let ran = ((Utc::now() - at).num_seconds() / 60) as i32;
+        let off = left.min(ran.max(0));
+        started = Some(at + chrono::Duration::minutes(off as i64));
+        left -= off;
+    }
+    let total = (task.actual_minutes - left).max(0);
+    let mut task: task::ActiveModel = task.into();
+    task.actual_minutes = Set(total);
+    task.timer_started_at = Set(started);
     Ok(task.update(db).await?)
 }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Bookmark, BookOpen, ClipboardCopy, Library, NotebookPen, Pencil, Quote, RotateCcw, Trash2, X } from "lucide-react";
+import { ArrowLeft, Bookmark, BookOpen, ClipboardCopy, Library, NotebookPen, Pencil, Play, Quote, RotateCcw, Timer, Trash2, X } from "lucide-react";
 import { useDataChanged } from "../../lib/sync";
 import { ConfirmButton } from "../../shell/ui/ConfirmButton";
 import { mediumDay, today } from "../daily_plan/time";
@@ -23,7 +23,7 @@ import {
   type Session,
 } from "./api";
 import { Cover, Progress, Stars } from "./Cover";
-import { readingChanged, setReadingUi, useReadingUi } from "./readingUi";
+import { readingChanged, setReadingUi, startReading, stopReading, useReadingUi } from "./readingUi";
 
 const KIND_ICONS = { note: NotebookPen, quote: Quote, bookmark: Bookmark };
 
@@ -43,7 +43,7 @@ const fieldsOf = (b: BookCard): BookFields => ({
 
 /** One book: where you are, your notes, its details and the reading log. */
 export function BookPage({ id }: { id: string }) {
-  const { page, revision } = useReadingUi();
+  const { page, revision, timer } = useReadingUi();
   const [detail, setDetail] = useState<BookDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -144,6 +144,17 @@ export function BookPage({ id }: { id: string }) {
           <header className="rd-book-title">
             <h1>{book.title}</h1>
             <p className="dim">{[book.authors, book.publishedYear].filter(Boolean).join(" · ")}</p>
+            {book.status !== "finished" && book.status !== "dnf" && (
+              timer?.bookId === book.id ? (
+                <button className="btn btn-sm" onClick={stopReading}>
+                  <Timer size={14} strokeWidth={1.75} /> Stop and log
+                </button>
+              ) : (
+                <button className="btn btn-sm btn-ghost" onClick={() => startReading(book.id, book.title)} disabled={!!timer} title={timer ? `You're timing ${timer.title}` : undefined}>
+                  <Play size={14} strokeWidth={1.75} /> Start reading
+                </button>
+              )
+            )}
           </header>
 
           <ProgressPanel book={book} onLog={(value, minutes) => run(() => api.logProgress(id, value, minutes, today()))} />
@@ -185,6 +196,20 @@ function ProgressPanel({ book, onLog }: { book: BookCard; onLog: (value: number,
     setH(String(Math.floor(book.progress / 60)));
     setM(String(book.progress % 60));
   }, [book.progress, book.unit]);
+  // The reading timer just stopped on this book: its minutes, ready to log
+  // with the page reached (for a book read in minutes, added on).
+  const { counted } = useReadingUi();
+  useEffect(() => {
+    if (counted?.bookId !== book.id) return;
+    if (book.unit === "minutes") {
+      const total = book.progress + counted.minutes;
+      setH(String(Math.floor(total / 60)));
+      setM(String(total % 60));
+    } else {
+      setSpent(String(counted.minutes));
+    }
+    setReadingUi({ counted: null });
+  }, [counted, book.id, book.unit, book.progress]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();

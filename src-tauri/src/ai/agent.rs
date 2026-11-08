@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 
 use super::Assistant;
 use super::entities::{chat, message, proposal};
-use super::skills::{self, AREAS, Ctx, Preview, Spec};
+use super::skills::{self, AREAS, Ctx, Preview, Spec, Start};
 use super::undo;
 use crate::features::reading::library::OpenLibrary;
 use crate::account::Account;
@@ -38,13 +38,16 @@ const MAX_RESULT_BYTES: usize = 24 * 1024;
 #[serde(rename_all = "camelCase")]
 pub struct Progress {
     pub chat_id: String,
-    /// "thinking", "looking" (at an area), "preparing" (a change) or "done".
+    /// "thinking", "waiting" (on a busy AI), "looking" (at an area),
+    /// "preparing" (a change) or "done".
     pub state: &'static str,
     pub area: Option<String>,
     /// Which of the turn's AI calls it's on, from 0.
     pub step: usize,
     /// What this step's answer has written so far, while it's written.
     pub text: Option<String>,
+    /// While "waiting": seconds until the AI is asked again.
+    pub wait: Option<u32>,
 }
 
 /// A chat in the list.
@@ -69,9 +72,10 @@ pub struct ChatView {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Entry {
     User { id: String, text: String },
-    /// `tokens`: what the AI calls for this answer used so far, when known.
+    /// `tokens`: what the AI calls for this answer used so far, when known;
+    /// `cached`: how many of those the AI had kept from before.
     #[serde(rename_all = "camelCase")]
-    Assistant { id: String, text: String, provider: Option<String>, tokens: Option<u32> },
+    Assistant { id: String, text: String, provider: Option<String>, tokens: Option<u32>, cached: u32 },
     /// Lemma looked at an area.
     Looked { id: String, area: String },
     /// `undoable`: confirmed (or failed part-way), and what it did can still be undone on this computer.
@@ -145,19 +149,22 @@ pub async fn view(db: &DatabaseConnection, id: &str) -> Result<ChatView> {
     let mut entries = Vec::new();
     // Tokens used since the person's last message: one answer's AI calls.
     let mut spent: Option<u32> = None;
+    let mut cached = 0;
     for m in messages(db, id).await? {
         match m.role.as_str() {
             "user" => {
                 spent = None;
+                cached = 0;
                 entries.push(Entry::User { id: m.id, text: m.text.unwrap_or_default() });
             }
             "assistant" => {
                 let data: AssistantData = m.data.as_deref().and_then(|d| serde_json::from_str(d).ok()).unwrap_or_default();
                 if let Some(used) = data.usage {
                     spent = Some(spent.unwrap_or(0) + used.input + used.output);
+                    cached += used.cached;
                 }
                 if let Some(text) = m.text.filter(|t| !t.trim().is_empty()) {
-                    entries.push(Entry::Assistant { id: m.id, text, provider: m.provider, tokens: spent });
+                    entries.push(Entry::Assistant { id: m.id, text, provider: m.provider, tokens: spent, cached });
                 }
             }
             _ => {
@@ -265,13 +272,13 @@ pub struct Persona {
 }
 
 impl Persona {
-    fn name(&self) -> String {
+    pub(super) fn name(&self) -> String {
         let name = self.name.as_deref().unwrap_or_default().split_whitespace().collect::<Vec<_>>().join(" ");
         if name.is_empty() { "Lemma".into() } else { name.chars().take(24).collect() }
     }
 
     /// How it talks, for its instructions.
-    fn style(&self) -> &'static str {
+    pub(super) fn style(&self) -> &'static str {
         match self.personality.as_deref() {
             Some("cheerful") => "Be upbeat and playful, with a light touch of fun (an emoji now and then is fine), and brief",
             Some("calm") => "Be calm, gentle and reassuring, never rushed, and brief",
@@ -338,7 +345,7 @@ pub async fn send(turn: &Turn<'_>, chat_id: Option<String>, text: Option<String>
         add_message(turn.db, &chat_id, "user", Some(text), None, None).await?;
     }
     let result = run(turn, &chat_id, &progress).await;
-    progress(Progress { chat_id: chat_id.clone(), state: "done", area: None, step: 0, text: None });
+    progress(Progress { chat_id: chat_id.clone(), state: "done", area: None, step: 0, text: None, wait: None });
     result?;
     view(turn.db, &chat_id).await
 }
@@ -351,14 +358,27 @@ fn title_of(text: &str) -> String {
 async fn run(turn: &Turn<'_>, chat_id: &str, progress: &(impl Fn(Progress) + Sync)) -> Result<()> {
     let specs = skills::specs(&turn.areas);
     let system = system_prompt(&turn.areas, turn.name.as_deref(), &turn.persona);
-    let mut loaded = starting_areas(turn.db, chat_id, &turn.areas).await?;
+    let now = now_stamp();
+    let Start { areas: mut loaded, broad } = starting_areas(turn.db, chat_id, &turn.areas).await?;
+    // Looks made this turn, by tool and arguments, so asking again is caught.
+    let mut looked: Vec<(String, String)> = Vec::new();
+    if let Some(call) = look_ahead(turn.db, chat_id, &loaded).await? {
+        let data = AssistantData { tool_calls: vec![call.clone()], usage: None };
+        add_message(turn.db, chat_id, "assistant", None, Some(json!(data)), None).await?;
+        let at = |state, area| Progress { chat_id: chat_id.into(), state, area, step: 0, text: None, wait: None };
+        let mut data = run_call(turn, chat_id, &specs, &call, &|state, area| progress(at(state, area))).await;
+        data.result = kept(data.result);
+        add_message(turn.db, chat_id, "tool", None, Some(json!(data)), None).await?;
+        looked.push((call.name, call.arguments.to_string()));
+    }
     for step in 0..MAX_STEPS {
         if turn.stop.stopped() {
             return Ok(());
         }
-        let at = |state, area| Progress { chat_id: chat_id.into(), state, area, step, text: None };
+        let at = |state, area| Progress { chat_id: chat_id.into(), state, area, step, text: None, wait: None };
         progress(at("thinking", None));
-        let request = ChatRequest { system: system.clone(), messages: history(turn.db, chat_id).await?, tools: tools_for(&loaded, &turn.areas) };
+        let messages = stamped(history(turn.db, chat_id).await?, &now);
+        let request = ChatRequest { system: system.clone(), messages, tools: tools_for(&loaded, &turn.areas, broad) };
         // The words show as they're written.
         let written = std::sync::Mutex::new(String::new());
         let on = |delta: Delta| {
@@ -366,11 +386,12 @@ async fn run(turn: &Turn<'_>, chat_id: &str, progress: &(impl Fn(Progress) + Syn
             match delta {
                 Delta::Text(words) => so_far.push_str(words),
                 Delta::Restart => so_far.clear(),
+                Delta::Waiting(wait) => return progress(Progress { wait: Some(wait.as_secs_f64().ceil() as u32), ..at("waiting", None) }),
             }
             progress(Progress { text: Some(so_far.clone()), ..at("thinking", None) });
         };
         let reply = tokio::select! {
-            reply = turn.assistant.chat_stream(turn.account, &request, &on) => reply?.reply,
+            reply = turn.assistant.chat_stream(turn.account, &request, &on) => reply?,
             () = turn.stop.clone().wait() => return Ok(()),
         };
         let data = AssistantData { tool_calls: reply.tool_calls.clone(), usage: reply.usage };
@@ -379,9 +400,17 @@ async fn run(turn: &Turn<'_>, chat_id: &str, progress: &(impl Fn(Progress) + Syn
             return Ok(());
         }
         for call in &reply.tool_calls {
+            let look = (call.name.clone(), call.arguments.to_string());
+            let is_look = specs.iter().any(|s| s.name == call.name && !s.change);
             let mut data = if call.name == USE_AREA {
                 ToolData::new(call, load_areas(&mut loaded, &turn.areas, &call.arguments))
+            } else if is_look && looked.contains(&look) {
+                // Weaker models can go round in circles; each lap is another call.
+                ToolData::new(call, json!({ "note": "You already looked this up in this answer, and nothing has changed since. Use what it returned above, or answer now." }))
             } else {
+                if is_look {
+                    looked.push(look);
+                }
                 run_call(turn, chat_id, &specs, call, &|state, area| progress(at(state, area))).await
             };
             data.result = kept(data.result);
@@ -391,14 +420,37 @@ async fn run(turn: &Turn<'_>, chat_id: &str, progress: &(impl Fn(Progress) + Syn
     add_message(turn.db, chat_id, "assistant", Some("I'll stop there for now. Ask me to carry on if there's more to do.".into()), None, None).await
 }
 
+/// "Plan my day" always starts with a look at the day, so that look is made
+/// before the AI is first asked, as if it had asked: one round trip fewer.
+/// Only at the start of a turn about planning a day, with Daily Plan's tools.
+async fn look_ahead(db: &DatabaseConnection, chat_id: &str, loaded: &[String]) -> Result<Option<ToolCall>> {
+    if !loaded.iter().any(|a| a == "daily_plan") {
+        return Ok(None);
+    }
+    let Some(last) = messages(db, chat_id).await?.pop().filter(|m| m.role == "user") else { return Ok(None) };
+    let Some(arguments) = day_planned(&last.text.unwrap_or_default(), Local::now().date_naive()) else { return Ok(None) };
+    Ok(Some(ToolCall { id: format!("look_ahead_{}", new_id()), name: "plan_day".into(), arguments, signature: None }))
+}
+
+/// `plan_day`'s arguments when `text` asks to plan a day: today's, or tomorrow's.
+pub(super) fn day_planned(text: &str, today: chrono::NaiveDate) -> Option<Value> {
+    let text = text.to_lowercase();
+    let words: Vec<&str> = text.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect();
+    let said = |cue: &str| words.iter().any(|w| w.starts_with(cue));
+    if !(said("plan") || said("schedul")) || !(said("day") || said("today") || said("tomorrow")) {
+        return None;
+    }
+    Some(if said("tomorrow") { json!({ "day": (today + chrono::Days::new(1)).to_string() }) } else { json!({}) })
+}
+
 /// The areas a turn starts with tools for: the ones the person's message is
 /// about, and the ones this chat used lately (for follow-ups like "move it
 /// to 3"). Every area's tools add hundreds of tokens to every call.
-async fn starting_areas(db: &DatabaseConnection, chat_id: &str, allowed: &[String]) -> Result<Vec<String>> {
+async fn starting_areas(db: &DatabaseConnection, chat_id: &str, allowed: &[String]) -> Result<Start> {
     let all = messages(db, chat_id).await?;
     let users: Vec<usize> = all.iter().enumerate().filter(|(_, m)| m.role == "user").map(|(i, _)| i).collect();
     let question = users.last().and_then(|&i| all[i].text.clone()).unwrap_or_default();
-    let mut areas = skills::areas_for(&question, allowed);
+    let Start { mut areas, broad } = skills::areas_for(&question, allowed);
     // The previous turn and this one.
     let since = users.len().checked_sub(2).map_or(0, |n| users[n]);
     for m in &all[since..] {
@@ -407,18 +459,23 @@ async fn starting_areas(db: &DatabaseConnection, chat_id: &str, allowed: &[Strin
             areas.push(area);
         }
     }
-    Ok(areas)
+    Ok(Start { areas, broad })
 }
 
-/// The tools of the loaded areas, and `use_area` for the rest it may use.
-fn tools_for(loaded: &[String], allowed: &[String]) -> Vec<Tool> {
-    let mut tools: Vec<Tool> =
-        skills::specs(loaded).iter().map(|s| Tool { name: s.name.into(), description: s.description.into(), parameters: s.parameters.clone() }).collect();
-    let others: Vec<&String> = allowed.iter().filter(|a| !loaded.contains(a)).collect();
+/// The tools of the loaded areas, the looks of the rest when `broad`, and
+/// `use_area` for the rest it may use.
+pub(super) fn tools_for(loaded: &[String], allowed: &[String], broad: bool) -> Vec<Tool> {
+    let others: Vec<String> = allowed.iter().filter(|a| !loaded.contains(a)).cloned().collect();
+    let looks = if broad { skills::specs(&others).into_iter().filter(|s| !s.change).collect() } else { Vec::new() };
+    let mut tools: Vec<Tool> = skills::specs(loaded)
+        .into_iter()
+        .chain(looks)
+        .map(|s| Tool { name: s.name.into(), description: s.description.into(), parameters: s.parameters })
+        .collect();
     if !others.is_empty() {
         tools.push(Tool {
             name: USE_AREA.into(),
-            description: "Gives you the tools for more of the person's areas, when you need one you haven't got.".into(),
+            description: "Gives you all the tools for more of the person's areas, including making changes, when you need one you haven't got.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": { "areas": { "type": "array", "items": { "type": "string", "enum": others } } },
@@ -519,7 +576,7 @@ fn kept(result: Value) -> Value {
     json!({ "note": "Too long to keep whole; this is the start. Use a narrower search if you need more.", "start": &text[..cut] })
 }
 
-fn context(db: &DatabaseConnection) -> Ctx<'_> {
+pub(super) fn context(db: &DatabaseConnection) -> Ctx<'_> {
     let now = Local::now();
     Ctx { db, today: now.date_naive(), now_minute: (now.hour() * 60 + now.minute()) as i32, library: OpenLibrary::new(None) }
 }
@@ -575,6 +632,20 @@ async fn history(db: &DatabaseConnection, chat_id: &str) -> Result<Vec<Message>>
     Ok(sent.split_off(start))
 }
 
+/// The conversation with when it is put at the start of the person's latest
+/// message: the one place it can change without changing what came before.
+fn stamped(mut messages: Vec<Message>, now: &str) -> Vec<Message> {
+    if let Some(Message::User { text }) = messages.iter_mut().rev().find(|m| matches!(m, Message::User { .. })) {
+        *text = format!("[{now}] {text}");
+    }
+    messages
+}
+
+/// When it is, for `stamped`: set once a turn, so every step of it sends the same.
+pub(super) fn now_stamp() -> String {
+    Local::now().format("%A %-d %B %Y, %H:%M").to_string()
+}
+
 /// A result cut to what's worth sending: a long list's start, and a note.
 fn shortened(result: Value) -> Value {
     let text = result.to_string();
@@ -588,16 +659,17 @@ fn shortened(result: Value) -> Value {
     json!({ "note": "Cut short to save space; this is the start. Use a narrower search if you need more.", "start": &text[..cut] })
 }
 
+/// Lemma's instructions. They hold nothing that changes from one minute to
+/// the next (the time goes with the person's message, see `stamped`): an AI
+/// keeps the start of a prompt it saw lately, cheaper and outside Groq's
+/// limit a minute, but only while that start is exactly the same.
 fn system_prompt(areas: &[String], name: Option<&str>, persona: &Persona) -> String {
-    let now = Local::now();
     let on: Vec<&str> = AREAS.iter().filter(|(id, _)| areas.iter().any(|a| a == id)).map(|(_, about)| *about).collect();
     let off: Vec<&str> = AREAS.iter().filter(|(id, _)| !areas.iter().any(|a| a == id)).map(|(_, about)| about.split(':').next().unwrap_or_default()).collect();
     let mut prompt = format!(
         "You are {}, Axiom Intelligence: the assistant inside Axiom, a desktop app where people keep track of every area of their life.\n\
-         Today is {}, and it's {} on the person's computer.\n",
+         The person's latest message starts with today's date and the time on their computer, in brackets.\n",
         persona.name(),
-        now.format("%A %-d %B %Y"),
-        now.format("%H:%M"),
     );
     if let Some(name) = name.map(str::trim).filter(|n| !n.is_empty()) {
         prompt.push_str(&format!("The person's name is {name}.\n"));
@@ -617,7 +689,7 @@ fn system_prompt(areas: &[String], name: Option<&str>, persona: &Persona) -> Str
         "How you work:\n\
          - Look with your tools before saying anything about their data. Never guess or make up entries, ids, dates or numbers.\n\
          - In a change, fill in only what the person said or clearly meant. Leave the rest out (no made-up ratings, times or amounts); the app has sensible defaults.\n\
-         - You start with the tools for the areas the message seems to be about. If you need another area they've let you use, call use_area first.\n\
+         - You start with the tools for the areas the message seems to be about (and, for a question about everything, ways to look at the rest). If you need another area they've let you use, or to change one you can only look at, call use_area first.\n\
          - Look at several things at once (several tool calls in one go) rather than one at a time.\n\
          - Be quick: when the person asks for a change and has given what it needs, prepare it straight away. Only look first if you need something from their data, like an id; ask a question only when something essential is missing.\n\
          - To change anything, use a change tool. It only prepares the change: the person sees it as a card in the chat and confirms it. Never say something is done until it has been confirmed; say you've prepared it for them to check.\n\

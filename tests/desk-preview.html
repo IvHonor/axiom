@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lemma on the desktop checks</title>
+<script>
+  // Settings are read as their modules load, so they're put in place first.
+  const params = new URLSearchParams(location.search);
+  localStorage.setItem("axiom.desk", JSON.stringify({ mode: params.has("timers") ? "timers" : "always", style: params.has("notch") ? "notch" : "float", nudges: !params.has("quiet"), rounds: params.has("rounds") ? "25/5" : "off", sound: params.has("sound"), checkin: params.has("checkin"), weatherFrom: params.has("weather") ? "auto" : "off", ...(params.get("size") ? { size: Number(params.get("size")) } : {}) }));
+  for (const key of ["axiom.desk.reminders", "axiom.desk.ringing", "axiom.desk.break", "axiom.desk.extra", "axiom.desk.rounds", "axiom.desk.focus", "axiom.desk.sessions", "axiom.desk.pushed", "axiom.desk.spot"]) localStorage.removeItem(key);
+  localStorage.setItem("axiom.assistant.areas", JSON.stringify(params.has("heads") ? ["daily_plan", "birthdays", "finance"] : ["daily_plan"]));
+  localStorage.removeItem("axiom.desk.paused");
+  if (params.has("study")) localStorage.setItem("axiom.learning.timer", JSON.stringify({ sourceId: "s1", title: "Rust for Rustaceans", startedAt: Date.now() - 25 * 60000 }));
+  else localStorage.removeItem("axiom.learning.timer");
+  if (params.has("reading")) localStorage.setItem("axiom.reading.timer", JSON.stringify({ bookId: "b1", title: "Dune", startedAt: Date.now() - 40 * 60000 }));
+  else localStorage.removeItem("axiom.reading.timer");
+  // What he says once a day is already said, so it doesn't get in the way
+  // of the other checks: unless ?greet (the hello and wrap-up), ?heads
+  // (birthdays and bills) or ?checkin (how was today).
+  const d = new Date();
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const said = params.has("greet") ? {} : { morning: day, evening: day, goals: day, heads: day, checkin: day, stretch: day };
+  if (params.has("heads")) delete said.heads;
+  if (params.has("checkin")) delete said.checkin;
+  // ?keep leaves what was said alone (to check it isn't said twice).
+  if (!params.has("keep")) localStorage.setItem("axiom.desk.said", JSON.stringify(said));
+  // ?again: the task was timed once already this week.
+  if (params.has("again")) {
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    const week = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
+    localStorage.setItem("axiom.desk.sessions", JSON.stringify({ week, seen: [], counts: { "write the quarterly report": 1 } }));
+  }
+</script>
+</head><body><div id="root"></div><script type="module" src="./desk-fixture.tsx"></script></body></html>

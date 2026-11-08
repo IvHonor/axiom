@@ -26,6 +26,7 @@ impl MigratorTrait for Migrator {
         all.extend(crate::features::goals::migrations::all());
         all.extend(crate::features::learning::migrations::all());
         all.extend(crate::ai::migrations::all());
+        all.extend(crate::profile::migrations::all());
         all
     }
 }

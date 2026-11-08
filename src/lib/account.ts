@@ -93,6 +93,48 @@ export const revokeAccount = (id: string) => invoke<void>("account_admin_revoke"
 export const updateAccount = (id: string, change: { role?: AccountRole; permissions?: Permission[] }) =>
   invoke<AdminAccount>("account_admin_update", { id, role: change.role ?? null, permissions: change.permissions ?? null });
 export const adminSettings = () => invoke<AdminSettings>("account_admin_settings");
+
+/** Mirrors `AiUsageTotals` in crates/protocol (as the server sends it). */
+export interface AiUsageTotals {
+  /** Questions asked. */
+  prompts: number;
+  /** Model calls: a question, and one for each step it took. */
+  calls: number;
+  input_tokens: number;
+  /** Of `input_tokens`, those the AI had kept from before (cheaper). */
+  cached_tokens: number;
+  output_tokens: number;
+  /** Recordings written down. */
+  transcriptions: number;
+  /** Calls that got no answer. */
+  failures: number;
+}
+
+/** A UTC day, "2026-11-06". */
+export type AiUsageDay = AiUsageTotals & { day: string };
+
+export interface AiUsagePerson extends AiUsageTotals {
+  id: string;
+  email: string;
+  display_name: string | null;
+  /** Their days with any use, oldest first. */
+  daily: AiUsageDay[];
+  last_error: string | null;
+  last_used_at: string | null;
+}
+
+/** Mirrors `AdminAiUsage`: what the assistant used over the last `days` days. */
+export interface AdminAiUsage {
+  days: number;
+  /** Everyone's, a row for every day, oldest first. */
+  daily: AiUsageDay[];
+  /** Most tokens first. */
+  people: AiUsagePerson[];
+  /** The server's brake on calls a day across everyone, if it has one. */
+  daily_limit: number | null;
+}
+
+export const adminAiUsage = (days: number) => invoke<AdminAiUsage>("account_admin_ai_usage", { days });
 export const saveAdminSettings = (settings: AdminSettings) => invoke<AdminSettings>("account_admin_save_settings", { settings });
 
 /** Mirrors `ProfileView`: the name and picture the account shows. */

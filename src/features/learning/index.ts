@@ -4,6 +4,7 @@ import type { ExtensionManifest } from "../../extensions/types";
 import { LearningSidebar } from "./LearningSidebar";
 import { LearningSummary } from "./LearningSummary";
 import { LearningView } from "./LearningView";
+import { learningAnalytics } from "./analytics";
 
 export const learning: ExtensionManifest = {
   id: "learning",
@@ -30,5 +31,5 @@ export const learning: ExtensionManifest = {
   builtIn: true,
   icon: Brain,
   color: "var(--area-learning)",
-  area: { View: LearningView, Summary: LearningSummary, fittedSummary: true, Sidebar: LearningSidebar },
+  area: { View: LearningView, Summary: LearningSummary, fittedSummary: true, Sidebar: LearningSidebar, analytics: learningAnalytics },
 };

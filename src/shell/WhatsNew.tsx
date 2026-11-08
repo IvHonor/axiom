@@ -1,26 +1,21 @@
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Modal } from "./ui/Modal";
-import { unseen, type Release } from "./releaseNotes";
+import { readSetting, saveSetting } from "../lib/settings";
+import { compareVersions, unseen, type Release } from "./releaseNotes";
 
-/** The last version whose news was shown here. */
+/** The last version whose news was shown, on any of the person's computers. */
 const SEEN = "axiom.whatsNew.seen";
 
 function readSeen(): string | null {
-  try {
-    const saved = JSON.parse(localStorage.getItem(SEEN) ?? "null");
-    return typeof saved === "string" ? saved : null;
-  } catch {
-    return null;
-  }
+  const saved = readSetting(SEEN);
+  return typeof saved === "string" ? saved : null;
 }
 
+/** Never goes back: a computer not updated yet mustn't show another's news again. */
 function markSeen(version: string) {
-  try {
-    localStorage.setItem(SEEN, JSON.stringify(version));
-  } catch {
-    // Storage unavailable: it shows again next time, which is harmless.
-  }
+  const seen = readSeen();
+  if (seen === null || compareVersions(version, seen) > 0) saveSetting(SEEN, version);
 }
 
 /** Once after an update: what the new version brings. `version` is the one running, once known. */

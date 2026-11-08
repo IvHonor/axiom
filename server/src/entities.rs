@@ -351,8 +351,9 @@ pub mod server_setting {
 pub mod ai_usage {
     use sea_orm::entity::prelude::*;
 
-    /// How many assistant calls an account made on Axiom's AI keys on one
-    /// day (UTC). The row with an empty `user_id` counts everyone's.
+    /// What an account's assistant used on Axiom's AI keys on one day (UTC).
+    /// The row with an empty `user_id` counts everyone's model calls, for
+    /// `AI_DAILY_LIMIT`.
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
     #[sea_orm(table_name = "ai_usage")]
     pub struct Model {
@@ -360,7 +361,22 @@ pub mod ai_usage {
         pub user_id: String,
         #[sea_orm(primary_key, auto_increment = false)]
         pub day: Date,
+        /// Model calls: one question takes one, plus one more for each step
+        /// (each time Lemma looks at an area or prepares a change).
         pub count: i32,
+        /// Questions asked.
+        pub prompts: i32,
+        pub input_tokens: i64,
+        /// Of `input_tokens`, those Gemini had kept from before (cheaper).
+        pub cached_tokens: i64,
+        pub output_tokens: i64,
+        /// Recordings written down.
+        pub transcriptions: i32,
+        /// Calls that got no answer.
+        pub failures: i32,
+        /// Why the latest of them failed.
+        pub last_error: Option<String>,
+        pub last_used_at: Option<DateTimeUtc>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -151,3 +151,29 @@ async fn deleting_a_term_takes_its_modules_and_lectures() {
     assert!(s.terms.is_empty() && s.modules.is_empty() && s.behind.is_empty());
     assert!(get_module(&db, &m, today()).await.is_err());
 }
+
+#[tokio::test]
+async fn analytics_sort_each_lecture_by_where_it_stands() {
+    use crate::features::period::Period;
+    let db = setup().await;
+    let term = autumn(&db).await;
+    let m = module(&db, &term).await;
+    let added = add_schedule(&db, &m, weekly(vec![1, 3], vec![])).await.unwrap();
+    let on = |d: NaiveDate| added.iter().find(|l| l.day == Some(d)).unwrap().id.clone();
+    // Last Tuesday caught up on; this Tuesday only gone to; Thursday's to come.
+    set_stage(&db, &on(day(10, 20)), "caught_up", true, today()).await.unwrap();
+    set_stage(&db, &on(day(10, 27)), "attended", true, today()).await.unwrap();
+
+    let week = super::analytics::report(&db, Period::new("week", today(), today()).unwrap()).await.unwrap();
+    let tuesday = &week.days[1];
+    let thursday = &week.days[3];
+    assert_eq!((tuesday.attended, tuesday.caught_up, tuesday.behind), (1, 0, 0), "gone to, not caught up on yet");
+    assert_eq!(thursday.upcoming, 1);
+    // So far this week: Tuesday's, gone to but not caught up on. The same
+    // days last week: Tuesday's, caught up on.
+    assert_eq!((week.headline.now, week.headline.before), (Some(0.0), Some(100.0)));
+    assert_eq!(week.attendance.now, Some(100.0));
+    assert_eq!(week.due.now, Some(1.0));
+    assert_eq!(week.behind, 10, "everything due before today but last Tuesday's");
+    assert_eq!((week.modules[0].due, week.modules[0].caught_up), (2, 0));
+}

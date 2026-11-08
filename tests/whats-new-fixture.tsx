@@ -13,6 +13,9 @@ import "../src/styles/shell.css";
   laterMinor: unseen("0.6.1", "0.7.0").length,
   alreadySeenLater: unseen("0.7.0", "0.7.1").length,
   fresh: unseen(null, "0.6.2").length,
+  // 0.8.0 brought Lemma on the desktop: from 0.7.0, just that; from before 0.6.2, both.
+  toEight: unseen("0.7.0", "0.8.0").length,
+  oldToEight: unseen("0.6.0", "0.8.0").length,
 };
 const version = new URLSearchParams(location.search).get("version") ?? "0.6.2";
 createRoot(document.getElementById("root")!).render(

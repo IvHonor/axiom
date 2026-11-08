@@ -116,3 +116,8 @@ pub async fn reading_summary(db: State<'_, Db>, today: Date) -> Result<ReadingSu
 pub async fn reading_stats(db: State<'_, Db>, year: i32, today: Date) -> Result<ReadingStats> {
     service::stats(&db.conn().await?, year, today).await
 }
+
+#[tauri::command]
+pub async fn reading_analytics(db: State<'_, Db>, unit: String, day: Date, today: Date) -> Result<super::analytics::ReadingAnalytics> {
+    super::analytics::report(&db.conn().await?, crate::features::period::Period::new(&unit, day, today)?).await
+}

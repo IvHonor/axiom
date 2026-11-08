@@ -7,6 +7,7 @@
 //! - `service.rs` holds the logic, `types.rs` the shapes sent to React
 //! - `commands.rs` exposes the logic to React
 
+pub(crate) mod analytics;
 pub mod calendars;
 pub mod commands;
 pub(crate) mod entities;
@@ -35,11 +36,16 @@ pub const SYNCED_TABLES: &[&str] = &[
     "daily_plan_routines",
     "daily_plan_calendar_accounts",
     "daily_plan_calendars",
+    "daily_plan_calendar_secrets",
 ];
 
 /// Calendar connections are end-to-end encrypted: they hold account
-/// addresses and private iCal links, which work like passwords.
-pub const ENCRYPTED_TABLES: &[&str] = &["daily_plan_calendar_accounts", "daily_plan_calendars"];
+/// addresses, private iCal links (which work like passwords) and sign-ins.
+pub const ENCRYPTED_TABLES: &[&str] = &["daily_plan_calendar_accounts", "daily_plan_calendars", "daily_plan_calendar_secrets"];
+
+/// Synced, but left out of data exports: sign-ins aren't the person's data,
+/// and a file of them would work like their passwords.
+pub const NOT_EXPORTED: &[&str] = &["daily_plan_calendar_secrets"];
 
 /// What each computer keeps to itself about its calendars: when it last read
 /// them, what went wrong, what it last published, and whether it's signed in

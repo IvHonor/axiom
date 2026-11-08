@@ -25,6 +25,12 @@ pub fn body(model: &str, request: &ChatRequest) -> Value {
         });
     }
     let mut body = json!({ "model": model, "messages": messages, "max_completion_tokens": crate::MAX_OUTPUT_TOKENS });
+    // gpt-oss thinks before it answers: a little is enough for the assistant,
+    // and its thinking isn't shown, so it isn't sent back.
+    if model.contains("gpt-oss") {
+        body["reasoning_effort"] = json!("low");
+        body["include_reasoning"] = json!(false);
+    }
     if !request.tools.is_empty() {
         let tools: Vec<Value> = request
             .tools
@@ -106,6 +112,10 @@ pub fn reply(body: &Value) -> Result<ChatReply, ProviderError> {
     }
     let used = &body["usage"];
     let count = |v: &Value| v.as_u64().unwrap_or(0) as u32;
-    let usage = used.is_object().then(|| Usage { input: count(&used["prompt_tokens"]), output: count(&used["completion_tokens"]) });
+    let usage = used.is_object().then(|| Usage {
+        input: count(&used["prompt_tokens"]),
+        output: count(&used["completion_tokens"]),
+        cached: count(&used["prompt_tokens_details"]["cached_tokens"]),
+    });
     Ok(ChatReply { text, tool_calls, provider: "Groq".into(), usage })
 }

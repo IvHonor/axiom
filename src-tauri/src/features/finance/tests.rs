@@ -232,3 +232,41 @@ async fn other_currencies_convert_at_the_days_rate() {
     let m = month_summary(&db, "2026-10", today()).await.unwrap();
     assert_eq!(m.spending, 10_000);
 }
+
+#[tokio::test]
+async fn analytics_count_a_month_against_the_same_days_of_the_last() {
+    use crate::features::period::Period;
+    let (db, current) = ready().await;
+    let savings = add_account(&db, account_fields("Savings", "savings", "GBP", 0)).await.unwrap().id;
+    let groceries = update_category(&db, "cat-groceries", CategoryFields { name: "Groceries".into(), kind: "expense".into(), color: "green".into(), icon: "🛒".into(), budget: Some(30_000) })
+        .await
+        .unwrap();
+    add_transaction(&db, tx(&current, day(10, 3), -12_000, "Tesco", Some(&groceries.id))).await.unwrap();
+    add_transaction(&db, tx(&current, day(10, 9), 2_000, "Tesco refund", Some(&groceries.id))).await.unwrap();
+    add_transaction(&db, tx(&current, day(10, 25), 240_000, "ACME", Some("cat-salary"))).await.unwrap();
+    add_transaction(&db, tx(&current, day(10, 26), -500, "Mystery", None)).await.unwrap();
+    // Dated ahead of today: not counted yet.
+    add_transaction(&db, tx(&current, day(10, 30), -9_999, "Later", Some(&groceries.id))).await.unwrap();
+    add_transaction(&db, tx(&current, day(9, 26), -7_000, "Tesco", Some(&groceries.id))).await.unwrap();
+    // After the 27th of September: outside the stretch compared with.
+    add_transaction(&db, tx(&current, day(9, 29), -4_000, "Tesco", Some(&groceries.id))).await.unwrap();
+    let mut transfer = tx(&current, day(10, 21), 20_000, "", None);
+    transfer.transfer_account_id = Some(savings);
+    add_transaction(&db, transfer).await.unwrap();
+
+    let month = super::analytics::report(&db, Period::new("month", day(10, 1), today()).unwrap()).await.unwrap();
+    assert_eq!((month.income.now, month.spending.now), (Some(240_000.0), Some(10_500.0)), "the refund and transfer don't count as income");
+    assert_eq!((month.headline.now, month.headline.before), (Some(229_500.0), Some(-7_000.0)));
+    assert_eq!(month.savings_rate.before, None, "nothing came in last month to keep a share of");
+    let g = month.categories.iter().find(|c| c.id.as_deref() == Some("cat-groceries")).unwrap();
+    assert_eq!((g.spent, g.budget), (10_000, Some(30_000)));
+    assert_eq!(month.categories.iter().find(|c| c.id.is_none()).unwrap().spent, 500);
+    assert_eq!(month.budgeted, Some(30_000));
+    assert_eq!((month.days.len(), month.days[2].spending, month.days[8].spending), (31, 12_000, -2_000));
+    assert_eq!((month.previous_spending.len(), month.previous_spending[25]), (30, 7_000));
+
+    // A week has no budgets: they're monthly.
+    let week = super::analytics::report(&db, Period::new("week", today(), today()).unwrap()).await.unwrap();
+    assert_eq!((week.spending.now, week.budgeted), (Some(500.0), None));
+    assert!(week.categories.iter().all(|c| c.budget.is_none()));
+}

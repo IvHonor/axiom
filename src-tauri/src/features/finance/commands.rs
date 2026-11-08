@@ -185,3 +185,8 @@ pub async fn finance_import_commit(
     let _ = rates::fill(&conn, &rates, today).await;
     Ok(saved)
 }
+
+#[tauri::command]
+pub async fn finance_analytics(db: State<'_, Db>, unit: String, day: Date, today: Date) -> Result<super::analytics::FinanceAnalytics> {
+    super::analytics::report(&db.conn().await?, crate::features::period::Period::new(&unit, day, today)?).await
+}

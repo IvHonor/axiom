@@ -69,3 +69,8 @@ pub async fn birthdays_export(app: AppHandle, db: State<'_, Db>, today: Date) ->
     std::fs::write(&file, ics).map_err(|e| Error::Invalid(format!("Couldn't save {}: {e}", file.display())))?;
     Ok(file.to_string_lossy().into_owned())
 }
+
+#[tauri::command]
+pub async fn birthdays_analytics(db: State<'_, Db>, unit: String, day: sea_orm::prelude::Date, today: sea_orm::prelude::Date) -> Result<super::analytics::BirthdaysAnalytics> {
+    super::analytics::report(&db.conn().await?, crate::features::period::Period::new(&unit, day, today)?).await
+}

@@ -42,8 +42,10 @@ pub async fn plan_update_task(db: State<'_, Db>, id: String, fields: TaskFields)
 }
 
 #[tauri::command]
-pub async fn plan_set_done(db: State<'_, Db>, id: String, done: bool) -> Result<task::Model> {
-    service::set_done(&db.conn().await?, &id, done).await
+pub async fn plan_set_done(app: AppHandle, db: State<'_, Db>, id: String, done: bool) -> Result<task::Model> {
+    let task = service::set_done(&db.conn().await?, &id, done).await?;
+    crate::desk::timer_changed(&app);
+    Ok(task)
 }
 
 #[tauri::command]
@@ -94,13 +96,25 @@ pub async fn plan_update_settings(db: State<'_, Db>, settings: Settings) -> Resu
 }
 
 #[tauri::command]
-pub async fn plan_start_timer(db: State<'_, Db>, id: String) -> Result<task::Model> {
-    service::start_timer(&db.conn().await?, &id).await
+pub async fn plan_start_timer(app: AppHandle, db: State<'_, Db>, id: String) -> Result<task::Model> {
+    let task = service::start_timer(&db.conn().await?, &id).await?;
+    crate::desk::timer_changed(&app);
+    Ok(task)
 }
 
 #[tauri::command]
-pub async fn plan_stop_timer(db: State<'_, Db>, id: String) -> Result<task::Model> {
-    service::stop_timer(&db.conn().await?, &id).await
+pub async fn plan_stop_timer(app: AppHandle, db: State<'_, Db>, id: String) -> Result<task::Model> {
+    let task = service::stop_timer(&db.conn().await?, &id).await?;
+    crate::desk::timer_changed(&app);
+    Ok(task)
+}
+
+/// Takes time spent away from the computer off a task (see `service::take_off`).
+#[tauri::command]
+pub async fn plan_take_off(app: AppHandle, db: State<'_, Db>, id: String, minutes: i32) -> Result<task::Model> {
+    let task = service::take_off(&db.conn().await?, &id, minutes).await?;
+    crate::desk::timer_changed(&app);
+    Ok(task)
 }
 
 #[tauri::command]
@@ -258,4 +272,9 @@ pub async fn plan_delete_event(db: State<'_, Db>, hub: State<'_, CalendarHub>, i
 #[tauri::command]
 pub async fn plan_set_due(db: State<'_, Db>, id: String, due: Option<Date>) -> Result<task::Model> {
     service::set_due(&db.conn().await?, &id, due).await
+}
+
+#[tauri::command]
+pub async fn plan_analytics(db: State<'_, Db>, unit: String, day: Date, today: Date) -> Result<super::analytics::PlanAnalytics> {
+    super::analytics::report(&db.conn().await?, crate::features::period::Period::new(&unit, day, today)?).await
 }

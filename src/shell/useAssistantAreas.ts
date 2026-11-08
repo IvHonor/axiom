@@ -1,29 +1,26 @@
 // The areas (extension ids) Lemma may see and change. None until the person
 // switches some on: whatever it sees is sent to the AI. Shared by the chat
-// and its settings, and kept on this computer.
+// and its settings, and part of the profile, so it syncs.
 import { useSyncExternalStore } from "react";
+import { onSettingSynced, readSetting, saveSetting } from "../lib/settings";
 
 const KEY = "axiom.assistant.areas";
 
-let areas: string[] = load();
+let areas: string[] = parse(readSetting(KEY));
 const listeners = new Set<() => void>();
 
-function load(): string[] {
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? "[]");
-    return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === "string") : [];
-  } catch {
-    return [];
-  }
+function parse(saved: unknown): string[] {
+  return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === "string") : [];
 }
+
+onSettingSynced(KEY, (saved) => {
+  areas = parse(saved);
+  listeners.forEach((listener) => listener());
+});
 
 function setAllowed(id: string, on: boolean) {
   areas = on ? [...new Set([...areas, id])] : areas.filter((other) => other !== id);
-  try {
-    localStorage.setItem(KEY, JSON.stringify(areas));
-  } catch {
-    // Storage unavailable: the choice lasts for this session only.
-  }
+  saveSetting(KEY, areas);
   listeners.forEach((listener) => listener());
 }
 

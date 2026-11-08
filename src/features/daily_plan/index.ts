@@ -5,6 +5,7 @@ import { DailyPlanView } from "./DailyPlanView";
 import { PlanSidebar } from "./PlanSidebar";
 import { PlanSummary } from "./PlanSummary";
 import { PlanSummaryTitle } from "./overview/OverviewMenu";
+import { planAnalytics } from "./analytics";
 
 export const dailyPlan: ExtensionManifest = {
   id: "daily_plan",
@@ -31,5 +32,5 @@ export const dailyPlan: ExtensionManifest = {
   builtIn: true,
   icon: CalendarClock,
   color: "var(--area-plan)",
-  area: { View: DailyPlanView, Summary: PlanSummary, SummaryTitle: PlanSummaryTitle, fittedSummary: true, Sidebar: PlanSidebar },
+  area: { View: DailyPlanView, Summary: PlanSummary, SummaryTitle: PlanSummaryTitle, fittedSummary: true, Sidebar: PlanSidebar, analytics: planAnalytics },
 };

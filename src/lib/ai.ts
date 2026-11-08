@@ -2,14 +2,6 @@
 // mirror `axiom_protocol::ai` (crates/protocol/src/ai.rs).
 import { invoke } from "@tauri-apps/api/core";
 
-export type Provider = "gemini" | "groq";
-
-/** Which of the person's own keys are saved (never the keys themselves). */
-export interface KeyStatus {
-  gemini: boolean;
-  groq: boolean;
-}
-
 export interface ToolCall {
   id: string;
   name: string;
@@ -36,25 +28,6 @@ export interface ChatRequest {
   tools: Tool[];
 }
 
-export interface AssistantReply {
-  text: string | null;
-  tool_calls: ToolCall[];
-  /** Which AI answered, e.g. "Gemini". */
-  provider: string;
-  /** On the person's own key, rather than Axiom's. */
-  ownKey: boolean;
-}
-
-export const PROVIDERS: { id: Provider; name: string; keyUrl: string }[] = [
-  { id: "gemini", name: "Google Gemini", keyUrl: "https://aistudio.google.com/apikey" },
-  { id: "groq", name: "Groq", keyUrl: "https://console.groq.com/keys" },
-];
-
-export const keyStatus = () => invoke<KeyStatus>("ai_key_status");
-/** Saves one of the person's own keys, or forgets it (`key` null). */
-export const setKey = (provider: Provider, key: string | null) => invoke<KeyStatus>("ai_set_key", { provider, key });
-export const chat = (request: ChatRequest) => invoke<AssistantReply>("ai_chat", { request });
-
 // ---------- Chats with Lemma ----------
 
 /** One line of a change's preview: new (after), changed (before and after) or going (before). */
@@ -75,7 +48,8 @@ export type ProposalStatus = "pending" | "confirmed" | "discarded" | "failed" | 
 export type Entry =
   | { kind: "user"; id: string; text: string }
   /** `tokens`: what this answer's AI calls used, when the AI said. */
-  | { kind: "assistant"; id: string; text: string; provider: string | null; tokens: number | null }
+  /** `cached`: of `tokens`, how many the AI had kept from before (cheaper). */
+  | { kind: "assistant"; id: string; text: string; provider: string | null; tokens: number | null; cached?: number }
   | { kind: "looked"; id: string; area: string }
   /**
    * `undoable`: confirmed (or failed part-way), and what it did can still be undone on this computer.
@@ -100,15 +74,20 @@ export interface ChatView {
 /** What Lemma is doing right now (the `assistant-progress` event). */
 export interface Progress {
   chatId: string;
-  state: "thinking" | "looking" | "preparing" | "done";
+  /** "waiting": the AI is busy for a moment and will be asked again. */
+  state: "thinking" | "waiting" | "looking" | "preparing" | "done";
   area: string | null;
   /** Which of the turn's AI calls it's on, from 0. */
   step: number;
   /** What this step's answer has written so far, while it's written. */
   text: string | null;
+  /** While waiting: seconds until the AI is asked again. */
+  wait: number | null;
 }
 
 export const chats = () => invoke<ChatSummary[]>("assistant_chats");
+/** Wakes Axiom's server, which sleeps when idle and takes about a minute to start. */
+export const wakeServer = () => invoke<void>("assistant_wake");
 export const getChat = (id: string) => invoke<ChatView>("assistant_chat", { id });
 /** Who the assistant is (see `features/lemma/persona.ts`). */
 export interface Persona {
@@ -138,3 +117,29 @@ export interface Transcript {
 
 /** What was said in a recording (base64 `audio`), see `voice.ts`. */
 export const transcribe = (audio: string, mime: string) => invoke<Transcript>("ai_transcribe", { audio, mime });
+
+/** What came of something said to Lemma on the desktop. Mirrors `quick::QuickReply`. */
+export interface QuickReply {
+  /** For the speech bubble. */
+  said: string | null;
+  /** What was done, e.g. `Start a timer on "Essay"`. */
+  did: string | null;
+  /** It needs a chat: carry on in Axiom. */
+  openChat: boolean;
+  /** Puts back what was done (`quickUndo`); empty when nothing was. */
+  undo: string[];
+  /** A reminder to give later: what, and when (ms since 1970). */
+  reminder: { text: string; at: number; onReturn: boolean } | null;
+}
+
+/** Something said to Lemma on the desktop: small things are done straight away, and nothing is kept. */
+export const quick = (text: string, areas: string[], name: string | null, persona: Persona) =>
+  invoke<QuickReply>("assistant_quick", { text, areas, name, persona });
+/**
+ * Something done on the desktop by hand, with no AI: dropped on Lemma, the
+ * evening check-in, logging a timer. Straight away, with an Undo. `tool` is
+ * one of `quick::ACTS`, `args` as Lemma's own tool takes them.
+ */
+export const act = (tool: string, args: Record<string, unknown>) => invoke<QuickReply>("assistant_act", { tool, args });
+/** Undo, from the speech bubble: puts back what something said on the desktop did. */
+export const quickUndo = (undo: string[]) => invoke<void>("assistant_quick_undo", { undo });

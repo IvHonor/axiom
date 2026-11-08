@@ -79,3 +79,8 @@ pub async fn uni_set_stage(db: State<'_, Db>, id: String, stage: String, done: b
 pub async fn uni_delete_lecture(db: State<'_, Db>, id: String) -> Result<()> {
     service::delete_lecture(&db.conn().await?, &id).await
 }
+
+#[tauri::command]
+pub async fn uni_analytics(db: State<'_, Db>, unit: String, day: sea_orm::prelude::Date, today: sea_orm::prelude::Date) -> Result<super::analytics::UniAnalytics> {
+    super::analytics::report(&db.conn().await?, crate::features::period::Period::new(&unit, day, today)?).await
+}

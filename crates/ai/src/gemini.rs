@@ -193,6 +193,10 @@ pub fn reply(body: &Value) -> Result<ChatReply, ProviderError> {
     }
     let used = &body["usageMetadata"];
     let count = |v: &Value| v.as_u64().unwrap_or(0) as u32;
-    let usage = used.is_object().then(|| Usage { input: count(&used["promptTokenCount"]), output: count(&used["candidatesTokenCount"]) + count(&used["thoughtsTokenCount"]) });
+    let usage = used.is_object().then(|| Usage {
+        input: count(&used["promptTokenCount"]),
+        output: count(&used["candidatesTokenCount"]) + count(&used["thoughtsTokenCount"]),
+        cached: count(&used["cachedContentTokenCount"]),
+    });
     Ok(ChatReply { text: (!text.is_empty()).then_some(text), tool_calls, provider: "Gemini".into(), usage })
 }

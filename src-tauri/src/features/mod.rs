@@ -6,6 +6,7 @@
 
 pub mod birthdays;
 pub mod daily_plan;
+pub(crate) mod period;
 pub(crate) mod doc_edits;
 pub mod finance;
 pub mod goals;

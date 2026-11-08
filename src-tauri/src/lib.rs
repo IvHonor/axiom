@@ -2,9 +2,11 @@ mod account;
 mod ai;
 mod app_lock;
 mod db;
+mod desk;
 mod error;
 mod features;
 mod notifications;
+mod profile;
 mod vault;
 mod sync;
 mod system;
@@ -26,7 +28,11 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // First, so a second start hands over to this one: its window comes back.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| desk::bring_back(app)));
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
@@ -36,7 +42,7 @@ pub fn run() {
         .manage(notifications::runner::Notifier::default())
         .manage(vault::Vault::new(Box::new(vault::Keychain::VAULT)))
         .manage(app_lock::AppLock::new(Box::new(vault::Keychain::APP_LOCK)))
-        .manage(ai::Assistant::new(axiom_ai::Ai::default(), Box::new(vault::Keychain::AI_KEYS)))
+        .manage(ai::Assistant::default())
         .manage(ai::commands::Turns::default())
         .manage(features::finance::rates::Rates::new(None))
         .manage(features::daily_plan::calendars::accounts::CalendarHub::new(
@@ -45,9 +51,23 @@ pub fn run() {
             rrule::Tz::LOCAL,
         ))
         .setup(|app| {
+            ai::Assistant::forget_own_keys(&vault::Keychain::AI_KEYS);
             // The window starts hidden and the frontend shows it once it has
             // drawn. Should the frontend never load, show it anyway.
             if let Some(window) = app.get_webview_window("main") {
+                // Closing Axiom's window: with Lemma always on the desktop, it
+                // only hides, and Axiom carries on in the background (his menu
+                // brings it back, or quits). Otherwise he goes with it.
+                let handle = app.handle().clone();
+                let main = window.clone();
+                window.on_window_event(move |event| match event {
+                    tauri::WindowEvent::CloseRequested { api, .. } if desk::keeps_running() => {
+                        api.prevent_close();
+                        let _ = main.hide();
+                    }
+                    tauri::WindowEvent::Destroyed => desk::bye(&handle),
+                    _ => {}
+                });
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_secs(5));
                     if !window.is_visible().unwrap_or(true) {
@@ -73,6 +93,8 @@ pub fn run() {
             // in tauri.conf.json). The frontend decides when to ask.
             #[cfg(desktop)]
             app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            #[cfg(desktop)]
+            desk::listen_for_hotkey(app)?;
 
             // The local database lives in the app's data folder, e.g.
             // %APPDATA%\app.axiom.desktop\axiom.db on Windows. Development builds
@@ -94,13 +116,29 @@ pub fn run() {
         // Every command React can call. Add new ones here.
         .invoke_handler(tauri::generate_handler![
             system::app_status,
-            ai::commands::ai_key_status,
-            ai::commands::ai_set_key,
-            ai::commands::ai_chat,
+            desk::desk_show,
+            desk::desk_hide,
+            desk::desk_resize,
+            desk::desk_place,
+            desk::desk_hotkey,
+            desk::desk_notify,
+            desk::desk_state,
+            desk::desk_background,
+            desk::desk_quit,
+            desk::desk_weather,
+            desk::desk_settle,
+            desk::desk_chime,
+            desk::desk_timer_keys,
+            desk::desk_open_main,
+            ai::commands::assistant_analytics,
             ai::commands::ai_transcribe,
+            ai::commands::assistant_wake,
             ai::commands::assistant_chats,
             ai::commands::assistant_chat,
             ai::commands::assistant_send,
+            ai::commands::assistant_quick,
+            ai::commands::assistant_quick_undo,
+            ai::commands::assistant_act,
             ai::commands::assistant_stop,
             ai::commands::assistant_confirm,
             ai::commands::assistant_confirm_all,
@@ -130,6 +168,7 @@ pub fn run() {
             acct::account_admin_update,
             acct::account_admin_settings,
             acct::account_admin_save_settings,
+            acct::account_admin_ai_usage,
             acct::account_profile,
             acct::account_update_profile,
             system::data_export,
@@ -137,6 +176,8 @@ pub fn run() {
             sync::sync_now,
             sync::sync_auto,
             sync::sync_set_auto,
+            profile::profile_settings,
+            profile::profile_set,
             notifications::commands::notifications_kinds,
             notifications::commands::notifications_settings,
             notifications::commands::notifications_set,
@@ -179,8 +220,10 @@ pub fn run() {
             fin::finance_confirm,
             fin::finance_skip,
             fin::finance_month,
+            fin::finance_analytics,
             fin::finance_import_preview,
             fin::finance_import_commit,
+            journal::journal_analytics,
             journal::journal_list,
             journal::journal_on_day,
             journal::journal_get,
@@ -192,6 +235,7 @@ pub fn run() {
             journal::journal_stats,
             journal::journal_export,
             journal::journal_prompts,
+            notes::notes_analytics,
             notes::notes_state,
             notes::notes_list,
             notes::notes_get,
@@ -209,6 +253,7 @@ pub fn run() {
             notes::notes_folder_move,
             notes::notes_folder_delete,
             notes::notes_export,
+            birthdays::birthdays_analytics,
             birthdays::birthdays_list,
             birthdays::birthdays_get,
             birthdays::birthdays_create,
@@ -219,6 +264,7 @@ pub fn run() {
             birthdays::birthdays_gift_delete,
             birthdays::birthdays_import,
             birthdays::birthdays_export,
+            goals::goals_analytics,
             goals::goals_list,
             goals::goals_get,
             goals::goals_summary,
@@ -265,6 +311,7 @@ pub fn run() {
             plan::plan_update_settings,
             plan::plan_start_timer,
             plan::plan_stop_timer,
+            plan::plan_take_off,
             plan::plan_card,
             plan::plan_update_day,
             plan::plan_replan,
@@ -274,6 +321,7 @@ pub fn run() {
             plan::plan_update_routine,
             plan::plan_delete_routine,
             plan::plan_insights,
+            plan::plan_analytics,
             plan::plan_calendar_setup,
             plan::plan_add_calendar,
             plan::plan_remove_calendar,
@@ -318,6 +366,7 @@ pub fn run() {
             board::board_create_from_template,
             board::board_activity,
             board::board_insights,
+            board::board_analytics,
             reading::reading_search,
             reading::reading_editions,
             reading::reading_cover,
@@ -339,6 +388,8 @@ pub fn run() {
             reading::reading_set_goal,
             reading::reading_summary,
             reading::reading_stats,
+            reading::reading_analytics,
+            uni::uni_analytics,
             uni::uni_summary,
             uni::uni_modules,
             uni::uni_module,
@@ -353,6 +404,7 @@ pub fn run() {
             uni::uni_update_lecture,
             uni::uni_set_stage,
             uni::uni_delete_lecture,
+            learning::learning_analytics,
             learning::learning_summary,
             learning::learning_source,
             learning::learning_add_skill,
@@ -373,6 +425,16 @@ pub fn run() {
             learning::learning_youtube_available,
             learning::learning_youtube,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // macOS: clicking the Dock icon brings the window back (it may be
+            // hidden, with Lemma on the desktop).
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                desk::bring_back(app);
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }

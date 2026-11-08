@@ -16,8 +16,9 @@ pub const UNCONFIRMED_DAYS: i64 = 7;
 pub const ENDED_SESSION_DAYS: i64 = 30;
 /// A support ticket after it was marked solved.
 pub const SOLVED_TICKET_DAYS: i64 = 365;
-/// How many times an account used the assistant on a day, after that day.
-pub const AI_USAGE_DAYS: i64 = 7;
+/// What an account used of the assistant on a day, after that day: long
+/// enough for the admin panel to show a season of use.
+pub const AI_USAGE_DAYS: i64 = 90;
 
 pub async fn run(s: AppState) {
     let mut every = tokio::time::interval(TICK);
@@ -140,7 +141,7 @@ mod tests {
         ticket(&s, None).await;
         for days_ago in [AI_USAGE_DAYS + 1, 0] {
             let day = (Utc::now() - Days::days(days_ago)).date_naive();
-            ai_usage::ActiveModel { user_id: Set("u".into()), day: Set(day), count: Set(3) }.insert(&s.db).await.unwrap();
+            ai_usage::ActiveModel { user_id: Set("u".into()), day: Set(day), count: Set(3), ..Default::default() }.insert(&s.db).await.unwrap();
         }
 
         assert_eq!(tidy(&s).await.unwrap(), 3);

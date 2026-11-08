@@ -1,10 +1,11 @@
 //! The assistant commands React calls, wrapped by `src/lib/ai.ts`.
 
-use axiom_protocol::ai::{ChatRequest, Transcript};
+use axiom_protocol::ai::Transcript;
 use tauri::{AppHandle, Emitter, State};
 
 use super::agent::{self, ChatSummary, ChatView, Persona, Stop, Turn};
-use super::{Assistant, AssistantReply, KeyStatus, Provider};
+use super::Assistant;
+use super::quick::QuickReply;
 use crate::account::Account;
 use crate::db::Db;
 use crate::error::Result;
@@ -17,26 +18,18 @@ const PROGRESS_EVENT: &str = "assistant-progress";
 #[derive(Default)]
 pub struct Turns(std::sync::Mutex<std::collections::HashMap<String, tokio::sync::watch::Sender<bool>>>);
 
-#[tauri::command]
-pub fn ai_key_status(assistant: State<'_, Assistant>) -> KeyStatus {
-    assistant.key_status()
-}
-
-/// Saves one of the person's own AI keys, or forgets it (`key` null).
-#[tauri::command]
-pub fn ai_set_key(assistant: State<'_, Assistant>, provider: Provider, key: Option<String>) -> Result<KeyStatus> {
-    assistant.set_key(provider, key.as_deref())
-}
-
-#[tauri::command]
-pub async fn ai_chat(assistant: State<'_, Assistant>, account: State<'_, Account>, request: ChatRequest) -> Result<AssistantReply> {
-    assistant.chat(&account, &request).await
-}
-
 /// What was said in a recording from the microphone (base64 `audio`).
 #[tauri::command]
 pub async fn ai_transcribe(assistant: State<'_, Assistant>, account: State<'_, Account>, audio: String, mime: String) -> Result<Transcript> {
     assistant.transcribe(&account, &audio, &mime).await
+}
+
+/// Wakes Axiom's server (which sleeps when idle, and takes about a minute
+/// to start) when the assistant opens, so the first question doesn't wait.
+#[tauri::command]
+pub async fn assistant_wake(account: State<'_, Account>) -> Result<()> {
+    account.wake().await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -76,6 +69,48 @@ pub async fn assistant_send(
     .await;
     turns.0.lock().unwrap().remove(&turn_id);
     result
+}
+
+/// Something said to Lemma on the desktop: done straight away when it's
+/// small (timing a task, ticking one off), else handed on to a chat. Nothing
+/// is kept. The planner and the desktop view hear about anything done.
+#[tauri::command]
+pub async fn assistant_quick(
+    app: AppHandle,
+    db: State<'_, Db>,
+    assistant: State<'_, Assistant>,
+    account: State<'_, Account>,
+    text: String,
+    areas: Vec<String>,
+    name: Option<String>,
+    persona: Option<Persona>,
+) -> Result<QuickReply> {
+    let conn = db.conn().await?;
+    let reply = super::quick::ask(&conn, &assistant, &account, &text, &areas, name.as_deref(), &persona.unwrap_or_default()).await?;
+    if reply.did.is_some() {
+        crate::desk::timer_changed(&app);
+        let _ = app.emit(DATA_CHANGED_EVENT, ());
+    }
+    Ok(reply)
+}
+
+/// Something done on the desktop by hand (dropped on Lemma, a check-in,
+/// logging a timer): straight away, with an Undo, and no AI.
+#[tauri::command]
+pub async fn assistant_act(app: AppHandle, db: State<'_, Db>, tool: String, args: serde_json::Value) -> Result<QuickReply> {
+    let reply = super::quick::act(&db.conn().await?, &tool, &args).await?;
+    crate::desk::timer_changed(&app);
+    let _ = app.emit(DATA_CHANGED_EVENT, ());
+    Ok(reply)
+}
+
+/// Undo, from the speech bubble: puts back what something said on the desktop did.
+#[tauri::command]
+pub async fn assistant_quick_undo(app: AppHandle, db: State<'_, Db>, undo: Vec<String>) -> Result<()> {
+    super::quick::undo_all(&db.conn().await?, &undo).await?;
+    crate::desk::timer_changed(&app);
+    let _ = app.emit(DATA_CHANGED_EVENT, ());
+    Ok(())
 }
 
 /// Stops a turn under way: Lemma stops waiting on the AI, or before its next step.
@@ -128,4 +163,9 @@ pub async fn assistant_rename_chat(db: State<'_, Db>, id: String, title: String)
 #[tauri::command]
 pub async fn assistant_delete_chat(db: State<'_, Db>, id: String) -> Result<()> {
     agent::delete(&db.conn().await?, &id).await
+}
+
+#[tauri::command]
+pub async fn assistant_analytics(db: State<'_, Db>, unit: String, day: sea_orm::prelude::Date, today: sea_orm::prelude::Date) -> Result<super::analytics::LemmaAnalytics> {
+    super::analytics::report(&db.conn().await?, crate::features::period::Period::new(&unit, day, today)?).await
 }

@@ -22,14 +22,22 @@ import { useTabs } from "./shell/useTabs";
 import { AreaNotifications } from "./shell/notifications/AreaNotifications";
 import { setNotificationsOff } from "./lib/notifications";
 import { AdminView } from "./shell/views/AdminView";
-import { ADMIN, viewKey } from "./shell/view";
+import { AnalyticsView } from "./shell/views/AnalyticsView";
+import { ADMIN, ANALYTICS, viewKey } from "./shell/view";
 import { ErrorBoundary } from "./shell/ui/ErrorBoundary";
 import { ExtensionInfoView } from "./shell/views/ExtensionInfoView";
 import { ExtensionView } from "./shell/views/ExtensionView";
 import { OverviewView } from "./shell/views/OverviewView";
 import { SidebarFrame } from "./shell/ui/SidebarFrame";
+import { usePersistentState } from "./shell/usePersistentState";
+import { QuickSwitcher } from "./shell/sidebar/QuickSwitcher";
+import { areaWantsSidebar, noteOpened, rememberAreaSidebar, useSidebarPrefs, useSidebarWidth } from "./shell/sidebar/sidebarPrefs";
+import { useBadges } from "./shell/sidebar/useBadges";
+import { useCollapseReason } from "./shell/sidebar/useCollapseReason";
+import { useTimers } from "./shell/desk/timers";
 import { Companion } from "./features/lemma/Companion";
 import { useAreaName } from "./features/lemma/persona";
+import { useDesk } from "./shell/desk/useDesk";
 
 export default function App() {
   const status = useAppStatus();
@@ -39,6 +47,7 @@ export default function App() {
   const { installedIds, install, uninstall, setEnabled, isOn } = useInstalled();
   const { hiddenIds, setHidden } = useOverviewVisibility();
   const { tabs, active, previewKey, open, pin, close, closeExtension, reorder } = useTabs();
+  useDesk(open);
   const [panel, setPanel] = useState<SidePanel | null>("areas");
   const [extQuery, setExtQuery] = useState("");
   const [extKind, setExtKind] = useState<ExtensionKind>("all");
@@ -55,11 +64,118 @@ export default function App() {
   const withSidebar = areas.filter((ext) => ext.area?.Sidebar);
   const shownArea = withSidebar.find((ext) => panel === `area:${ext.id}`);
   const nameOf = useAreaName();
-  const AreaSidebar = shownArea?.area?.Sidebar;
   const isInstalled = (ext: ExtensionManifest) => !!ext.builtIn || installedIds.includes(ext.id);
   const current = active.kind === "extension" || active.kind === "extension-info" ? findExtension(active.id) : undefined;
 
-  const togglePanel = (next: SidePanel) => setPanel((shown) => (shown === next ? null : next));
+  // ---------- The sidebar ----------
+
+  const sidebarPrefs = useSidebarPrefs();
+  const sidebarWidth = useSidebarWidth();
+  const [pinned, setPinned] = usePersistentState<boolean>("axiom.sidebar.pinned", (saved) => saved === true);
+  const openArea = active.kind === "extension" ? active.id : null;
+  const sidebarIds = withSidebar.map((ext) => ext.id).join();
+  const { running } = useTimers();
+  const collapseReason = useCollapseReason(active, !!running);
+  /** Tucked away by itself: why, and what to bring back once that's over. */
+  const tucked = useRef<{ reason: string; restore: SidePanel } | null>(null);
+  /** A reason you overruled (opening the sidebar anyway): it's left alone until that's over. */
+  const overruled = useRef<string | null>(null);
+  /** When the pointer was last on the sidebar: it never tucks away from under you. */
+  const lastUsed = useRef(0);
+
+  // Opened lately, for Recent and Ctrl+P, and to fold the areas hardly used into More.
+  useEffect(() => {
+    if (openArea) noteOpened(openArea);
+    else if (active.kind === "overview" || active.kind === "analytics") noteOpened(active.kind);
+  }, [openArea, active.kind]);
+
+  /** You opened or closed the sidebar: that's what you want (each area remembers), whatever had tucked it away. */
+  const choose = (next: SidePanel | null) => {
+    if (tucked.current || collapseReason) {
+      overruled.current = next ? collapseReason : null;
+      tucked.current = null;
+    }
+    if (openArea && sidebarPrefs.perArea && (next === null || next === `area:${openArea}`)) rememberAreaSidebar(openArea, next !== null);
+    setPanel(next);
+  };
+  // An area's icon opens the area too, so its sidebar and what's open agree;
+  // clicking the icon of the sidebar that's showing closes it.
+  const togglePanel = (next: SidePanel) => {
+    if (panel === next) return choose(null);
+    choose(next);
+    if (next.startsWith("area:")) {
+      const id = next.slice("area:".length);
+      if (sidebarPrefs.perArea) rememberAreaSidebar(id, true);
+      open({ kind: "extension", id });
+    }
+  };
+
+  // The sidebar keeps up with what's open: an area brings its own sidebar
+  // (or none, if you closed it there last time), the overview or Analytics
+  // the list of areas. Closed, it stays closed (unless the area's left it
+  // open); a panel you went to yourself (account, themes, extensions) stays
+  // put; and pinned, nothing moves it.
+  useEffect(() => {
+    if (pinned || !sidebarPrefs.follow) return;
+    const target = (shown: SidePanel | null): SidePanel | null => {
+      if (shown !== null && shown !== "areas" && !shown.startsWith("area:")) return shown;
+      if (openArea && sidebarIds.split(",").includes(openArea)) {
+        const wants = sidebarPrefs.perArea ? areaWantsSidebar(openArea) : undefined;
+        if (wants === false || (shown === null && wants !== true)) return null;
+        return `area:${openArea}`;
+      }
+      if (shown === null) return null;
+      return active.kind === "overview" || active.kind === "analytics" ? "areas" : shown;
+    };
+    // Tucked away meanwhile: what comes back is what's open now.
+    if (tucked.current) {
+      const next = target(tucked.current.restore);
+      if (next) tucked.current.restore = next;
+      return;
+    }
+    setPanel(target);
+  }, [openArea, active.kind, pinned, sidebarIds, sidebarPrefs.follow, sidebarPrefs.perArea]);
+
+  // Tucking itself away (narrow window, a roomy area, writing, a focus
+  // timer), and coming back when that's over. Never while you're on it,
+  // never when pinned, and not again for a reason you overruled.
+  useEffect(() => {
+    if (!collapseReason) {
+      overruled.current = null;
+      const was = tucked.current;
+      tucked.current = null;
+      if (was) setPanel((shown) => shown ?? was.restore);
+      return;
+    }
+    if (pinned || overruled.current === collapseReason) return;
+    const tuck = () =>
+      setPanel((shown) => {
+        if (!shown || overruled.current === collapseReason || Date.now() - lastUsed.current < 4000) return shown;
+        tucked.current = { reason: collapseReason, restore: shown };
+        return null;
+      });
+    tuck();
+    // You were on it: once you've moved off, it goes.
+    const again = setInterval(tuck, 2000);
+    return () => clearInterval(again);
+  }, [collapseReason, pinned]);
+
+  // Pointing at an icon with the sidebar closed: its panel slides out over
+  // what's open, and goes when the pointer leaves.
+  const [peek, setPeek] = useState<SidePanel | null>(null);
+  const peekTimer = useRef(0);
+  const peekAt = (id: SidePanel | null) => {
+    window.clearTimeout(peekTimer.current);
+    if (panel && id) return;
+    peekTimer.current = window.setTimeout(() => setPeek(id), id ? 280 : 250);
+  };
+  useEffect(() => {
+    if (panel) setPeek(null);
+  }, [panel]);
+  useEffect(() => () => window.clearTimeout(peekTimer.current), []);
+
+  const badges = useBadges(areas.map((ext) => ext.id), !!running);
+  const [switching, setSwitching] = useState(false);
 
   const browseThemes = () => {
     setExtQuery("");
@@ -81,8 +197,8 @@ export default function App() {
   }, [panel, shownArea]);
 
   // The shortcut handler is registered once, so it reads the latest state through a ref.
-  const latest = useRef({ active, close });
-  latest.current = { active, close };
+  const latest = useRef({ active, close, panel, choose });
+  latest.current = { active, close, panel, choose };
 
   // VS Code shortcuts: Ctrl+B toggles the sidebar, Ctrl+Shift+X opens Extensions,
   // Ctrl+W closes the active tab, and the chord Ctrl+K then Ctrl+T opens Themes.
@@ -105,7 +221,12 @@ export default function App() {
         chord = true;
       } else if (key === "b" && !e.shiftKey) {
         e.preventDefault();
-        setPanel((shown) => (shown ? null : "areas"));
+        const { panel, choose, active } = latest.current;
+        choose(panel ? null : active.kind === "extension" ? (`area:${active.id}` as SidePanel) : "areas");
+      } else if (key === "p" && !e.shiftKey) {
+        // Ctrl+P: jump anywhere.
+        e.preventDefault();
+        setSwitching(true);
       } else if (key === "x" && e.shiftKey) {
         e.preventDefault();
         setPanel("extensions");
@@ -117,6 +238,45 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  /** A sidebar panel: in the sidebar, or peeking over what's open. */
+  const panelFor = (p: SidePanel) => {
+    if (p === "areas") return <AreasPanel areas={areas} view={active} onOpen={open} onBrowse={() => setPanel("extensions")} hiddenIds={hiddenIds} onVisibilityChange={setHidden} />;
+    if (p === "extensions")
+      return (
+        <ExtensionsPanel
+          hiddenIds={hiddenIds}
+          onVisibilityChange={setHidden}
+          query={extQuery}
+          onQueryChange={setExtQuery}
+          kind={extKind}
+          onKindChange={setExtKind}
+          installedIds={installedIds}
+          isOn={isOn}
+          onEnabledChange={setEnabled}
+          selectedId={active.kind === "extension-info" ? active.id : null}
+          onOpen={(id, inNewTab) => open({ kind: "extension-info", id }, { preview: !inNewTab })}
+          onInstall={install}
+          onUninstall={uninstall}
+        />
+      );
+    if (p === "account") return <AccountPanel status={account} sync={sync} onChange={setAccount} extensions={areas.map((ext) => ext.id)} />;
+    if (p === "themes") return <ThemesPanel onBrowse={browseThemes} />;
+    const ext = withSidebar.find((e) => p === `area:${e.id}`);
+    const Sidebar = ext?.area?.Sidebar;
+    if (!ext || !Sidebar) return null;
+    return (
+      <aside className="sidebar" aria-label={nameOf(ext)}>
+        <button type="button" className="sidebar-head sidebar-head-link" title={`Open ${nameOf(ext)}`} aria-label={`Open ${nameOf(ext)}`} onClick={() => open({ kind: "extension", id: ext.id })}>
+          {nameOf(ext)}
+        </button>
+        <div className="sidebar-body">
+          <Sidebar active={active.kind === "extension" && active.id === ext.id} onOpen={() => open({ kind: "extension", id: ext.id })} />
+          <AreaNotifications extension={ext.id} signedIn={account?.state === "signed_in"} />
+        </div>
+      </aside>
+    );
+  };
 
   let main;
   if (active.kind === "extension" && current?.area) {
@@ -134,6 +294,8 @@ export default function App() {
         signedIn={account?.state === "signed_in"}
       />
     );
+  } else if (active.kind === "analytics") {
+    main = <AnalyticsView areas={areas} onOpen={(id) => open({ kind: "extension", id })} />;
   } else if (active.kind === "admin") {
     main = <AdminView email={account?.state === "signed_in" ? account.email : null} admin={account?.state === "signed_in" && account.admin} />;
   } else {
@@ -152,61 +314,35 @@ export default function App() {
     <ThemeProvider installed={installed}>
       <div className="app">
         <TopBar tabs={tabs} active={active} previewKey={previewKey} onSelect={open} onPin={pin} onClose={close} onReorder={reorder} />
-        <div className="workbench">
+        <div className="workbench" style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
           <ActivityBar
             hiddenIds={hiddenIds}
             onVisibilityChange={setHidden}
             active={panel}
             areas={withSidebar.map((ext) => ({ id: `area:${ext.id}` as const, label: nameOf(ext), icon: ext.icon, extension: ext }))}
             onToggle={togglePanel}
+            onPeek={peekAt}
+            badges={badges}
+            analytics={{ open: active.kind === "analytics", onOpen: () => open(ANALYTICS) }}
             accountEmail={account?.state === "signed_in" ? account.email : undefined}
             admin={account?.state === "signed_in" && account.admin ? { open: active.kind === "admin", onOpen: () => open(ADMIN) } : undefined}
           />
-          <SidebarFrame open={!!panel && (!panel.startsWith("area:") || !!shownArea)}>
-          {panel === "areas" && (
-            <AreasPanel areas={areas} view={active} onOpen={open} onBrowse={() => setPanel("extensions")}
-              hiddenIds={hiddenIds} onVisibilityChange={setHidden} />
-          )}
-          {panel === "extensions" && (
-            <ExtensionsPanel
-              hiddenIds={hiddenIds}
-              onVisibilityChange={setHidden}
-              query={extQuery}
-              onQueryChange={setExtQuery}
-              kind={extKind}
-              onKindChange={setExtKind}
-              installedIds={installedIds}
-              isOn={isOn}
-              onEnabledChange={setEnabled}
-              selectedId={active.kind === "extension-info" ? active.id : null}
-              onOpen={(id, inNewTab) => open({ kind: "extension-info", id }, { preview: !inNewTab })}
-              onInstall={install}
-              onUninstall={uninstall}
-            />
-          )}
-          {panel === "account" && <AccountPanel status={account} sync={sync} onChange={setAccount} extensions={areas.map((ext) => ext.id)} />}
-          {panel === "themes" && <ThemesPanel onBrowse={browseThemes} />}
-          {shownArea && AreaSidebar && (
-            <aside className="sidebar" aria-label={nameOf(shownArea)}>
-              <button
-                type="button"
-                className="sidebar-head sidebar-head-link"
-                title={`Open ${nameOf(shownArea)}`}
-                aria-label={`Open ${nameOf(shownArea)}`}
-                onClick={() => open({ kind: "extension", id: shownArea.id })}
-              >
-                {nameOf(shownArea)}
-              </button>
-              <div className="sidebar-body">
-                <AreaSidebar
-                  active={active.kind === "extension" && active.id === shownArea.id}
-                  onOpen={() => open({ kind: "extension", id: shownArea.id })}
-                />
-                <AreaNotifications extension={shownArea.id} signedIn={account?.state === "signed_in"} />
-              </div>
-            </aside>
-          )}
+          <SidebarFrame
+            open={!!panel && (!panel.startsWith("area:") || !!shownArea)}
+            pinned={pinned}
+            onPin={setPinned}
+            onUse={() => {
+              lastUsed.current = Date.now();
+            }}
+          >
+            {panel && panelFor(panel)}
           </SidebarFrame>
+          {/* Peeking, with the sidebar closed: the panel over what's open, until the pointer leaves. */}
+          {peek && !panel && (
+            <div className="sidebar-peek" onPointerEnter={() => window.clearTimeout(peekTimer.current)} onPointerLeave={() => peekAt(null)}>
+              {panelFor(peek)}
+            </div>
+          )}
           <main className="main">
             <ErrorBoundary key={viewKey(active)}>{main}</ErrorBoundary>
           </main>
@@ -214,6 +350,7 @@ export default function App() {
         {areas.some((area) => area.id === "lemma") && !(active.kind === "extension" && active.id === "lemma") && (active.kind !== "overview" || hiddenIds.includes("lemma")) && (
           <Companion onOpen={() => open({ kind: "extension", id: "lemma" })} />
         )}
+        {switching && <QuickSwitcher areas={areas} onOpen={open} onClose={() => setSwitching(false)} />}
         {updater.offered && <UpdatePrompt status={updater.status} onInstall={updater.install} onLater={updater.later} />}
         <WhatsNew version={status.version} onOpenLemma={() => open({ kind: "extension", id: "lemma" })} />
         <AppLockScreen accountState={account?.state} />

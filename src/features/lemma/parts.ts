@@ -27,8 +27,13 @@ export function greeting(name: string | null, now = new Date()): string {
 
 /** What Lemma's doing, in words, or null when it's free. */
 export function doing(s: LemmaState): string | null {
+  if (s.slow && ["thinking", "looking", "preparing"].includes(s.activity)) return "Still working on it…";
+  if (s.activity === "idle" && s.feeling === "acknowledged") return "Got it.";
+  if (s.activity === "idle" && s.feeling === "puzzled") return "I didn't catch that. Try again?";
   const area = s.area ? (findExtension(s.area)?.name ?? s.area) : null;
   switch (s.activity) {
+    case "speaking":
+      return "Answering…";
     case "listening":
       return "Listening…";
     case "thinking":

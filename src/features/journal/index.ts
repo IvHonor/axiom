@@ -4,6 +4,7 @@ import type { ExtensionManifest } from "../../extensions/types";
 import { JournalSidebar } from "./JournalSidebar";
 import { JournalSummary } from "./JournalSummary";
 import { JournalView } from "./JournalView";
+import { journalAnalytics } from "./analytics";
 
 export const journal: ExtensionManifest = {
   id: "journal",
@@ -31,7 +32,7 @@ export const journal: ExtensionManifest = {
   builtIn: true,
   icon: NotebookPen,
   color: "var(--area-journal)",
-  area: { View: JournalView, Summary: JournalSummary, Sidebar: JournalSidebar, fittedSummary: true },
+  area: { View: JournalView, Summary: JournalSummary, Sidebar: JournalSidebar, fittedSummary: true, analytics: journalAnalytics },
 };
 
 

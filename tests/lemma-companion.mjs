@@ -55,13 +55,13 @@ try {
     await page.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByRole("button", { name: "Wardrobe", exact: true }).click(); await ready();
 
-    for (const [shape, hat, holding] of [["Orb", "Cap", "Coffee"], ["Prism", "Headphones", "Game"], ["Pyramid", "Crown", "Star"], ["Drop", "Beanie", "Plant"]]) {
+    for (const [shape, hat, holding] of [["Orb", "Cap", "Coffee"], ["Prism", "Headphones", "Book"], ["Pyramid", "Crown", "Plant"], ["Drop", "Beanie", "Plant"]]) {
       await choose(shape); await choose(hat); await choose(holding);
       assert.equal((await saved()).shape, shape.toLowerCase());
       await page.screenshot({ path: `.qa.local/lemma/${shape.toLowerCase()}-accessories.png` });
     }
     for (const accessory of ["Halo", "Bow tie", "None"]) await choose(accessory);
-    for (const holding of ["Book", "Heart", "Rocket", "Music", "Nothing"]) await choose(holding);
+    for (const holding of ["Book", "Plant", "Nothing"]) await choose(holding);
     await choose("Orb"); await choose("Cap"); await choose("Coffee"); await choose("Amber");
     const wardrobe = await saved();
     await page.reload(); await ready();
@@ -115,7 +115,8 @@ try {
     await page.reload(); await ready();
     assert.equal(await preview().getAttribute("data-shape"), "prism");
     await choose("Coffee");
-    assert.equal((await saved()).accessory, "bow");
+    assert.equal((await saved()).accessory, "none");
+    assert.equal((await saved()).neckwear, "bow");
     const parsed = await page.evaluate(async () => {
       const { normaliseLook, STANDARD } = await import("/src/features/lemma/look.ts");
       return { standard: STANDARD, invalid: normaliseLook({ shape: "bad", accessory: 5, holding: {}, glow: "url(bad)", shell: null }), arrays: normaliseLook([]), bubble: normaliseLook({ shape: "bubble" }).shape, shield: normaliseLook({ shape: "shield" }).shape };

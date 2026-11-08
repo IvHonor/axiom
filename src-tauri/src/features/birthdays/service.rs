@@ -21,11 +21,11 @@ pub const RELATIONS: &[&str] = &["family", "friend", "partner", "work", "other"]
 pub const REMIND_DAYS: &[i32] = &[0, 1, 2, 3, 7, 14, 30];
 pub const STATUSES: &[&str] = &["idea", "bought", "given"];
 
-fn people() -> Select<person::Entity> {
+pub(super) fn people() -> Select<person::Entity> {
     person::Entity::find().filter(person::Column::DeletedAt.is_null())
 }
 
-fn gifts() -> Select<gift::Entity> {
+pub(super) fn gifts() -> Select<gift::Entity> {
     gift::Entity::find().filter(gift::Column::DeletedAt.is_null())
 }
 

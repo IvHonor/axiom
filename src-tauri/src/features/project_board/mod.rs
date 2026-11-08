@@ -7,6 +7,7 @@
 //! - `commands.rs` exposes the logic to React
 
 pub(crate) mod access;
+pub(crate) mod analytics;
 pub mod commands;
 mod entities;
 pub mod migrations;

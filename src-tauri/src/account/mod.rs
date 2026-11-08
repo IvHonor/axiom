@@ -234,6 +234,13 @@ impl Account {
         self.authed(|token| async move { self.client.ai_chat_stream(&token, request, on).await }).await
     }
 
+    /// Wakes the server when signed in, ahead of the assistant needing it.
+    pub async fn wake(&self) {
+        if matches!(self.status().await, AccountStatus::SignedIn { .. }) {
+            self.client.wake().await;
+        }
+    }
+
     /// Speech to text for the assistant, on Axiom's AI keys.
     pub async fn ai_transcribe(&self, request: &axiom_protocol::ai::Transcribe) -> std::result::Result<axiom_protocol::ai::Transcript, ServerError> {
         self.authed(|token| async move { self.client.ai_transcribe(&token, request).await }).await
@@ -452,6 +459,11 @@ impl Account {
         let result = self.authed(|token| async move { self.client.admin_settings(&token).await }).await;
         let s = result?;
         Ok(AdminSettingsView { waitlist: s.waitlist, default_permissions: s.default_permissions })
+    }
+
+    /// What each account's assistant used over the last `days` days, for an admin.
+    pub async fn admin_ai_usage(&self, days: u32) -> Result<axiom_protocol::AdminAiUsage> {
+        Ok(self.authed(|token| async move { self.client.admin_ai_usage(&token, days).await }).await?)
     }
 
     pub async fn save_admin_settings(&self, settings: AdminSettingsView) -> Result<AdminSettingsView> {

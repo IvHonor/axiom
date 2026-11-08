@@ -5,6 +5,7 @@ import { UniSidebar } from "./UniSidebar";
 import { UniSummary } from "./UniSummary";
 import { UniSummaryTitle } from "./overview/UniOverviewMenu";
 import { UniView } from "./UniView";
+import { uniAnalytics } from "./analytics";
 
 export const uni: ExtensionManifest = {
   id: "uni",
@@ -28,5 +29,5 @@ export const uni: ExtensionManifest = {
   builtIn: true,
   icon: GraduationCap,
   color: "var(--area-uni)",
-  area: { View: UniView, Summary: UniSummary, SummaryTitle: UniSummaryTitle, fittedSummary: true, Sidebar: UniSidebar },
+  area: { View: UniView, Summary: UniSummary, SummaryTitle: UniSummaryTitle, fittedSummary: true, Sidebar: UniSidebar, analytics: uniAnalytics },
 };

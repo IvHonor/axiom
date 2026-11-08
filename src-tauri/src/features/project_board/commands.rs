@@ -239,3 +239,10 @@ pub async fn board_activity(db: State<'_, Db>, project_id: String) -> Result<Vec
 pub async fn board_insights(db: State<'_, Db>, project_id: String) -> Result<Insights> {
     service::insights(&db.conn().await?, &project_id).await
 }
+
+// ---------- Analytics ----------
+
+#[tauri::command]
+pub async fn board_analytics(db: State<'_, Db>, unit: String, day: sea_orm::prelude::Date, today: sea_orm::prelude::Date) -> Result<super::analytics::BoardAnalytics> {
+    super::analytics::report(&db.conn().await?, crate::features::period::Period::new(&unit, day, today)?).await
+}

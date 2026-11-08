@@ -54,12 +54,14 @@ fn tables(area: &str) -> Vec<&'static str> {
 }
 
 /// A table's rows: whole, or for the ones only added to, each row's `updated_at`.
+#[derive(Clone)]
 enum Rows {
     Whole(HashMap<String, Row>),
     Times(HashMap<String, Value>),
 }
 
 /// An area's tables, read.
+#[derive(Clone)]
 pub struct Snapshot(Vec<(&'static str, Rows)>);
 
 /// Each row's `updated_at`, by id: enough to see what was added or changed.

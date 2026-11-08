@@ -3,7 +3,7 @@
 //! 22 October 2026, on British Summer Time (UTC+1).
 
 use rrule::Tz;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde_json::json;
 use wiremock::matchers::{body_string_contains, header, method, path, path_regex, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -331,16 +331,46 @@ async fn an_account_removed_on_another_computer_goes_here_too() {
 }
 
 #[tokio::test]
-async fn an_account_connected_on_another_computer_asks_to_reconnect_here() {
+async fn a_sign_in_made_on_another_computer_works_here() {
     let (db, server, secrets) = (setup().await, MockServer::start().await, Memory::default());
     google_basics(&server).await;
     let hub = hub(&server, secrets.clone());
     let account = accounts::connect_oauth(&db, &hub, "google", day(TODAY), browser("code")).await.unwrap();
     assert!(!super::setup(&db, &hub).await.unwrap().accounts[0].signed_out);
 
-    // The same rows on a computer without the sign-in.
-    secrets.delete(&account.id);
-    assert!(super::setup(&db, &hub).await.unwrap().accounts[0].signed_out);
+    // The same rows, synced sign-in included, on a computer whose credential store hasn't got it.
+    let elsewhere = Memory::default();
+    let other = self::hub(&server, elsewhere.clone());
+    assert!(!super::setup(&db, &other).await.unwrap().accounts[0].signed_out);
+    assert_eq!(elsewhere.load(&account.id), Some(Secret::OAuth { refresh_token: "rt-1".into(), scope: Some(G_SCOPES.into()) }), "kept here too");
+
+    // A sign-in that hasn't arrived (it waits while the computer is locked) still asks.
+    db.execute_unprepared("DELETE FROM daily_plan_calendar_secrets").await.unwrap();
+    assert!(super::setup(&db, &self::hub(&server, Memory::default())).await.unwrap().accounts[0].signed_out);
+}
+
+#[tokio::test]
+async fn a_sign_in_from_before_they_synced_is_shared() {
+    let (db, server, secrets) = (setup().await, MockServer::start().await, Memory::default());
+    google_basics(&server).await;
+    let hub = hub(&server, secrets.clone());
+    let account = accounts::connect_oauth(&db, &hub, "google", day(TODAY), browser("code")).await.unwrap();
+    db.execute_unprepared("DELETE FROM daily_plan_calendar_secrets").await.unwrap();
+
+    assert!(!super::setup(&db, &hub).await.unwrap().accounts[0].signed_out);
+    assert!(matches!(super::secrets::synced(&db, &account.id).await.unwrap(), super::secrets::Synced::Saved(_)));
+}
+
+#[tokio::test]
+async fn disconnecting_forgets_the_synced_sign_in() {
+    let (db, server, secrets) = (setup().await, MockServer::start().await, Memory::default());
+    google_basics(&server).await;
+    let hub = hub(&server, secrets.clone());
+    let account = accounts::connect_oauth(&db, &hub, "google", day(TODAY), browser("code")).await.unwrap();
+    accounts::remove_account(&db, &hub, &account.id).await.unwrap();
+
+    assert_eq!(super::secrets::synced(&db, &account.id).await.unwrap(), super::secrets::Synced::Removed);
+    assert_eq!(secrets.load(&account.id), None);
 }
 
 // ---------- Microsoft ----------

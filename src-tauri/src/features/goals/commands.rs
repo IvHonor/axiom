@@ -85,3 +85,8 @@ pub async fn goals_milestone_tick(db: State<'_, Db>, id: String, done: bool, tod
 pub async fn goals_milestone_delete(db: State<'_, Db>, id: String) -> Result<()> {
     service::delete_milestone(&db.conn().await?, &id).await
 }
+
+#[tauri::command]
+pub async fn goals_analytics(db: State<'_, Db>, unit: String, day: sea_orm::prelude::Date, today: sea_orm::prelude::Date) -> Result<super::analytics::GoalsAnalytics> {
+    super::analytics::report(&db.conn().await?, crate::features::period::Period::new(&unit, day, today)?).await
+}

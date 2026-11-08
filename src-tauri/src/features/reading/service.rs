@@ -24,11 +24,11 @@ pub const KINDS: &[&str] = &["note", "quote", "bookmark"];
 const PACE_DAYS: u64 = 14;
 const MAX_PAGES: i32 = 100_000;
 
-fn books() -> Select<book::Entity> {
+pub(super) fn books() -> Select<book::Entity> {
     book::Entity::find().filter(book::Column::DeletedAt.is_null())
 }
 
-fn sessions() -> Select<session::Entity> {
+pub(super) fn sessions() -> Select<session::Entity> {
     session::Entity::find().filter(session::Column::DeletedAt.is_null())
 }
 
@@ -36,7 +36,7 @@ fn notes() -> Select<note::Entity> {
     note::Entity::find().filter(note::Column::DeletedAt.is_null())
 }
 
-fn reads() -> Select<read::Entity> {
+pub(super) fn reads() -> Select<read::Entity> {
     read::Entity::find().filter(read::Column::DeletedAt.is_null())
 }
 

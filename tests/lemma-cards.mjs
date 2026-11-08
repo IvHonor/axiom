@@ -35,6 +35,10 @@ try {
   await card("Add a book").screenshot({ path: `${out}/book.png` });
   console.log("PASS: Undo, the note for another computer, and the book card");
 
+  // The server is woken as the chat opens, and an answer says what was cached.
+  assert.ok(await page.evaluate(() => window.calls.includes("assistant_wake")));
+  assert.equal(await page.locator(".lemma-bubble.is-lemma", { hasText: "Both are done." }).getAttribute("title"), "Gemini · 2,100 tokens (1,500 cached)");
+
   // Asking twice points back to the waiting card.
   await page.getByRole("button", { name: "Same change as the card above" }).click();
   await page.waitForFunction(() => document.getElementById("lemma-card-dune")?.classList.contains("is-shown"));
@@ -69,12 +73,17 @@ try {
   await page.evaluate(() => window.progress({ state: "looking", area: "daily_plan", step: 0 }));
   await page.locator(".lemma-status", { hasText: "Looking at Daily Plan…" }).waitFor();
   assert.equal(await draft.textContent(), "Let me check your plan.", "earlier words stay while it looks");
+  // A busy AI's wait, counted down, then thinking again.
+  await page.evaluate(() => window.progress({ state: "waiting", wait: 2, step: 1 }));
+  await page.locator(".lemma-status", { hasText: "The AI's free plan is busy. Trying again in 2s…" }).waitFor();
+  await page.locator(".lemma-status", { hasText: "Trying again in 1s…" }).waitFor();
+  await page.locator(".lemma-status", { hasText: "is thinking…" }).waitFor({ timeout: 4000 });
   await page.evaluate(() => window.progress({ step: 1, text: "Here's your" }));
   await page.waitForFunction(() => [...document.querySelectorAll(".lemma-bubble.is-lemma")].at(-1)?.textContent === "Here's your");
   await page.evaluate(() => window.finishTurn());
   await page.getByText("Here's your plan for the morning.").waitFor();
   assert.equal(await page.getByText("Here's your", { exact: true }).count(), 0, "drafts give way to the saved answer");
-  console.log("PASS: streamed words");
+  console.log("PASS: streamed words and a busy AI's wait");
 
   await page.emulateMedia({ colorScheme: "light" });
   await page.screenshot({ path: `${out}/cards-light.png`, fullPage: true });

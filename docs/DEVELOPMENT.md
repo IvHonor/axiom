@@ -56,6 +56,8 @@ The same build, tests and audits run on GitHub for every push and pull request (
 
 An area that's listed in `src/extensions/index.ts` without a `View` shows as **Coming soon** and can't be installed. To build one, give it a folder in `src/features/<id>/` exporting its manifest with a `View` and a `Summary`, and a Rust module in `src-tauri/src/features/<id>/`. To make its data sync, list its tables (see `SYNCED_TABLES` in `src-tauri/src/features/project_board/mod.rs`). Synced tables need text UUID ids, an `updated_at` column, soft deletes (`deleted_at`) and no foreign keys.
 
+To give it a section in **Analytics**, add an `<id>_analytics` command that takes `unit` ("week" or "month"), `day` and `today`, builds a `Period` (`src-tauri/src/features/period.rs`) and returns the area's report: a `Headline` for the scorecard (its `trend` comes from `Period::headline`), `Compare`s for its other numbers, and one row a day for its charts. Keep the report in the feature's own `analytics.rs`. On the React side, set `area.analytics` with `defineAnalytics` (`src/shell/analytics/measures.ts`) and draw the section with the charts in `src/shell/ui/charts/Charts.tsx`, which take the area's colour from the section. Daily Plan (`src/features/daily_plan/analytics.tsx`) is a short example.
+
 ## Making a theme
 
 Copy `src/themes/modern_themes/index.ts` to a new folder, change the colours, fonts, `style` (corner radius, brackets, button style, clock) and `labels`, then add the export to `EXTENSIONS` in `src/extensions/index.ts`. Every field is documented on the `Theme` type in `src/extensions/types.ts`. Give each theme extension a dark and a light theme so it works with "Match system light/dark".
@@ -119,6 +121,15 @@ Axiom asks to see calendars and events, to change events on the user's own calen
 3. Copy the **Application (client) ID**. Under **API permissions** add Microsoft Graph, delegated, `Calendars.ReadWrite`. No client secret is needed.
 
 Some workplaces only let staff use apps an administrator has approved, or from verified publishers; personal Outlook.com accounts work straight away.
+
+## Lemma on the desktop
+
+Lemma also lives in a small see-through window of his own (`src-tauri/src/desk.rs`, drawn by `src/shell/desk/Desk.tsx`), which the main window brings out and puts away (`src/shell/desk/useDesk.ts`).
+
+- **Running in the background:** with him set to be on the desktop always, closing Axiom's window only hides it, and Axiom carries on. His right-click menu reopens it or quits. `tauri-plugin-single-instance` makes starting Axiom again bring that window back rather than open a second copy; on macOS, so does clicking the Dock icon.
+- **macOS:** his window needs `macOSPrivateApi` (in `tauri.conf.json`, with Tauri's `macos-private-api` feature) to be see-through. That uses private macOS APIs, so Axiom can't go on the Mac App Store as it stands (it's distributed directly). On macOS, time away from the keyboard comes from `ioreg` and the chime from the system sounds; full-screen apps, calls and the window in front are only detected on Windows so far.
+- **What it checks on the computer:** idle time, a full-screen app, another app using the microphone or camera, and the window in front (Windows). None of it leaves the computer. The weather, when turned on, sends a typed place, or coordinates rounded to about 10 km, to Open-Meteo.
+- **Tests:** `node tests/desk.mjs` for him, `node tests/sidebar.mjs` for the sidebar (see `tests/README.md`).
 
 ## Releasing
 

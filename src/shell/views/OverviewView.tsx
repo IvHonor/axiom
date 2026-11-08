@@ -41,7 +41,7 @@ export function OverviewView({ areas, onOpen, onBrowse, hiddenIds = [], onVisibi
   const visible = areas.filter((area) => !hiddenIds.includes(area.id));
   const [menu, setMenu] = useState<{ ext: ExtensionManifest; at: MenuPosition } | null>(null);
   const nameOf = useAreaName();
-  const extra = useAreaTiles(visible);
+  const extra = useAreaTiles(areas);
   const { sizeOf, resize, positions, movement } = useOverviewLayout(
     [...visible.map(area => area.id), ...extra.map(({ tile }) => tile.id)],
     Object.fromEntries(extra.flatMap(({ tile }) => tile.size ? [[tile.id, tile.size]] : [])),
@@ -60,7 +60,7 @@ export function OverviewView({ areas, onOpen, onBrowse, hiddenIds = [], onVisibi
     );
   }
 
-  if (visible.length === 0) return <div className="empty-state overview-empty">
+  if (visible.length === 0 && extra.length === 0) return <div className="empty-state overview-empty">
     <Logo size={56} />
     <div className="empty-title">Your overview is clear</div>
     <p className="empty-text">Right-click an area in the left bar and choose Unhide to bring it back.</p>

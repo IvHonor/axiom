@@ -1,4 +1,4 @@
-import { Blocks, CircleUserRound, EyeOff, Layers, Palette, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Blocks, ChartColumn, CircleUserRound, EyeOff, Layers, Palette, ShieldCheck, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -11,6 +11,7 @@ import { Avatar } from "./ui/Avatar";
 import { ExtensionIcon } from "./ui/ExtensionIcon";
 import { useProfile } from "./useProfile";
 import { shortcut } from "../lib/shortcut";
+import type { Badge } from "./sidebar/useBadges";
 
 /** The shell's own panels, or an area's sidebar ("area:<id>"). */
 export type SidePanel = "areas" | "extensions" | "account" | "themes" | `area:${string}`;
@@ -37,8 +38,14 @@ interface ActivityBarProps {
   /** Installed areas with a sidebar of their own, listed under Extensions. */
   areas: Item[];
   onToggle: (panel: SidePanel) => void;
+  /** Pointing at an icon (null: away): its panel can peek out while the sidebar's closed. */
+  onPeek?: (panel: SidePanel | null) => void;
+  /** What's waiting in each area (by its id): a count, or a dot. */
+  badges?: Record<string, Badge>;
   /** Shown on the account icon's tooltip, e.g. "Account (ada@example.com)". */
   accountEmail?: string;
+  /** Opens the Analytics view in a tab. */
+  analytics?: { open: boolean; onOpen: () => void };
   /** Admins get an icon that opens the admin panel in a tab. */
   admin?: { open: boolean; onOpen: () => void };
   hiddenIds?: string[];
@@ -46,7 +53,7 @@ interface ActivityBarProps {
 }
 
 /** The far-left icon strip. Clicking an icon opens its sidebar; clicking it again closes it. */
-export function ActivityBar({ active, areas, onToggle, accountEmail, admin, hiddenIds = [], onVisibilityChange }: ActivityBarProps) {
+export function ActivityBar({ active, areas, onToggle, onPeek, badges = {}, accountEmail, analytics, admin, hiddenIds = [], onVisibilityChange }: ActivityBarProps) {
   const profile = useProfile(accountEmail);
   const [menu, setMenu] = useState<{ item: Item; at: MenuPosition } | null>(null);
   const [order, setOrder] = usePersistentState<string[]>("axiom.activityOrder.v1", saved =>
@@ -73,6 +80,7 @@ export function ActivityBar({ active, areas, onToggle, accountEmail, admin, hidd
   const button = ({ id, label, icon: Icon, extension }: Item, sortable?: ReturnType<typeof useSortable>) => {
     const title = id === "account" && accountEmail ? `${label} (${accountEmail})` : label;
     const hidden = !!extension && hiddenIds.includes(extension.id);
+    const badge = extension ? badges[extension.id] : undefined;
     return (
       <button
         key={id}
@@ -82,7 +90,9 @@ export function ActivityBar({ active, areas, onToggle, accountEmail, admin, hidd
         style={sortable ? { transform: CSS.Transform.toString(sortable.transform ? { ...sortable.transform, x: 0 } : null), transition: sortable.transition } : undefined}
         className={`activity${id === active ? " is-active" : ""}${sortable ? " activity-sortable" : ""}${sortable?.isDragging ? " is-dragging" : ""}`}
         onClick={() => onToggle(id)}
-        title={`${hidden ? `${title} · hidden on overview (right-click to unhide)` : title}${sortable ? " · Drag to reorder, or press Space then use arrow keys" : ""}`}
+        onPointerEnter={onPeek && id !== "account" && id !== "themes" ? () => onPeek(id) : undefined}
+        onPointerLeave={onPeek ? () => onPeek(null) : undefined}
+        title={`${hidden ? `${title} · hidden on overview (right-click to unhide)` : title}${badge ? ` · ${badge.label}` : ""}${sortable ? " · Drag to reorder, or press Space then use arrow keys" : ""}`}
         aria-label={title}
         aria-pressed={id === active}
         onContextMenu={extension && onVisibilityChange ? (event) => {
@@ -99,6 +109,11 @@ export function ActivityBar({ active, areas, onToggle, accountEmail, admin, hidd
         )}
         {id === "account" && accountEmail && <span className="activity-badge" />}
         {hidden && <span className="activity-hidden"><EyeOff size={9} /></span>}
+        {badge && (
+          <span className={`activity-count${badge.count === null ? " is-dot" : ""}`} aria-label={badge.label}>
+            {badge.count !== null && (badge.count > 9 ? "9+" : badge.count)}
+          </span>
+        )}
       </button>
     );
   };
@@ -106,6 +121,17 @@ export function ActivityBar({ active, areas, onToggle, accountEmail, admin, hidd
   return (
     <nav className="activitybar">
       {TOP.map(item => button(item))}
+      {analytics && (
+        <button
+          className={analytics.open ? "activity is-active" : "activity"}
+          onClick={analytics.onOpen}
+          title="Analytics"
+          aria-label="Analytics"
+          aria-pressed={analytics.open}
+        >
+          <ChartColumn size={20} strokeWidth={1.5} />
+        </button>
+      )}
       {areas.length > 0 && <div className="activitybar-divider" />}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={sorted.map(item => item.id)} strategy={verticalListSortingStrategy}>

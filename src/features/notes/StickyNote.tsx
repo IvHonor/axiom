@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { Ellipsis, LayoutDashboard, Maximize2, Palette, Trash2 } from "lucide-react";
 import { RichTextEditor } from "../../lib/richtext/Editor";
 import { Dropdown } from "../../shell/ui/Dropdown";
@@ -21,10 +21,11 @@ interface StickyProps {
   /** Opens the note in Notes. */
   onOpen: () => void;
   autofocus?: boolean;
+  moveHandle?: ReactNode;
 }
 
 /** A sticky note: coloured paper you write straight onto. */
-export function StickyNote({ card, place, onOpen, autofocus }: StickyProps) {
+export function StickyNote({ card, place, onOpen, autofocus, moveHandle }: StickyProps) {
   const { doc, save } = useNoteDoc(card.id);
   const { handwriting } = useNotesUi();
   const [palette, setPalette] = useState(false);
@@ -46,7 +47,7 @@ export function StickyNote({ card, place, onOpen, autofocus }: StickyProps) {
     <div className={`sticky is-${place}${handwriting ? " is-handwritten" : ""}`} style={style} onContextMenu={(e) => place === "tile" && e.preventDefault()}>
       <span className="sticky-tape" aria-hidden="true" />
       <header className="sticky-band">
-        {place === "tile" && <TileMoveHandle />}
+        {place === "tile" ? <TileMoveHandle /> : moveHandle}
         <button className="sticky-btn" title="Colour" aria-label="Colour" aria-expanded={palette} onClick={() => setPalette(!palette)}>
           <Palette size={14} strokeWidth={1.75} />
         </button>

@@ -46,6 +46,34 @@ async fn timers_track_time_one_task_at_a_time() {
 }
 
 #[tokio::test]
+async fn time_away_comes_off_the_timer_then_what_was_tracked() {
+    let db = setup().await;
+    let a = create_task(&db, "Write", Some(day(TODAY)), Some(60)).await.unwrap();
+    start_timer(&db, &a.id).await.unwrap();
+    backdate_timer(&db, &a.id, 30).await;
+
+    // Off the running timer: it carries on, as if started 20 minutes later.
+    let t = take_off(&db, &a.id, 20).await.unwrap();
+    assert!(t.timer_started_at.is_some());
+    assert_eq!(stop_timer(&db, &a.id).await.unwrap().actual_minutes, 10);
+
+    // Stopped: off what it tracked, never below nothing.
+    assert_eq!(take_off(&db, &a.id, 4).await.unwrap().actual_minutes, 6);
+    assert_eq!(take_off(&db, &a.id, 60).await.unwrap().actual_minutes, 0);
+
+    // More than the timer's run: the rest comes off what was tracked before.
+    let b = create_task(&db, "Read", Some(day(TODAY)), None).await.unwrap();
+    start_timer(&db, &b.id).await.unwrap();
+    backdate_timer(&db, &b.id, 15).await;
+    stop_timer(&db, &b.id).await.unwrap();
+    start_timer(&db, &b.id).await.unwrap();
+    backdate_timer(&db, &b.id, 5).await;
+    let b = take_off(&db, &b.id, 8).await.unwrap();
+    assert_eq!(b.actual_minutes, 12);
+    assert_eq!(stop_timer(&db, &b.id).await.unwrap().actual_minutes, 12);
+}
+
+#[tokio::test]
 async fn board_cards_are_suggested_planned_and_ticked_off_on_the_board() {
     use crate::features::project_board::service as board;
     use crate::features::project_board::types::TaskFields as CardFields;

@@ -1,6 +1,7 @@
 // Which planner view is showing and which dialog is open, shared by the
 // planner and its items in the sidebar (PlanNav).
 import { useSyncExternalStore } from "react";
+import { onSettingSynced, readSetting, saveSetting } from "../../lib/settings";
 
 export type PlanView = "day" | "week" | "month" | "year" | "insights";
 
@@ -25,27 +26,19 @@ interface PlanUi {
 
 const VIEW_KEY = "axiom.dailyPlan.view";
 
-function savedView(): PlanView {
-  try {
-    const v = localStorage.getItem(VIEW_KEY);
-    return PLAN_VIEWS.find((view) => view === v) ?? "day";
-  } catch {
-    return "day";
-  }
-}
+const viewFrom = (saved: unknown): PlanView => PLAN_VIEWS.find((view) => view === saved) ?? "day";
 
-let state: PlanUi = { view: savedView(), dialog: null, todayAsked: 0, revision: 0, event: null };
+let state: PlanUi = { view: viewFrom(readSetting(VIEW_KEY)), dialog: null, todayAsked: 0, revision: 0, event: null };
 const listeners = new Set<() => void>();
+
+onSettingSynced(VIEW_KEY, (saved) => {
+  state = { ...state, view: viewFrom(saved) };
+  listeners.forEach((listener) => listener());
+});
 
 export function setPlanUi(change: Partial<PlanUi>) {
   state = { ...state, ...change };
-  if (change.view) {
-    try {
-      localStorage.setItem(VIEW_KEY, change.view);
-    } catch {
-      // Remembering the view is a convenience; without storage it resets.
-    }
-  }
+  if (change.view) saveSetting(VIEW_KEY, change.view);
   listeners.forEach((listener) => listener());
 }
 

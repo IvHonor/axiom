@@ -12,6 +12,7 @@
 //! - `sources.rs` reads progress from the other extensions
 //! - `commands.rs` exposes it all to React
 
+pub(crate) mod analytics;
 pub mod commands;
 mod entities;
 pub mod migrations;

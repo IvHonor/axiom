@@ -9,7 +9,7 @@ use axiom_protocol::{
     CheckCode, ConfirmEmail, NewTicket, Pending, Ticket, TicketChange, TicketSent, route, routes,
 };
 use axiom_ai::Delta;
-use axiom_protocol::ai::{ChatReply, ChatRequest, Streamed, Transcribe, Transcript};
+use axiom_protocol::ai::{ChatReply, ChatRequest, SHOWS_WAITS, Streamed, Transcribe, Transcript};
 use axiom_protocol::notify::{PlanEmails, PlanResult};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -295,16 +295,30 @@ impl Client {
         read(self.http.put(self.url(routes::ADMIN_SETTINGS)).bearer_auth(token).json(settings).send().await).await
     }
 
+    pub async fn admin_ai_usage(&self, token: &str, days: u32) -> Result<axiom_protocol::AdminAiUsage, ClientError> {
+        read(self.http.get(self.url(routes::ADMIN_AI_USAGE)).query(&[("days", days)]).bearer_auth(token).send().await).await
+    }
+
     /// The assistant, on Axiom's AI keys. Slower than other calls: the
-    /// server may try one AI, then the other.
+    /// server may wait for a busy AI and ask again.
     pub async fn ai_chat(&self, token: &str, request: &ChatRequest) -> Result<ChatReply, ClientError> {
         let request = self.http.post(self.url(routes::AI_CHAT)).bearer_auth(token).json(request).timeout(Duration::from_secs(150));
         read(request.send().await).await
     }
 
-    /// Like `ai_chat`, but the reply's words go to `on` as they're written.
+    /// Like `ai_chat`, but the reply's words go to `on` as they're written,
+    /// and so does how long the server is waiting on a busy AI. Given longer:
+    /// the server may wait out the AI's limit a minute, twice.
     pub async fn ai_chat_stream(&self, token: &str, request: &ChatRequest, on: &(dyn Fn(Delta) + Sync)) -> Result<ChatReply, ClientError> {
-        let sent = self.http.post(self.url(routes::AI_CHAT_STREAM)).bearer_auth(token).json(request).timeout(Duration::from_secs(150)).send().await;
+        let sent = self
+            .http
+            .post(self.url(routes::AI_CHAT_STREAM))
+            .bearer_auth(token)
+            .header(SHOWS_WAITS, "1")
+            .json(request)
+            .timeout(Duration::from_secs(240))
+            .send()
+            .await;
         let mut response = match check(sent.map_err(|_| ClientError::Offline)?).await {
             // A server from before streaming answers all at once.
             Err(err) if matches!(err.status(), Some(404 | 405)) => return self.ai_chat(token, request).await,
@@ -321,6 +335,7 @@ impl Client {
                 match serde_json::from_slice::<Streamed>(&line) {
                     Ok(Streamed::Text { text }) => on(Delta::Text(&text)),
                     Ok(Streamed::Restart) => on(Delta::Restart),
+                    Ok(Streamed::Waiting { seconds }) => on(Delta::Waiting(Duration::from_secs(seconds.into()))),
                     Ok(Streamed::Reply { reply }) => return Ok(reply),
                     Ok(Streamed::Error { status, message }) => return Err(ClientError::Rejected { status, message }),
                     Err(_) => return Err(ClientError::Rejected { status: 502, message: "The server sent an answer Axiom doesn't understand. Try updating Axiom.".into() }),
@@ -329,6 +344,12 @@ impl Client {
         }
         // The connection ended before the reply did.
         Err(ClientError::Offline)
+    }
+
+    /// Wakes the server if it's asleep (a free host sleeps when idle and takes
+    /// about a minute to start), so it's ready by the time it's needed.
+    pub async fn wake(&self) {
+        let _ = self.http.get(self.url(routes::HEALTH)).send().await;
     }
 
     /// Speech to text for the assistant, on Axiom's AI keys.

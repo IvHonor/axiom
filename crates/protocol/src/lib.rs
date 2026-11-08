@@ -85,6 +85,9 @@ pub mod routes {
     pub const ADMIN_REVOKE: &str = "/v1/admin/accounts/{id}/revoke";
     /// `GET` and `PUT` the server's settings (`AdminSettings`).
     pub const ADMIN_SETTINGS: &str = "/v1/admin/settings";
+    /// `GET` what each account's assistant used (`AdminAiUsage`), over the
+    /// last `?days=` days (30 unless asked).
+    pub const ADMIN_AI_USAGE: &str = "/v1/admin/ai-usage";
     /// `POST` a message to support (`NewTicket`). Signing in is optional.
     pub const SUPPORT: &str = "/v1/support";
     /// `GET` support tickets, for admins: open ones first.
@@ -419,7 +422,7 @@ pub mod permissions {
     pub const SHARE: &str = "share";
     /// Get notification emails.
     pub const EMAIL: &str = "email";
-    /// Use the assistant on the server's AI keys (people with their own keys don't need it).
+    /// Use the assistant (Lemma), on the server's AI keys.
     pub const AI: &str = "ai";
     pub const ALL: &[&str] = &[SYNC, SHARE, EMAIL, AI];
 }
@@ -446,6 +449,57 @@ pub struct AdminAccount {
 pub struct AccountChange {
     pub role: Option<AccountRole>,
     pub permissions: Option<Vec<String>>,
+}
+
+/// What the assistant used over the last `days` days (UTC), from
+/// `ADMIN_AI_USAGE`. Counts only: what was asked is never kept.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AdminAiUsage {
+    pub days: u32,
+    /// Everyone's, a row for every day in the period, oldest first.
+    pub daily: Vec<AiUsageDay>,
+    /// Everyone who used it in the period, most tokens first.
+    pub people: Vec<AiUsagePerson>,
+    /// `AI_DAILY_LIMIT`: model calls a day across everyone, if there's a limit.
+    pub daily_limit: Option<u32>,
+}
+
+/// Totals over some time.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct AiUsageTotals {
+    /// Questions asked.
+    pub prompts: u64,
+    /// Model calls: a question, and one for each step it took.
+    pub calls: u64,
+    pub input_tokens: u64,
+    /// Of `input_tokens`, those the AI had kept from before (cheaper).
+    pub cached_tokens: u64,
+    pub output_tokens: u64,
+    /// Recordings written down.
+    pub transcriptions: u64,
+    /// Calls that got no answer.
+    pub failures: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AiUsageDay {
+    pub day: chrono::NaiveDate,
+    #[serde(flatten)]
+    pub totals: AiUsageTotals,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AiUsagePerson {
+    pub id: String,
+    pub email: String,
+    pub display_name: Option<String>,
+    #[serde(flatten)]
+    pub totals: AiUsageTotals,
+    /// Their days with any use, oldest first.
+    pub daily: Vec<AiUsageDay>,
+    /// Why their latest failed call failed, if one did in the period.
+    pub last_error: Option<String>,
+    pub last_used_at: Option<DateTime<Utc>>,
 }
 
 /// The server's settings, from `GET ADMIN_SETTINGS`; `PUT` replaces them.

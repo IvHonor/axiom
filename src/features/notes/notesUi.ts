@@ -1,6 +1,7 @@
 // What Notes shows, shared by its view, side panel, overview tile and sticky
 // notes: the shelf or folder, the open note and the filters.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { onSettingSynced, readSetting, saveSetting } from "../../lib/settings";
 import { useDataChanged } from "../../lib/sync";
 import { api, errorMessage, type NoteFilter, type Shelf, type Sort } from "./api";
 
@@ -22,34 +23,28 @@ interface NotesUi {
 const SORT_KEY = "axiom.notes.sort";
 const HAND_KEY = "axiom.notes.handwriting";
 
-function savedHandwriting(): boolean {
-  try {
-    return localStorage.getItem(HAND_KEY) !== "off";
-  } catch {
-    return true;
-  }
-}
+const handwritingFrom = (saved: unknown): boolean => saved !== "off";
+const sortFrom = (saved: unknown): Sort => (saved === "created" || saved === "title" ? saved : "edited");
 
-function savedSort(): Sort {
-  try {
-    const s = localStorage.getItem(SORT_KEY);
-    return s === "created" || s === "title" ? s : "edited";
-  } catch {
-    return "edited";
-  }
-}
-
-let state: NotesUi = { shelf: "all", folder: null, tag: null, search: "", sort: savedSort(), handwriting: savedHandwriting(), note: null, revision: 0 };
+let state: NotesUi = {
+  shelf: "all", folder: null, tag: null, search: "",
+  sort: sortFrom(readSetting(SORT_KEY)), handwriting: handwritingFrom(readSetting(HAND_KEY)), note: null, revision: 0,
+};
 const listeners = new Set<() => void>();
+
+onSettingSynced(SORT_KEY, (saved) => {
+  state = { ...state, sort: sortFrom(saved) };
+  listeners.forEach((listener) => listener());
+});
+onSettingSynced(HAND_KEY, (saved) => {
+  state = { ...state, handwriting: handwritingFrom(saved) };
+  listeners.forEach((listener) => listener());
+});
 
 export function setNotesUi(change: Partial<NotesUi>) {
   state = { ...state, ...change };
-  try {
-    if (change.sort) localStorage.setItem(SORT_KEY, change.sort);
-    if (change.handwriting !== undefined) localStorage.setItem(HAND_KEY, change.handwriting ? "on" : "off");
-  } catch {
-    // Remembering these is a nicety.
-  }
+  if (change.sort) saveSetting(SORT_KEY, change.sort);
+  if (change.handwriting !== undefined) saveSetting(HAND_KEY, change.handwriting ? "on" : "off");
   listeners.forEach((listener) => listener());
 }
 

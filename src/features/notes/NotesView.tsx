@@ -8,7 +8,7 @@ import { exportNotes } from "./exportNotes";
 import { NotePage } from "./NotePage";
 import { notesChanged, setNotesUi, useNoteList, useNotesState, useNotesUi } from "./notesUi";
 import { NoteList, newNote, newSticky, pathOf } from "./parts";
-import { StickyNote } from "./StickyNote";
+import { StickyCanvas } from "./StickyCanvas";
 
 const SORTS: { id: Sort; label: string }[] = [
   { id: "edited", label: "Last edited" },
@@ -196,7 +196,7 @@ function StickyBoard() {
           <p className="nt-board-count">
             <b>{showing}</b> of {stickies?.length ?? 0} on your overview
           </p>
-          <p className="dim">Click the overview button on a note to show or hide it there. The overview holds up to {MAX_ON_OVERVIEW}.</p>
+          <p className="dim">Drag notes by their top edge to arrange or stack them. Use the overview button to show or hide a note there (up to {MAX_ON_OVERVIEW}).</p>
         </div>
         <span className="nt-grow" />
         <label className="nt-hand">
@@ -219,13 +219,8 @@ function StickyBoard() {
           <p className="dim">Quick thoughts, reminders and lists, in colour. Pick a colour above to stick one up.</p>
         </div>
       ) : (
-        <div className="nt-board">
-          {stickies?.map((s) => (
-            <div key={s.id} className="nt-board-slot">
-              <StickyNote card={s} place="board" autofocus={ui.note === s.id && !s.words} onOpen={() => setNotesUi({ shelf: "all", note: s.id, folder: null, tag: null })} />
-            </div>
-          ))}
-        </div>
+        <StickyCanvas notes={stickies ?? []} autofocusId={ui.note}
+          onOpen={(id) => setNotesUi({ shelf: "all", note: id, folder: null, tag: null })} />
       )}
     </div>
   );

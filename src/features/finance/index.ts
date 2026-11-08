@@ -4,6 +4,7 @@ import type { ExtensionManifest } from "../../extensions/types";
 import { FinanceSidebar } from "./FinanceSidebar";
 import { FinanceSummary } from "./FinanceSummary";
 import { FinanceView } from "./FinanceView";
+import { financeAnalytics } from "./analytics";
 
 export const finance: ExtensionManifest = {
   id: "finance",
@@ -28,5 +29,5 @@ export const finance: ExtensionManifest = {
   builtIn: true,
   icon: Wallet,
   color: "var(--area-finance)",
-  area: { View: FinanceView, Summary: FinanceSummary, Sidebar: FinanceSidebar },
+  area: { View: FinanceView, Summary: FinanceSummary, Sidebar: FinanceSidebar, analytics: financeAnalytics },
 };

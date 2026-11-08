@@ -19,7 +19,7 @@ use super::ics::EventChange;
 use super::oauth::{random_token, Loopback, OAuthApp, Pkce};
 use super::publish::{self, plan_events};
 use super::remote::Remote;
-use super::secrets::{Secret, SecretStore};
+use super::secrets::{self, Secret, SecretStore, Synced};
 use super::{live_accounts, live_calendars, remove_calendars, replace_events, AXIOM_CALENDAR, DAYS_AHEAD, DAYS_BACK, STALE_MINUTES};
 use crate::db::new_id;
 use crate::error::{Error, Result};
@@ -119,13 +119,13 @@ impl CalendarHub {
     }
 
     /// A working access token, refreshed when it's about to run out.
-    async fn access_token(&self, account: &account::Model) -> Result<String> {
+    async fn access_token(&self, db: &DatabaseConnection, account: &account::Model) -> Result<String> {
         if let Some((token, until)) = self.tokens.lock().await.get(&account.id) {
             if *until > Instant::now() {
                 return Ok(token.clone());
             }
         }
-        let Some(Secret::OAuth { refresh_token, scope }) = self.secrets.load(&account.id) else {
+        let Some(Secret::OAuth { refresh_token, scope }) = self.secret(db, &account.id).await? else {
             return Err(Error::Account("Axiom isn't signed in to this calendar on this computer. Reconnect it.".into()));
         };
         let app = self.app(&account.provider)?;
@@ -136,7 +136,7 @@ impl CalendarHub {
             scope: tokens.scope.clone().or_else(|| scope.clone()),
         };
         if next != (Secret::OAuth { refresh_token, scope }) {
-            self.secrets.save(&account.id, &next).map_err(Error::Invalid)?;
+            self.save_secret(db, &account.id, &next).await?;
         }
         self.remember(&account.id, &tokens.access_token, tokens.expires_in).await;
         Ok(tokens.access_token)
@@ -158,25 +158,58 @@ impl CalendarHub {
         }
     }
 
-    pub async fn remote(&self, account: &account::Model) -> Result<Box<dyn Remote>> {
+    pub async fn remote(&self, db: &DatabaseConnection, account: &account::Model) -> Result<Box<dyn Remote>> {
         if account.provider == "caldav" {
-            let Some(Secret::Password { username, password }) = self.secrets.load(&account.id) else {
+            let Some(Secret::Password { username, password }) = self.secret(db, &account.id).await? else {
                 return Err(Error::Account("Axiom isn't signed in to this calendar on this computer. Reconnect it.".into()));
             };
             return Ok(Box::new(CalDav::new(&account.server, &username, &password)));
         }
-        let token = self.access_token(account).await?;
-        let scope = match self.secrets.load(&account.id) {
+        let token = self.access_token(db, account).await?;
+        let scope = match self.secret(db, &account.id).await? {
             Some(Secret::OAuth { scope, .. }) => scope,
             _ => None,
         };
         Ok(self.remote_with(&account.provider, token, scope.as_deref()))
     }
 
-    /// Whether this computer has a sign-in for the account (one connected on
-    /// another computer doesn't, until it's reconnected here).
-    pub fn signed_in_here(&self, account_id: &str) -> bool {
-        self.secrets.load(account_id).is_some()
+    /// Whether this computer can sign in to the account: with the synced
+    /// sign-in, or with its own from before sign-ins synced.
+    pub async fn signed_in_here(&self, db: &DatabaseConnection, account_id: &str) -> Result<bool> {
+        Ok(self.secret(db, account_id).await?.is_some())
+    }
+
+    /// The sign-in for the account. The synced one wins (another computer may
+    /// have a newer one), and is copied into this computer's credential
+    /// store; one only this computer has is shared with the others.
+    async fn secret(&self, db: &DatabaseConnection, account_id: &str) -> Result<Option<Secret>> {
+        let here = self.secrets.load(account_id);
+        match secrets::synced(db, account_id).await? {
+            Synced::Saved(synced) => {
+                if here.as_ref() != Some(&synced) {
+                    let _ = self.secrets.save(account_id, &synced);
+                    // An access token from the old sign-in may have stopped working.
+                    self.tokens.lock().await.remove(account_id);
+                }
+                Ok(Some(synced))
+            }
+            Synced::Removed => Ok(None),
+            Synced::Missing => {
+                if let Some(here) = &here {
+                    secrets::share(db, account_id, here).await?;
+                }
+                Ok(here)
+            }
+        }
+    }
+
+    /// Saves a sign-in here and for the person's other computers. The synced
+    /// copy is the one that counts, so a credential store that won't take it
+    /// doesn't stop the sign-in working.
+    async fn save_secret(&self, db: &DatabaseConnection, account_id: &str, secret: &Secret) -> Result<()> {
+        secrets::share(db, account_id, secret).await?;
+        let _ = self.secrets.save(account_id, secret);
+        Ok(())
     }
 
     /// Stops a sign-in that's waiting on the browser.
@@ -216,7 +249,7 @@ pub async fn connect_oauth(
     let name = remote.account_name().await?;
 
     let saved = save_account(db, provider, &name, "").await?;
-    hub.secrets.save(&saved.id, &Secret::OAuth { refresh_token, scope: tokens.scope.clone() }).map_err(Error::Invalid)?;
+    hub.save_secret(db, &saved.id, &Secret::OAuth { refresh_token, scope: tokens.scope.clone() }).await?;
     hub.remember(&saved.id, &tokens.access_token, tokens.expires_in).await;
     finish_connecting(db, hub, &saved, remote.as_ref(), today).await?;
     Ok(saved)
@@ -238,9 +271,7 @@ pub async fn connect_caldav(db: &DatabaseConnection, hub: &CalendarHub, server: 
     let remote = CalDav::new(&server, username, password);
     let name = remote.account_name().await?;
     let saved = save_account(db, "caldav", &name, &server).await?;
-    hub.secrets
-        .save(&saved.id, &Secret::Password { username: username.into(), password: password.into() })
-        .map_err(Error::Invalid)?;
+    hub.save_secret(db, &saved.id, &Secret::Password { username: username.into(), password: password.into() }).await?;
     finish_connecting(db, hub, &saved, &remote, today).await?;
     Ok(saved)
 }
@@ -369,7 +400,7 @@ pub async fn sync_account(db: &DatabaseConnection, hub: &CalendarHub, account: &
         return Ok(false);
     }
     let outcome = async {
-        let remote = hub.remote(account).await?;
+        let remote = hub.remote(db, account).await?;
         if force {
             sync_calendar_list(db, account, remote.as_ref()).await?;
         }
@@ -398,7 +429,7 @@ pub async fn publish_plan(db: &DatabaseConnection, hub: &CalendarHub, today: Dat
     }
     let outcome = async {
         let account = account_of(db, &cal).await?;
-        let remote = hub.remote(&account).await?;
+        let remote = hub.remote(db, &account).await?;
         let (from, to) = publish::window(today, hub.zone);
         publish::publish(remote.as_ref(), cal.remote_id.as_deref().unwrap_or_default(), &desired, from, to).await
     }
@@ -432,7 +463,7 @@ pub async fn set_publish(db: &DatabaseConnection, hub: &CalendarHub, calendar_id
     for old in previous.into_iter().filter(|c| Some(c.id.as_str()) != calendar_id) {
         // Best effort: an account that's gone shouldn't stop the change.
         if let Ok(account) = account_of(db, &old).await {
-            if let Ok(remote) = hub.remote(&account).await {
+            if let Ok(remote) = hub.remote(db, &account).await {
                 let (from, to) = publish::window(today, hub.zone);
                 let _ = publish::publish(remote.as_ref(), old.remote_id.as_deref().unwrap_or_default(), &[], from, to).await;
             }
@@ -456,7 +487,7 @@ pub async fn set_publish(db: &DatabaseConnection, hub: &CalendarHub, calendar_id
 /// Makes an "Axiom" calendar in the account and publishes the plan there.
 pub async fn create_plan_calendar(db: &DatabaseConnection, hub: &CalendarHub, account_id: &str, today: Date) -> Result<calendar::Model> {
     let account = live_accounts().filter(account::Column::Id.eq(account_id)).one(db).await?.ok_or(Error::NotFound("Calendar account"))?;
-    let remote = hub.remote(&account).await?;
+    let remote = hub.remote(db, &account).await?;
     let made = remote.create_calendar(AXIOM_CALENDAR).await?;
     sync_calendar_list(db, &account, remote.as_ref()).await?;
     let stored = live_calendars()
@@ -518,12 +549,12 @@ pub async fn set_shown(db: &DatabaseConnection, hub: &CalendarHub, calendar_id: 
 }
 
 /// Disconnects an account, on every computer: it and its calendars are
-/// marked removed and their events go. This computer's sign-in is removed
-/// from the keychain (and revoked, for Google); the others' go when they
-/// hear about it (see `forget_removed`).
+/// marked removed and their events go. The sign-in is revoked (for Google)
+/// and forgotten here and in the synced copy; the others' credential stores
+/// let go of it when they hear about it (see `forget_removed`).
 pub async fn remove_account(db: &DatabaseConnection, hub: &CalendarHub, account_id: &str) -> Result<()> {
     let account = live_accounts().filter(account::Column::Id.eq(account_id)).one(db).await?.ok_or(Error::NotFound("Calendar account"))?;
-    forget_sign_in(hub, &account).await;
+    forget_sign_in(db, hub, &account).await?;
     let calendars: Vec<String> = live_calendars().filter(calendar::Column::AccountId.eq(account_id)).all(db).await?.into_iter().map(|c| c.id).collect();
     let txn = db.begin().await?;
     remove_calendars(&txn, &calendars).await?;
@@ -540,22 +571,30 @@ pub async fn remove_account(db: &DatabaseConnection, hub: &CalendarHub, account_
 pub async fn forget_removed(db: &DatabaseConnection, hub: &CalendarHub) -> Result<()> {
     db.execute_unprepared("DELETE FROM daily_plan_events WHERE calendar_id NOT IN (SELECT id FROM daily_plan_calendars WHERE deleted_at IS NULL)").await?;
     let removed = account::Entity::find().filter(account::Column::DeletedAt.is_not_null()).all(db).await?;
-    for gone in removed.iter().filter(|a| hub.signed_in_here(&a.id)) {
-        forget_sign_in(hub, gone).await;
+    for gone in &removed {
+        if hub.secrets.load(&gone.id).is_some() || matches!(secrets::synced(db, &gone.id).await?, Synced::Saved(_)) {
+            forget_sign_in(db, hub, gone).await?;
+        }
     }
     Ok(())
 }
 
-/// Takes this computer's sign-in to the account out of the keychain, and
+/// Forgets the sign-in to the account, here and in the synced copy, and
 /// revokes it with Google (Microsoft and CalDAV offer no way to).
-async fn forget_sign_in(hub: &CalendarHub, account: &account::Model) {
+async fn forget_sign_in(db: &DatabaseConnection, hub: &CalendarHub, account: &account::Model) -> Result<()> {
     if account.provider == "google" {
-        if let Some(Secret::OAuth { refresh_token, .. }) = hub.secrets.load(&account.id) {
+        let synced = match secrets::synced(db, &account.id).await? {
+            Synced::Saved(secret) => Some(secret),
+            _ => None,
+        };
+        if let Some(Secret::OAuth { refresh_token, .. }) = synced.or_else(|| hub.secrets.load(&account.id)) {
             let _ = hub.http.post(&hub.providers.google_revoke).form(&[("token", refresh_token)]).send().await;
         }
     }
+    secrets::unshare(db, &account.id).await?;
     hub.secrets.delete(&account.id);
     hub.tokens.lock().await.remove(&account.id);
+    Ok(())
 }
 
 pub async fn list_accounts(db: &DatabaseConnection) -> Result<Vec<account::Model>> {
@@ -596,7 +635,7 @@ async fn editable_event(db: &DatabaseConnection, hub: &CalendarHub, event_id: &s
     }
     let cal = live_calendars().filter(calendar::Column::Id.eq(found.calendar_id.as_str())).one(db).await?.ok_or(Error::NotFound("Calendar"))?;
     let account = account_of(db, &cal).await?;
-    let remote = hub.remote(&account).await?;
+    let remote = hub.remote(db, &account).await?;
     Ok((found, cal, account, remote))
 }
 

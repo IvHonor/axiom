@@ -15,6 +15,7 @@ import {
 } from "../../lib/account";
 import { adminTickets, type Ticket } from "../../lib/support";
 import { ErrorNote, useAction } from "../account/fields";
+import { AdminAiUsage } from "./AdminAiUsage";
 import { AdminSupport } from "./AdminSupport";
 import { ago } from "../format";
 import { Avatar } from "../ui/Avatar";
@@ -23,10 +24,11 @@ import { Panel } from "../ui/Panel";
 import { Switch } from "../ui/Switch";
 import { useNow } from "../useSync";
 
-type Tab = "people" | "waiting" | "support" | "settings";
+type Tab = "people" | "waiting" | "support" | "usage" | "settings";
 
 /** The admin panel: everyone with an account, their roles and permissions,
- * who's waiting to be let in, messages to support, and the server's settings. */
+ * who's waiting to be let in, messages to support, how much each person
+ * uses Lemma's AI, and the server's settings. */
 export function AdminView({ email, admin }: { email: string | null; admin: boolean }) {
   const [tab, setTab] = useState<Tab>("people");
   const [accounts, setAccounts] = useState<AdminAccount[] | null>(null);
@@ -95,6 +97,7 @@ export function AdminView({ email, admin }: { email: string | null; admin: boole
             ["people", "People"],
             ["waiting", "Waiting list"],
             ["support", "Support"],
+            ["usage", "AI usage"],
             ["settings", "Settings"],
           ] as const
         ).map(([id, label]) => (
@@ -113,6 +116,8 @@ export function AdminView({ email, admin }: { email: string | null; admin: boole
         <People people={people} me={email} busy={busy} onChange={change} />
       ) : tab === "waiting" ? (
         <Waiting waiting={waiting} waitlist={settings.waitlist} busy={busy} onChange={change} onSettings={() => setTab("settings")} />
+      ) : tab === "usage" ? (
+        <AdminAiUsage />
       ) : tab === "support" ? (
         <AdminSupport
           tickets={tickets}

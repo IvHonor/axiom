@@ -5,6 +5,7 @@ import { BoardSidebar } from "./BoardSidebar";
 import { BoardSummary } from "./BoardSummary";
 import { BoardSummaryTitle } from "./overview/BoardOverviewMenu";
 import { ProjectBoardView } from "./ProjectBoardView";
+import { boardAnalytics } from "./analytics";
 
 export const projectBoard: ExtensionManifest = {
   id: "project_board",
@@ -28,5 +29,5 @@ export const projectBoard: ExtensionManifest = {
   builtIn: true,
   icon: SquareKanban,
   color: "var(--area-board)",
-  area: { View: ProjectBoardView, Summary: BoardSummary, SummaryTitle: BoardSummaryTitle, fittedSummary: true, Sidebar: BoardSidebar },
+  area: { View: ProjectBoardView, Summary: BoardSummary, SummaryTitle: BoardSummaryTitle, fittedSummary: true, Sidebar: BoardSidebar, analytics: boardAnalytics },
 };

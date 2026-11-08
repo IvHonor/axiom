@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { PAD, roundedTop, scale, useWidth } from "../../shell/ui/charts/geometry";
 import { api, errorMessage, type Board, type Insights } from "./api";
 import { colorOf, shortDate } from "./palette";
 
@@ -80,26 +81,8 @@ export function ChartCard({ title, note, className, children }: { title: string;
   );
 }
 
-/** Width of an element, kept up to date as it resizes. */
-export function useWidth() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    if (!ref.current) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
-    observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, []);
-  return [ref, width] as const;
-}
-
-/** A "nice" axis maximum and three gridline values for counts. */
-export function scale(max: number) {
-  const top = Math.max(4, Math.ceil(max / 4) * 4);
-  return { top, ticks: [0, top / 2, top] };
-}
-
-export const PAD = { top: 12, right: 12, bottom: 24, left: 32 };
+// Daily Plan and Reading draw their insights with these too.
+export { PAD, roundedTop, scale, useWidth };
 
 /**
  * Two lines over 30 days: every task that existed (a neutral reference) and
@@ -240,12 +223,6 @@ function WeeklyBars({ weeks }: { weeks: Insights["throughput"] }) {
       )}
     </div>
   );
-}
-
-/** A bar path with its data end rounded and its baseline square. */
-export function roundedTop(x: number, y: number, w: number, h: number, r: number) {
-  const radius = Math.min(r, w / 2, h);
-  return `M${x},${y + h}V${y + radius}Q${x},${y} ${x + radius},${y}H${x + w - radius}Q${x + w},${y} ${x + w},${y + radius}V${y + h}Z`;
 }
 
 /** Horizontal bars with the name and value as text, so nothing relies on color. */

@@ -115,3 +115,8 @@ pub fn learning_youtube_available() -> bool {
 pub async fn learning_youtube(link: String) -> Result<Found> {
     youtube::playlist(&link).await
 }
+
+#[tauri::command]
+pub async fn learning_analytics(db: State<'_, Db>, unit: String, day: sea_orm::prelude::Date, today: sea_orm::prelude::Date) -> Result<super::analytics::LearningAnalytics> {
+    super::analytics::report(&db.conn().await?, crate::features::period::Period::new(&unit, day, today)?).await
+}

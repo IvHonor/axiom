@@ -65,9 +65,11 @@ function useSystemType(): Theme["type"] {
 interface ThemeProviderProps {
   installed: ExtensionManifest[];
   children: ReactNode;
+  /** The window is see-through (Lemma on the desktop): its background isn't painted. */
+  transparent?: boolean;
 }
 
-export function ThemeProvider({ installed, children }: ThemeProviderProps) {
+export function ThemeProvider({ installed, children, transparent = false }: ThemeProviderProps) {
   const [prefs, setPrefs] = usePersistentState<ThemePrefs>("axiom.themePrefs", (saved) => {
     const p = { ...DEFAULT_PREFS, ...(saved && typeof saved === "object" ? (saved as Partial<ThemePrefs>) : {}) };
     return { ...p, dark: currentId(p.dark), light: currentId(p.light), fixed: currentId(p.fixed) };
@@ -110,7 +112,7 @@ export function ThemeProvider({ installed, children }: ThemeProviderProps) {
       // prefers-color-scheme honest, which useSystemType relies on.
       const win = getCurrentWindow();
       win.setTheme(prefs.followSystem ? null : theme.type).catch(() => {});
-      win.setBackgroundColor(theme.colors.background).catch(() => {});
+      if (!transparent) win.setBackgroundColor(theme.colors.background).catch(() => {});
     } catch {
       // Not running inside Tauri (e.g. a plain browser tab).
     }

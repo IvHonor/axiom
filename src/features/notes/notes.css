@@ -462,6 +462,7 @@
 }
 
 .nt-board-head {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -513,14 +514,44 @@
 }
 
 .nt-board {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 30px 24px;
-  padding: 12px 4px;
+  flex: 1;
+  min-height: 360px;
+  position: relative;
+  overflow: auto;
+  overscroll-behavior: contain;
+  isolation: isolate;
+}
+
+.nt-board-canvas {
+  position: relative;
+  min-height: 100%;
 }
 
 .nt-board-slot {
+  position: absolute;
+  width: 240px;
   height: 240px;
+}
+
+.nt-board-slot .sticky-band {
+  cursor: grab;
+  touch-action: none;
+}
+
+.nt-board-move {
+  cursor: grab;
+  touch-action: none;
+  opacity: 1 !important;
+}
+
+.nt-board-slot.is-moving .sticky {
+  transform: rotate(0deg) translateY(-2px);
+  box-shadow: 0 18px 30px -12px rgb(0 0 0 / 0.5);
+}
+
+.nt-board-slot.is-moving .sticky-band,
+.nt-board-slot.is-moving .nt-board-move {
+  cursor: grabbing;
 }
 
 /* ---------- A sticky note ---------- */

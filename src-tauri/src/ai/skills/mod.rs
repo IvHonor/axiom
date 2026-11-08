@@ -120,13 +120,13 @@ pub const AREAS: &[(&str, &str)] = &[
 /// with one of these ("birthday" matches "birthdays", but "read" doesn't
 /// match "already").
 const CUES: &[(&str, &[&str])] = &[
-    ("birthdays", &["birthday", "bday", "anniversar", "born", "gift", "present", "turning", "turns"]),
+    ("birthdays", &["birthday", "bday", "anniversar", "born", "gift", "presents", "turning", "turns"]),
     (
         "daily_plan",
         &[
             "plan", "day", "today", "tonight", "tomorrow", "morning", "afternoon", "evening", "schedul", "task", "todo", "agenda", "calendar", "meeting", "busy",
             "free", "week", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "gym", "work", "sleep", "break", "lunch", "dinner",
-            "commute", "drive", "remind", "timeline", "block", "hour", "minute", "routine", "event",
+            "commute", "drive", "remind", "timeline", "block", "hour", "minute", "routine", "event", "timer", "time", "focus", "stopwatch",
         ],
     ),
     ("goals", &["goal", "target", "habit", "milestone", "resolution", "progress", "checkin", "check"]),
@@ -142,29 +142,39 @@ const CUES: &[(&str, &[&str])] = &[
     ("notes", &["note", "jot", "idea", "write"]),
 ];
 
-/// Questions about everything bring in every area.
+/// Questions about everything let Lemma look at every area.
 const EVERYTHING: &[&str] = &["life", "overall", "everything", "summary", "summarise", "summarize", "overview", "improve", "focus", "priorit", "suggest", "recommend"];
 
-/// The areas a message seems to be about, of those allowed, so Lemma starts
-/// with only their tools (each area's add hundreds of tokens to every call).
-/// It can ask for the others with `use_area`.
-pub fn areas_for(text: &str, allowed: &[String]) -> Vec<String> {
+/// What a message starts Lemma with.
+#[derive(Debug, PartialEq)]
+pub struct Start {
+    /// The areas it seems to be about, of those allowed, with all their tools.
+    pub areas: Vec<String>,
+    /// A question about everything: Lemma can also look at every other
+    /// allowed area, though not change it without `use_area`.
+    pub broad: bool,
+}
+
+/// The tools a message starts Lemma with. Each area's add hundreds of tokens
+/// to every call, and the free AI plans allow only so many a minute, so it
+/// starts with as few as will do; it can ask for the others with `use_area`.
+pub fn areas_for(text: &str, allowed: &[String]) -> Start {
     let text = text.to_lowercase();
     let words: Vec<&str> = text.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect();
     let said = |cue: &str| words.iter().any(|w| w.starts_with(cue));
-    if EVERYTHING.iter().any(|cue| said(cue)) {
-        return allowed.to_vec();
-    }
+    let broad = EVERYTHING.iter().any(|cue| said(cue));
     // A time of day ("at 3pm", "11:30") or an amount of money is a cue too.
     let time = words.iter().any(|w| (w.ends_with("am") || w.ends_with("pm")) && w.chars().next().is_some_and(|c| c.is_ascii_digit())) || text.contains(':');
     let money = text.contains(['£', '$', '€']);
-    CUES.iter()
+    let areas = CUES
+        .iter()
         .filter(|(area, cues)| {
             allowed.iter().any(|a| a == area)
                 && (cues.iter().any(|cue| said(cue)) || (*area == "daily_plan" && time) || (*area == "finance" && money))
         })
         .map(|(area, _)| area.to_string())
-        .collect()
+        .collect();
+    Start { areas, broad }
 }
 
 /// Every tool for the allowed areas.
@@ -297,24 +307,33 @@ mod tests;
 
 #[cfg(test)]
 mod routing {
-    use super::areas_for;
+    use super::{Start, areas_for};
 
     fn all() -> Vec<String> {
         super::AREAS.iter().map(|(id, _)| id.to_string()).collect()
     }
 
-    #[test]
-    fn a_message_brings_in_only_the_areas_it_is_about() {
-        assert_eq!(areas_for("Whose birthday is next?", &all()), ["birthdays"], "not \"day\" too");
-        assert_eq!(areas_for("I'm free from 11am to 5pm, then the gym", &all()), ["daily_plan"]);
-        assert_eq!(areas_for("I've already finished", &all()), Vec::<String>::new(), "not \"read\"");
-        assert_eq!(areas_for("Spent £12 on lunch", &all()), ["daily_plan", "finance"]);
-        assert_eq!(areas_for("Add my lecture notes", &all()), ["uni", "notes"]);
+    fn areas(text: &str) -> Vec<String> {
+        areas_for(text, &all()).areas
     }
 
     #[test]
-    fn only_allowed_areas_and_everything_for_big_questions() {
-        assert!(areas_for("Whose birthday is next?", &["daily_plan".into()]).is_empty());
-        assert_eq!(areas_for("How can I improve my life?", &all()).len(), all().len());
+    fn a_message_brings_in_only_the_areas_it_is_about() {
+        assert_eq!(areas("Whose birthday is next?"), ["birthdays"], "not \"day\" too");
+        assert_eq!(areas("I'm free from 11am to 5pm, then the gym"), ["daily_plan"]);
+        assert_eq!(areas("I've already finished"), Vec::<String>::new(), "not \"read\"");
+        assert_eq!(areas("Spent £12 on lunch"), ["daily_plan", "finance"]);
+        assert_eq!(areas("Add my lecture notes"), ["uni", "notes"]);
+        assert_eq!(areas("Prep my presentation"), Vec::<String>::new(), "not a birthday present");
+        assert_eq!(areas("Start a timer for writing my essay"), ["daily_plan"]);
+    }
+
+    #[test]
+    fn only_allowed_areas_and_a_look_everywhere_for_big_questions() {
+        assert!(areas_for("Whose birthday is next?", &["daily_plan".into()]).areas.is_empty());
+        assert_eq!(areas_for("How can I improve my life?", &all()), Start { areas: vec![], broad: true });
+        let plan = areas_for("Can you suggest how to plan tomorrow, with the gym and some reading?", &all());
+        assert_eq!((plan.areas, plan.broad), (vec!["daily_plan".into(), "reading".into()], true), "the areas named get all their tools");
+        assert!(!areas_for("Plan my day", &all()).broad);
     }
 }

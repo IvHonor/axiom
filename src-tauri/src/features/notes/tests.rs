@@ -147,3 +147,19 @@ async fn edits_squash_and_split() {
     assert_eq!(left.len(), 2);
     assert!(left.contains(&"three".to_owned()) && left.contains(&"all".to_owned()));
 }
+
+#[tokio::test]
+async fn analytics_count_each_note_once_a_day() {
+    use crate::features::period::Period;
+    let db = setup().await;
+    let today = chrono::Local::now().date_naive();
+    let id = note(&db, "Plans", "one two three").await;
+    // A second edit the same day is the same note worked on.
+    save(&db, &id, Some("BAQ=".into()), "one two three four".into(), 4).await.unwrap();
+    note(&db, "Other", "five").await;
+
+    let week = super::analytics::report(&db, Period::new("week", today, today).unwrap()).await.unwrap();
+    assert_eq!((week.headline.now, week.created.now, week.total), (Some(2.0), Some(2.0), 2));
+    let on_day = week.days.iter().find(|d| d.day == today).unwrap();
+    assert_eq!((on_day.created, on_day.worked_on), (2, 2));
+}

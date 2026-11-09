@@ -1,6 +1,7 @@
 import { currentAccount } from "@/lib/session";
 import { readPublicFile } from "@/lib/terminal/feed";
 import { sameOrigin } from "../origin";
+import { readJson, RequestBodyError } from "@/lib/request-body";
 
 // Reading on the web: finding books on Open Library and fetching covers, as
 // the desktop does in src-tauri/src/features/reading/library.rs. Open Library
@@ -86,14 +87,12 @@ export async function POST(request: Request) {
   if (!request.headers.get("content-type")?.startsWith("application/json")) return json({ message: "Expected JSON." }, 415);
   if (!(await currentAccount())) return json({ message: "Your sign-in has ended. Reload to sign in again." }, 401);
   try {
-    const text = await request.text();
-    if (text.length > 8192) return json({ message: "That's too long." }, 413);
-    const body = JSON.parse(text) as { op?: string; query?: string; workKey?: string; url?: string };
+    const body = await readJson(request, 8192);
     if (body.op === "search") return json({ data: await search(String(body.query ?? "")) });
     if (body.op === "editions") return json({ data: await editions(String(body.workKey ?? "")) });
     if (body.op === "cover") return json({ data: await coverImage(String(body.url ?? "")) });
     return json({ message: "Unknown request." }, 400);
   } catch (error) {
-    return json({ message: error instanceof Error ? error.message : "Something went wrong." }, 400);
+    return json({ message: error instanceof Error ? error.message : "Something went wrong." }, error instanceof RequestBodyError ? error.status : 400);
   }
 }

@@ -52,10 +52,12 @@ interface ActivityBarProps {
   admin?: { open: boolean; onOpen: () => void };
   hiddenIds?: string[];
   onVisibilityChange?: (id: string, hidden: boolean) => void;
+  /** The area that's open, if one is: its icon is marked, whichever sidebar is showing. */
+  current?: string | null;
 }
 
 /** The far-left icon strip. Clicking an icon opens its sidebar; clicking it again closes it. */
-export function ActivityBar({ active, areas, onToggle, onPeek, badges = {}, accountEmail, analytics, admin, hiddenIds = [], onVisibilityChange }: ActivityBarProps) {
+export function ActivityBar({ active, areas, onToggle, onPeek, badges = {}, accountEmail, analytics, admin, hiddenIds = [], onVisibilityChange, current }: ActivityBarProps) {
   const profile = useProfile(accountEmail);
   const [menu, setMenu] = useState<{ item: Item; at: MenuPosition } | null>(null);
   const [order, setOrder] = usePersistentState<string[]>("axiom.activityOrder.v1", saved =>
@@ -84,14 +86,17 @@ export function ActivityBar({ active, areas, onToggle, onPeek, badges = {}, acco
     const title = id === "account" && accountEmail ? `${label} (${accountEmail})` : label;
     const hidden = !!extension && hiddenIds.includes(extension.id);
     const badge = extension ? badges[extension.id] : undefined;
+    const here = !!extension && extension.id === current;
     return (
       <button
         key={id}
+        data-tour={id}
         ref={sortable?.setNodeRef}
         {...sortable?.attributes}
         {...sortable?.listeners}
         style={sortable ? { transform: CSS.Transform.toString(sortable.transform ? (phone ? { ...sortable.transform, y: 0 } : { ...sortable.transform, x: 0 }) : null), transition: sortable.transition } : undefined}
-        className={`activity${id === active ? " is-active" : ""}${sortable ? " activity-sortable" : ""}${sortable?.isDragging ? " is-dragging" : ""}`}
+        className={`activity${id === active ? " is-active" : ""}${here ? " is-current" : ""}${sortable ? " activity-sortable" : ""}${sortable?.isDragging ? " is-dragging" : ""}`}
+        aria-current={here ? "page" : undefined}
         onClick={() => onToggle(id)}
         onPointerEnter={onPeek && id !== "account" && id !== "themes" ? () => onPeek(id) : undefined}
         onPointerLeave={onPeek ? () => onPeek(null) : undefined}
@@ -113,6 +118,7 @@ export function ActivityBar({ active, areas, onToggle, onPeek, badges = {}, acco
         )}
         {id === "account" && accountEmail && <span className="activity-badge" />}
         {hidden && <span className="activity-hidden"><EyeOff size={9} /></span>}
+        {here && <span className="activity-here" aria-hidden="true" />}
         {badge && (
           <span className={`activity-count${badge.count === null ? " is-dot" : ""}`} aria-label={badge.label}>
             {badge.count !== null && (badge.count > 9 ? "9+" : badge.count)}

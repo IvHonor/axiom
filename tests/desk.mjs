@@ -223,6 +223,36 @@ try {
   await page.getByText("On it: timing your essay now.").waitFor();
   assert.deepEqual(await page.evaluate(() => window.said), ["start a timer for my essay"]);
 
+  // Keeping the screen awake: understood without the AI; asked how long; a countdown under him;
+  // clicked, Stop; capped at 4 hours; and a word when it runs out.
+  await open("?idle");
+  const typeTo = async (text) => {
+    await page.locator(".desk-lemma").click({ button: "middle" });
+    await page.getByRole("textbox", { name: "Type to Lemma" }).fill(text);
+    await page.keyboard.press("Enter");
+  };
+  await typeTo("can you keep my screen awake?");
+  await page.getByText("How long should I keep your screen awake?").waitFor();
+  await page.screenshot({ path: ".qa.local/desk-awake-ask.png" });
+  await page.getByRole("button", { name: "1 hour", exact: true }).click();
+  await page.getByText("I'll keep your screen awake for 1 h.").waitFor();
+  const badge = page.locator(".desk-awake");
+  assert.match(await badge.innerText(), /^(1:00|0:59)$/);
+  assert.match(await badge.getAttribute("title"), /Keeping your screen awake · (1 h|59 min) left/);
+  await page.screenshot({ path: ".qa.local/desk-awake.png" });
+  await badge.click();
+  await page.getByText(/I'm keeping your screen awake for another/).waitFor();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.getByText("Your screen can sleep again.").waitFor();
+  await badge.waitFor({ state: "detached" });
+  await typeTo("keep my screen awake for 6 hours");
+  await page.getByText("I can keep it awake for up to 4 h at a time, so 4 h it is.").waitFor();
+  assert.match(await badge.innerText(), /^(4:00|3:59)$/);
+  await page.evaluate(() => window.expireAwake());
+  await page.getByText("Time's up: your screen can sleep again.").waitFor();
+  await badge.waitFor({ state: "detached" });
+  assert.deepEqual(await page.evaluate(() => window.said), [], "none of that went to the AI");
+
   // Dropped on him: text is a task, a link goes to Learning (or Reading, or
   // a task), a file is a journal note; each with an Undo.
   await open("?idle");
@@ -365,6 +395,19 @@ try {
   await page.waitForFunction(() => / dock$/.test(window.deskSizes.at(-1) ?? "") && parseInt(window.deskSizes.at(-1)) < 70);
   await page.waitForTimeout(400);
   await page.screenshot({ path: ".qa.local/desk-notch.png" });
+  // Keeping the screen awake while tucked: a coffee cup and the time left, under him in the notch.
+  await open("?notch&awake");
+  await page.locator(".desk.is-tucked.side-right").waitFor({ state: "attached", timeout: 6000 });
+  const awakeTab = page.locator(".desk-tab-awake");
+  await awakeTab.waitFor();
+  assert.match(await awakeTab.innerText(), /^0:4[45]$/);
+  assert.equal(await awakeTab.locator("svg").count(), 1, "with its coffee cup");
+  assert.match(await awakeTab.getAttribute("title"), /Keeping your screen awake · 4[45] min left/);
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: ".qa.local/desk-notch-awake.png" });
+  await open("?notch");
+  await page.locator(".desk.is-tucked.side-right").waitFor({ state: "attached", timeout: 6000 });
+  await page.locator(".desk-tab-time", { hasText: /^3[23]:\d\d$/ }).waitFor();
   // Pointed at: only a peek at what's on, however long; clicked, he comes out.
   // Approach gently so the separate fast-cursor duck reaction doesn't speak.
   const notchBox = await page.locator(".desk").boundingBox();

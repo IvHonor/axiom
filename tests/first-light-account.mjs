@@ -5,7 +5,8 @@ import { test } from "node:test";
 // Keep Next's request context local; exercise the real web-session response.
 const mock = source => ({ url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true });
 registerHooks({ resolve(specifier, context, next) {
-  if (specifier === "next/headers") return mock("export const cookies = async () => ({ get() {} });");
+  if (specifier === "next/headers") return mock("export const cookies = async () => ({ get() {}, has() { return false; }, set() {} });");
+  if (specifier === "@/lib/session-cookies") return mock("export const BROWSER_SESSION_COOKIE = 'axiom_browser_session'; export const browserCookie = () => ({ name: BROWSER_SESSION_COOKIE, value: 'fixture-browser-session' });");
   if (specifier === "@/lib/axiom") return mock("export const call = async () => {};");
   if (specifier === "@/lib/session") return mock("export const currentAccount = async () => globalThis.fixtureAccount; export const clearSession = async () => {}; export const REFRESH_COOKIE = 'fixture';");
   if (specifier === "../origin") return mock("export const sameOrigin = () => true;");

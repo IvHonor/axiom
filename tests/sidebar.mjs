@@ -54,6 +54,10 @@ try {
   await until("Birthdays");
   await page.locator(".tab", { hasText: "Goals" }).first().click();
   await until(null);
+  // Closed, switching tabs never brings it out, even to an area that had it open.
+  await page.locator(".tab", { hasText: "Birthdays" }).first().click();
+  await page.waitForTimeout(500);
+  assert.equal(await shown(), null, "switching tabs doesn't open the sidebar");
 
   // Peeking: with it closed, pointing at an icon slides its panel out; away, it goes.
   await page.locator(".activity[aria-label='Finance']").hover();

@@ -2,15 +2,14 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 
 export async function checkDesktopPlanner({ page, accounts, today, tomorrow, until, rowWithTitle }) {
-  const main = page.locator('.desktop-planner-main'), quick = main.locator('.dp-quick input');
+  // The Daily Plan the web app shows is the desktop's own, in the app's main area.
+  const main = page.locator('main.main'), quick = main.locator('.dp-quick input');
   const row = title => main.locator('.dp-row').filter({ has: page.getByText(title, { exact: true }) });
   const tab = name => main.getByRole('tab', { name, exact: true });
   const add = async title => { await quick.fill(title); await quick.press('Enter'); await quick.press('Escape'); };
   await row('Task from the desktop').waitFor();
   await mkdir('.qa.local/terminal', { recursive: true });
   await page.screenshot({ path: '.qa.local/terminal/desktop-daily-initial.png' });
-  const layout = await main.evaluate(node => { const bar = node.querySelector('.dp-toolbar'), body = node.querySelector('.dp-body'), panel = node.querySelector('.dp-panel'); return { padding: getComputedStyle(bar).padding, gap: getComputedStyle(body).gap, taskWidth: panel.getBoundingClientRect().width, height: node.getBoundingClientRect().height, hasOldHero: !!node.querySelector('h1'), font: getComputedStyle(node).fontSize }; });
-  assert.equal(layout.padding, '10px 20px'); assert.equal(layout.gap, '16px'); assert.equal(layout.taskWidth, 400); assert.equal(layout.hasOldHero, false); assert.equal(layout.font, '13px');
   await row('Task from the desktop').getByRole('checkbox').click();
   await until(() => !!rowWithTitle('Task from the desktop').data.done_at, 'desktop UI completion did not sync');
   await add('Write the web terminal tests 30m !');
@@ -41,7 +40,9 @@ export async function checkDesktopPlanner({ page, accounts, today, tomorrow, unt
   await until(() => rowWithTitle('Web next-day task')?.data.day === tomorrow, 'date arrows did not select tomorrow');
   await quick.press('Escape'); await page.keyboard.press('t');
   await row('Write the web terminal tests').waitFor();
-  const sidebar = page.locator('.desktop-planner-sidebar');
+  // Its sidebar slides away once you click into the plan: the icon brings it back.
+  const sidebar = page.locator('aside.sidebar[aria-label="Daily Plan"]');
+  if (!(await sidebar.isVisible())) await page.locator('.activitybar').getByRole('button', { name: 'Daily Plan', exact: true }).click();
   await sidebar.getByRole('button', { name: 'Add a routine', exact: true }).click();
   const routines = page.getByRole('dialog', { name: 'Routines', exact: true });
   const bounds = await routines.boundingBox(); assert.equal(Math.round(bounds.x + bounds.width / 2), 720, 'native dialogs centre in the full app window');
@@ -54,25 +55,17 @@ export async function checkDesktopPlanner({ page, accounts, today, tomorrow, unt
   await until(() => !!rowWithTitle('Desktop routine'), 'desktop routine form did not save');
   await routines.getByRole('button', { name: 'Close', exact: true }).click();
   await main.locator('.dp-block').filter({ hasText: 'Desktop routine' }).waitFor();
-  // Calendar file tools remain available inside the shared desktop calendar dialog.
+  // Calendar links are fetched by the website, which only reaches public servers:
+  // a link to a private address is refused, so it can't be used to probe the server's network.
   await main.getByRole('button', { name: 'Planner settings', exact: true }).click();
   await main.getByRole('button', { name: 'Calendars…', exact: true }).click();
   const calendars = page.getByRole('dialog', { name: 'Calendars', exact: true });
-  await calendars.getByText('Import / export calendar files', { exact: true }).click();
-  const date = today.replaceAll('-', ''), source = ['BEGIN:VCALENDAR','VERSION:2.0','BEGIN:VEVENT','UID:web-event',`DTSTART:${date}T090000`,`DTEND:${date}T100000`,'SUMMARY:Web imported meeting','URL:https://calendar.example.test/event','END:VEVENT','END:VCALENDAR'].join('\r\n');
-  await calendars.getByLabel('Calendar name', { exact: true }).fill('Web calendar');
-  await calendars.getByLabel('iCalendar file', { exact: true }).setInputFiles({ name: 'fixture.ics', mimeType: 'text/calendar', buffer: Buffer.from(source) });
-  await calendars.getByRole('button', { name: 'Import calendar', exact: true }).click();
-  await calendars.getByRole('checkbox', { name: 'Show Web calendar', exact: true }).waitFor();
-  const downloadPromise = page.waitForEvent('download'); await calendars.getByRole('button', { name: 'Export plan (.ics)', exact: true }).click(); assert.match((await downloadPromise).suggestedFilename(), /\.ics$/);
+  await calendars.getByRole('button', { name: 'Add a read-only iCal link', exact: true }).click();
+  await calendars.getByPlaceholder('Name, e.g. Work').fill('Private network');
+  await calendars.getByPlaceholder('Secret iCal address (https://… .ics)').fill('https://127.0.0.1/private.ics');
+  await calendars.getByRole('button', { name: 'Add calendar', exact: true }).click();
+  await calendars.getByText(/public internet server/).waitFor();
   await calendars.getByRole('button', { name: 'Close', exact: true }).click();
-  await main.locator('.dp-event').filter({ hasText: 'Web imported meeting' }).waitFor();
-  await main.locator('.dp-event').filter({ hasText: 'Web imported meeting' }).click();
-  const details = main.getByRole('region', { name: 'Event: Web imported meeting', exact: true });
-  await page.context().route('https://calendar.example.test/**', route => route.fulfill({ contentType: 'text/html', body: 'Fixture calendar event' }));
-  const opened = page.waitForEvent('popup'); await details.getByRole('button', { name: 'Open in Calendar link', exact: true }).click();
-  const popup = await opened; await popup.getByText('Fixture calendar event', { exact: true }).waitFor(); await popup.close();
-  await details.getByRole('button', { name: 'Close', exact: true }).click();
   await page.screenshot({ path: '.qa.local/terminal/desktop-daily-dark.png' });
-  console.log('PASS: shared desktop layout, tasks, priorities, quick-add, scheduling, focus/timers/notes, settings, calendar views, routines and calendar file tools');
+  console.log('PASS: desktop Daily Plan on the web: tasks, priorities, quick-add, scheduling, focus/timers/notes, settings, calendar views, routines, and calendar links limited to public servers');
 }

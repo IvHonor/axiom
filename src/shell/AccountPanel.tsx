@@ -28,10 +28,12 @@ interface AccountPanelProps {
   onChange: (status: AccountStatus) => void;
   /** Installed extensions, for their notification settings. */
   extensions: string[];
+  /** Goes up each time creating an account is asked for (e.g. by Lemma): the form switches to it. */
+  signUp?: number;
 }
 
 /** Sidebar for the account: signing in, sync, devices, password, data, and signing out. */
-export function AccountPanel({ status, sync, onChange, extensions }: AccountPanelProps) {
+export function AccountPanel({ status, sync, onChange, extensions, signUp }: AccountPanelProps) {
   return (
     <aside className="sidebar">
       <header className="sidebar-head">Account</header>
@@ -42,7 +44,7 @@ export function AccountPanel({ status, sync, onChange, extensions }: AccountPane
           status && (
             <>
               <div className="account-brand"><Logo variant="lockup" size={96} /></div>
-              <SignInForm onDone={onChange} />
+              <SignInForm onDone={onChange} signUp={signUp} />
             </>
           )
         )}

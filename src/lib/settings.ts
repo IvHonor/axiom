@@ -43,6 +43,7 @@ export const SYNCED: Record<string, string> = {
   "axiom.board.zoom": "board.zoom",
   "axiom.notes.sort": "notes.sort",
   "axiom.notes.handwriting": "notes.handwriting",
+  "axiom.notes.stickyToOverview": "notes.stickyToOverview",
   "axiom.whatsNew.seen": "whatsNew.seen",
 };
 
@@ -70,6 +71,44 @@ export function readSetting(key: string): unknown {
   }
 }
 
+/** Synced settings kept to this computer for now (see `holdSync`). */
+const held = new Set<string>();
+
+/**
+ * Keeps a synced setting to this computer until `releaseSync`: changes are
+ * saved here but not sent. For a first run, before it's known whether the
+ * account that signs in already has its own choice (see shell/firstRun).
+ */
+export function holdSync(key: string) {
+  held.add(key);
+}
+
+export function releaseSync(key: string) {
+  held.delete(key);
+}
+
+/** This computer has nothing from before profiles synced: there's nothing to send. */
+export function markImported() {
+  try {
+    localStorage.setItem(IMPORTED, "1");
+  } catch {
+    // Storage unavailable: nothing was saved to send either.
+  }
+}
+
+/**
+ * Sets a setting on this computer only, as if it had been read, not chosen:
+ * whoever's listening hears it, and it isn't sent to the profile.
+ */
+export function setLocalSetting(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage unavailable: the listeners still get it.
+  }
+  listeners.get(key)?.forEach((listener) => listener(value));
+}
+
 /** Saves a setting here, and to the profile if it's part of it. */
 export function saveSetting(key: string, value: unknown) {
   try {
@@ -78,7 +117,7 @@ export function saveSetting(key: string, value: unknown) {
     // Storage unavailable: it lasts for this session, and still syncs.
   }
   const name = SYNCED[key];
-  if (!name || !hasProfileSync()) return;
+  if (!name || !hasProfileSync() || held.has(key)) return;
   clearTimeout(unsent.get(key));
   unsent.set(
     key,

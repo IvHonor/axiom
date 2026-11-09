@@ -646,6 +646,28 @@ html:has(.desk) #root {
   pointer-events: none;
 }
 
+/* Keeping the screen awake: a small countdown under him, on the same dark glass as his time. */
+.desk-awake {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: -2px;
+  padding: 2px 8px 3px;
+  background: rgb(22 22 26 / 0.74);
+  border: 1px solid color-mix(in srgb, var(--lemma-glow) 22%, transparent);
+  border-radius: 999px;
+  font-size: calc(11px * var(--t));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: color-mix(in srgb, var(--lemma-glow) 35%, white);
+  cursor: pointer;
+}
+
+.desk-awake:hover {
+  border-color: color-mix(in srgb, var(--lemma-glow) 50%, transparent);
+}
+
 .desk-time.is-break {
   text-shadow: 0 0 6px #6ee7a8, 0 0 14px rgb(110 231 168 / 0.5), 0 1px 2px rgb(0 0 0 / 0.45);
 }
@@ -1269,6 +1291,11 @@ html[data-color-scheme="dark"] .desk-soon {
   align-items: center;
   gap: 2px;
   white-space: nowrap;
+}
+
+/* Keeping the screen awake, in the notch: a warm coffee colour, apart from the timer. */
+.desk-tab-awake {
+  color: #f3d2a2;
 }
 
 .desk-tab-time:is(.is-meeting, .is-soon, .is-reminder) {

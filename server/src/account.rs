@@ -162,7 +162,7 @@ pub async fn app_lock_code(State(s): State<AppState>, auth: AuthUser) -> Result<
 
 /// Checks (and uses up) that code.
 pub async fn app_lock_check(State(s): State<AppState>, auth: AuthUser, Json(body): Json<CheckCode>) -> Result<StatusCode, ApiError> {
-    codes::check(&s, &auth.user_id, Purpose::UnlockApp, &body.code).await?;
+    codes::check(&s.db, &auth.user_id, Purpose::UnlockApp, &body.code).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

@@ -1,7 +1,7 @@
 // Run after npm run build; checks the CSS shipped in desktop installers.
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
-import { applyTheme } from '../src/shell/theme/applyTheme.ts';
+import { applyTheme, themeVariables } from '../src/shell/theme/applyTheme.ts';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const assets = new URL('../dist/assets/', import.meta.url);
@@ -13,6 +13,8 @@ try {
   const page = await browser.newPage();
   await page.setContent('<span class="extension-symbol" style="--extension-accent:var(--area-journal)">Journal</span><span id="success" style="color:var(--success)">Saved</span>');
   await page.addStyleTag({ content: css });
+  // applyTheme calls themeVariables: it goes into the page first.
+  await page.addScriptTag({ content: themeVariables.toString() });
   for (const [scheme, journal, success] of [
     ['light', 'rgb(168, 77, 107)', 'rgb(53, 123, 80)'],
     ['dark', 'rgb(227, 154, 178)', 'rgb(131, 191, 150)'],

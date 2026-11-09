@@ -5,13 +5,18 @@
 //!   checks the session is still signed in (`auth::signed_in`), and signing
 //!   out forgets it at once. A short life only made every open app refresh
 //!   (and wake the database) every 15 minutes.
-//! - The **refresh token** is a random string the app swaps for a new pair.
-//!   Each one works once; the server stores only its SHA-256 hash.
+//! - The **refresh token** is a string the app swaps for a new pair. Each one
+//!   works once; the server stores only its SHA-256 hash. A session's first is
+//!   random; each after it is derived (HMAC) from the session and the token it
+//!   replaced, so a refresh asked twice at once (a web page's requests renewing
+//!   together, or a retry whose answer was lost) gets the same new token both
+//!   times instead of one that cuts off the other.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use hmac::{Hmac, KeyInit, Mac};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -46,6 +51,8 @@ pub struct Keys {
     decoding: DecodingKey,
     validation: Validation,
     link_validation: Validation,
+    /// For deriving rotated refresh tokens.
+    refresh_key: Vec<u8>,
 }
 
 impl Keys {
@@ -55,7 +62,19 @@ impl Keys {
         let mut link_validation = Validation::new(Algorithm::HS256);
         link_validation.set_required_spec_claims(&["sub"]);
         link_validation.validate_exp = false;
-        Self { encoding: EncodingKey::from_secret(secret), decoding: DecodingKey::from_secret(secret), validation, link_validation }
+        Self { encoding: EncodingKey::from_secret(secret), decoding: DecodingKey::from_secret(secret), validation, link_validation, refresh_key: secret.to_vec() }
+    }
+
+    /// The refresh token that replaces the one hashed as `replaced_hash`. As
+    /// unguessable as a random one without the secret, but the same each time,
+    /// so a repeat of the same refresh can be given the same answer.
+    pub fn rotated_refresh_token(&self, session_id: &str, replaced_hash: &str) -> String {
+        let mut mac = Hmac::<Sha256>::new_from_slice(&self.refresh_key).expect("HMAC takes a key of any length");
+        mac.update(b"axiom refresh token v1\0");
+        mac.update(session_id.as_bytes());
+        mac.update(b"\0");
+        mac.update(replaced_hash.as_bytes());
+        URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes())
     }
 
     pub fn unsubscribe_token(&self, user_id: &str, kind: &str) -> String {

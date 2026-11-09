@@ -142,9 +142,24 @@ async fn a_refresh_whose_answer_was_lost_can_be_retried_later() {
     let (status, retry) = post(&app, routes::REFRESH, json!({ "refresh_token": first["refresh_token"] })).await;
     assert_eq!(status, StatusCode::OK, "{retry}");
     assert_eq!(call(&app, Method::GET, routes::ME, retry["access_token"].as_str(), None).await.0, StatusCode::OK);
-    // The lost pair was never used, and is replaced.
-    assert_eq!(post(&app, routes::REFRESH, json!({ "refresh_token": lost["refresh_token"] })).await.0, StatusCode::UNAUTHORIZED);
+    // It gets the same new refresh token it missed, and that one carries on.
+    assert_eq!(retry["refresh_token"], lost["refresh_token"]);
     assert_eq!(post(&app, routes::REFRESH, json!({ "refresh_token": retry["refresh_token"] })).await.0, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn the_same_refresh_asked_twice_at_once_keeps_both_signed_in() {
+    // A web page's requests all renew an expired sign-in together, with the same token.
+    let app = server().await;
+    let (_, first) = post(&app, routes::SIGN_UP, credentials("ada@example.com", "correct horse")).await;
+    let body = json!({ "refresh_token": first["refresh_token"] });
+    let (a, b) = tokio::join!(post(&app, routes::REFRESH, body.clone()), post(&app, routes::REFRESH, body));
+    assert_eq!((a.0, b.0), (StatusCode::OK, StatusCode::OK));
+    assert_eq!(a.1["refresh_token"], b.1["refresh_token"], "one new token, whichever answer the browser keeps");
+    assert_eq!(call(&app, Method::GET, routes::ME, b.1["access_token"].as_str(), None).await.0, StatusCode::OK);
+    let (status, next) = post(&app, routes::REFRESH, json!({ "refresh_token": a.1["refresh_token"] })).await;
+    assert_eq!(status, StatusCode::OK, "{next}");
+    assert_ne!(next["refresh_token"], a.1["refresh_token"], "and it still rotates after that");
 }
 
 #[tokio::test]

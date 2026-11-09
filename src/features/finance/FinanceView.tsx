@@ -104,6 +104,8 @@ function Setup() {
   return (
     <div className="fin-setup">
       <form className="fin-setup-card" onSubmit={submit}>
+        {/* Finances from another computer may be waiting, still locked: say so before anyone starts afresh. */}
+        <VaultLockBanner subject="finances" />
         <span className="fin-setup-icon">💷</span>
         <h1>Track your money, simply</h1>
         <p className="dim">

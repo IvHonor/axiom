@@ -18,14 +18,14 @@ try {
   assert.equal(packages.length, 5);
   assert.equal(packages.flatMap(p => p.themes).length, 14);
   const status = page.getByTestId("status");
+  const item = label => page.locator(".theme-item").filter({ has: page.locator(".theme-name").getByText(label, { exact: true }) });
+  // Every theme of every pack is listed: packs are built in and can't be switched off.
+  const total = await page.evaluate(async () => (await import("/src/extensions/index.ts")).EXTENSIONS.flatMap(ext => ext.themes || []).length);
+  assert.equal(await status.getAttribute("data-options"), String(total), "every theme is there to pick");
   for (const pack of packages) {
-    assert.equal(pack.builtIn, false);
-    await page.getByLabel("Package", { exact: true }).selectOption(pack.id);
-    assert.equal(await page.getByRole("button", { name: "Apply", exact: true }).first().isDisabled(), true);
-    await page.getByRole("button", { name: "Install", exact: true }).click();
+    assert.equal(pack.builtIn, true, pack.id + " is built in");
     for (const theme of pack.themes) {
-      const row = page.locator(".theme-row").filter({ has: page.getByText(theme.label, { exact: true }) });
-      await row.getByRole("button", { name: "Apply", exact: true }).click();
+      await item(theme.label).click();
       assert.equal(await status.getAttribute("data-theme"), theme.id);
       const rendering = await page.evaluate(async theme => {
         const root = getComputedStyle(document.documentElement);
@@ -55,19 +55,14 @@ try {
     const last = pack.themes.at(-1).id;
     await page.reload();
     assert.equal(await status.getAttribute("data-theme"), last, "Theme persists across reload");
-    await page.getByLabel("Package", { exact: true }).selectOption(pack.id);
-    await page.getByRole("button", { name: "Uninstall", exact: true }).click();
-    assert.equal(await status.getAttribute("data-theme"), "modern-dark", "Active uninstalled theme falls back");
-    assert.equal(await status.getAttribute("data-options"), "2", "Uninstalled variants disappear");
-    await page.getByRole("button", { name: "Install", exact: true }).click();
-    assert.equal(await status.getAttribute("data-theme"), last, "Reinstall restores saved selection");
-    await page.getByRole("button", { name: "Uninstall", exact: true }).click();
-    console.log("PASS: " + pack.id + " variants, fonts, contrast, persistence and removal");
+    console.log("PASS: " + pack.id + " variants, fonts, contrast and persistence");
   }
+  // A pack switched off back when packs could be is listed again.
+  await page.evaluate(() => localStorage.setItem("axiom.disabled", JSON.stringify(["nord_themes"])));
+  await page.reload();
+  assert.equal(await status.getAttribute("data-options"), String(total), "a pack switched off before is listed again");
   // System mode follows the saved choice for each appearance.
-  await page.getByLabel("Package", { exact: true }).selectOption("nord_themes");
-  await page.getByRole("button", { name: "Install", exact: true }).click();
-  await page.locator(".theme-row").filter({ hasText: "Nord Polar Night" }).getByRole("button", { name: "Apply", exact: true }).click();
+  await item("Nord Polar Night").click();
   await page.getByRole("checkbox").check();
   await page.emulateMedia({ colorScheme: "light" });
   await page.waitForFunction(() => document.querySelector("output").dataset.theme === "nord-snow");

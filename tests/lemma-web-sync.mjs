@@ -63,8 +63,11 @@ async function device(id) {
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(`${base}/terminal`, { waitUntil: "domcontentloaded" });
   const news = page.getByRole("dialog", { name: /What.s new in Axiom/ });
-  await until(async () => (await news.count()) > 0 || (await page.getByRole("button", { name: "Customise 117", exact: true }).count()) > 0, "The signed-in app did not finish opening");
+  // A new browser with a new account gets Lemma's tour (not the back catalogue of news): skip it.
+  const tour = page.locator(".tour-card");
+  await until(async () => (await news.count()) > 0 || (await tour.count()) > 0 || (await page.getByRole("button", { name: "Customise 117", exact: true }).count()) > 0, "The signed-in app did not finish opening");
   if (await news.count()) await news.getByRole("button", { name: "Later", exact: true }).click();
+  if (await tour.count()) await tour.getByRole("button", { name: "Skip", exact: true }).click();
   assert.equal(await page.evaluate(() => document.documentElement.dataset.platform), "web", "Production must run the web entry, including its startup and mobile styles");
   assert.equal(await page.locator("#boot").count(), 0, "The loading screen must be removed after sign-in");
   await page.getByRole("button", { name: "117", exact: true }).first().click();

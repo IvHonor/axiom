@@ -53,7 +53,7 @@ export async function signUp(email: string, key: string, agreed: boolean): Promi
 /** Confirms the address with the emailed code, then signs in with the same key. */
 export async function confirmEmail(email: string, code: string, key: string): Promise<AuthResult> {
   if (!code.trim()) return { kind: "error", message: "Enter the code from the email." };
-  const confirmed = await call("POST", "/v1/auth/confirm-email", { body: { email, code } });
+  const confirmed = await call("POST", "/v1/auth/confirm-email", { body: { email, code, password: key } });
   if (!confirmed.ok) return { kind: "error", message: confirmed.message };
   return signIn(email, key);
 }

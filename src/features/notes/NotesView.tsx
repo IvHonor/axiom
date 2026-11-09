@@ -7,7 +7,8 @@ import { COLORS, MAX_ON_OVERVIEW, api, errorMessage, type Folder, type Sort } fr
 import { exportNotes } from "./exportNotes";
 import { NotePage } from "./NotePage";
 import { notesChanged, setNotesUi, useNoteList, useNotesState, useNotesUi } from "./notesUi";
-import { NoteList, newNote, newSticky, pathOf } from "./parts";
+import { NoteList, newNote, newSticky, pathOf, STICKY_TO_OVERVIEW } from "./parts";
+import { usePersistentState } from "../../shell/usePersistentState";
 import { StickyCanvas } from "./StickyCanvas";
 import { PhoneBack } from "../../shell/ui/PhoneBack";
 
@@ -187,8 +188,9 @@ function StickyBoard() {
   const { data: stickies, error } = useNoteList({ shelf: "stickies", sort: "created" });
   const [problem, setProblem] = useState<string | null>(null);
   const showing = stickies?.filter((s) => s.onOverview).length ?? 0;
+  const [toOverview, setToOverview] = usePersistentState<boolean>(STICKY_TO_OVERVIEW, (saved) => saved === true);
 
-  const add = (color: string) => newSticky(color).then(() => setProblem(null), (err) => setProblem(errorMessage(err)));
+  const add =(color: string) => newSticky(color).then(() => setProblem(null), (err) => setProblem(errorMessage(err)));
 
   return (
     <div className="nt-board-page">
@@ -200,6 +202,10 @@ function StickyBoard() {
           <p className="dim">Drag notes by their top edge to arrange or stack them. Use the overview button to show or hide a note there (up to {MAX_ON_OVERVIEW}).</p>
         </div>
         <span className="nt-grow" />
+        <label className="nt-hand" title="New sticky notes go on your overview too (while there's room)">
+          <span>Put new ones on my overview</span>
+          <Switch on={toOverview} onChange={setToOverview} label="Put new sticky notes on my overview" />
+        </label>
         <label className="nt-hand">
           <span>Handwriting</span>
           <Switch on={ui.handwriting} onChange={(on) => setNotesUi({ handwriting: on })} label="Handwritten font" />

@@ -645,6 +645,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "futures-util",
+ "hmac 0.13.0",
  "http-body-util",
  "jsonwebtoken",
  "rand 0.10.3",

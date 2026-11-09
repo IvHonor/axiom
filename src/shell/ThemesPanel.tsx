@@ -3,8 +3,8 @@ import { useTheme, type ThemeOption } from "./theme/ThemeProvider";
 import { Section } from "./ui/Section";
 import { ThemeSwatch } from "./ui/ThemeSwatch";
 
-/** Sidebar for picking the color theme, like VS Code's Ctrl+K Ctrl+T picker. */
-export function ThemesPanel({ onBrowse }: { onBrowse: () => void }) {
+/** Sidebar for picking the color theme, like VS Code's Ctrl+K Ctrl+T picker. Every theme pack's themes are here. */
+export function ThemesPanel() {
   const { theme: active, options, setTheme, followSystem, setFollowSystem, systemType, preferred } = useTheme();
   const dark = options.filter((o) => o.theme.type === "dark");
   const light = options.filter((o) => o.theme.type === "light");
@@ -59,11 +59,6 @@ export function ThemesPanel({ onBrowse }: { onBrowse: () => void }) {
         <Section title="Light" count={light.length}>
           {list(light)}
         </Section>
-        <div className="sidebar-empty">
-          <button className="btn btn-sm btn-ghost" onClick={onBrowse}>
-            Browse theme extensions
-          </button>
-        </div>
       </div>
     </aside>
   );

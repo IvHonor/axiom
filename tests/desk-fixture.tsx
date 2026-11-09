@@ -80,6 +80,13 @@ document.addEventListener("mousemove", (e) => Object.assign(cursor, { x: e.clien
 const changed = () => setTimeout(() => void emit("timer-changed"), 0);
 
 mockWindows("main");
+// "?awake": already keeping the screen awake for 45 minutes.
+let awakeUntil: number | null = params.has("awake") ? Date.now() + 45 * 60_000 : null;
+/** The keep-awake time running out, as the desktop would say. */
+(window as unknown as { expireAwake: () => void }).expireAwake = () => {
+  awakeUntil = null;
+  void emit("keep-awake-changed", null);
+};
 mockIPC(
   (command, args) => {
     const a = (args ?? {}) as Record<string, unknown>;
@@ -114,6 +121,17 @@ mockIPC(
         running = { ...task, title: "Essay", estimateMinutes: null, timerStartedAt: new Date().toISOString() };
         changed();
         return { said: "On it: timing your **essay** now.", did: "Start a timer on \"Essay\"", openChat: false, undo: ["quick-1"], reminder: null };
+      // Keeping the screen awake: the deadline kept here, as the desktop would.
+      case "keep_awake_start":
+        awakeUntil = Date.now() + Number(a.minutes) * 60_000;
+        void emit("keep-awake-changed", awakeUntil);
+        return awakeUntil;
+      case "keep_awake_stop":
+        awakeUntil = null;
+        void emit("keep-awake-changed", null);
+        return null;
+      case "keep_awake_status":
+        return awakeUntil;
       case "assistant_quick_undo":
         undone.push(a.undo as string[]);
         running = null;

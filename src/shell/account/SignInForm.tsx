@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useAssistantName } from "../../features/lemma/persona";
 import {
   confirmEmail,
   requestReset,
@@ -27,8 +28,9 @@ const INTRO: Record<Mode, string> = {
   waitlisted: "",
 };
 
-export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void }) {
-  const [mode, setMode] = useState<Mode>("sign-in");
+/** `signUp`: goes up each time creating an account is asked for elsewhere (e.g. by Lemma), and the form switches to it. */
+export function SignInForm({ onDone, signUp: wantsSignUp = 0 }: { onDone: (status: AccountStatus) => void; signUp?: number }) {
+  const [mode, setMode] = useState<Mode>(wantsSignUp ? "sign-up" : "sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -39,6 +41,13 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
     setMode(next);
     setError(null);
   };
+  // Asked for again while the form's open.
+  useEffect(() => {
+    if (wantsSignUp) switchTo("sign-up");
+    // `switchTo` is recreated each render; a new request is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsSignUp]);
+  const me = useAssistantName();
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -117,6 +126,7 @@ export function SignInForm({ onDone }: { onDone: (status: AccountStatus) => void
       ) : (
         <p className="account-intro">
           {INTRO[mode]}
+          {mode === "sign-up" && ` It's also how you chat with ${me}.`}
           {mode !== "forgot" && " Axiom works fully without one, and your data stays on this computer either way."}
         </p>
       )}

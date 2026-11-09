@@ -95,15 +95,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Account API regression checks
-        run: node ../tests/site-account-api.mjs
+      - name: Account and security regression checks
+        run: node --test ../tests/site-account-api.mjs ../tests/site-security.mjs ../tests/web-links.mjs ../tests/keep-awake.mjs
 
       # Type-checks and prerenders every page, as Vercel does.
       - name: Build
         run: npm run build
 
       - name: npm audit
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=moderate
 
   audit:
     name: Security audit
@@ -116,7 +116,7 @@ jobs:
           node-version: lts/*
 
       - name: npm audit
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=moderate
 
       - uses: taiki-e/install-action@v2
         with:

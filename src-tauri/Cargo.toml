@@ -70,5 +70,5 @@ tauri-plugin-updater = { version = "2", default-features = false, features = ["r
 # notices time away from the computer (see `desk::desk_state`), chimes, and
 # finds roughly where it is for the weather (`desk::desk_weather`).
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62", features = ["Win32_UI_Shell", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_SystemInformation", "Win32_Media_Audio", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_Com", "Foundation", "Devices_Geolocation"] }
+windows = { version = "0.62", features = ["Win32_UI_Shell", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_SystemInformation", "Win32_System_Power", "Win32_Media_Audio", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_Com", "Foundation", "Devices_Geolocation"] }
 windows-registry = "0.6"

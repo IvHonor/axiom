@@ -56,22 +56,22 @@ fn get<V: Clone>(map: &Mutex<HashMap<String, (V, Instant)>>, key: &str) -> Optio
     map.get(key).filter(|(_, at)| at.elapsed() < KEEP_FOR).map(|(value, _)| value.clone())
 }
 
-fn put<V>(map: &Mutex<HashMap<String, (V, Instant)>>, key: String, value: V) {
-    let mut map = map.lock().unwrap();
-    if map.len() >= MAX_ENTRIES {
-        map.clear();
-    }
-    map.insert(key, (value, Instant::now()));
-}
-
 impl Cache {
     /// Read before going to the database; pass it to `keep_*` afterwards.
     pub fn generation(&self) -> u64 {
         self.generation.load(Ordering::SeqCst)
     }
 
-    fn unchanged_since(&self, generation: u64) -> bool {
-        self.generation() == generation
+    fn put<V>(&self, map: &Mutex<HashMap<String, (V, Instant)>>, generation: u64, key: String, value: V) {
+        let mut map = map.lock().unwrap();
+        // Check while holding the same lock invalidation uses to remove entries.
+        if self.generation() != generation {
+            return;
+        }
+        if map.len() >= MAX_ENTRIES {
+            map.clear();
+        }
+        map.insert(key, (value, Instant::now()));
     }
 
     pub fn session(&self, session_id: &str) -> Option<String> {
@@ -79,9 +79,7 @@ impl Cache {
     }
 
     pub fn keep_session(&self, generation: u64, session_id: &str, user_id: &str) {
-        if self.unchanged_since(generation) {
-            put(&self.sessions, session_id.into(), user_id.into());
-        }
+        self.put(&self.sessions, generation, session_id.into(), user_id.into());
     }
 
     pub fn account(&self, user_id: &str) -> Option<user::Model> {
@@ -89,9 +87,7 @@ impl Cache {
     }
 
     pub fn keep_account(&self, generation: u64, account: &user::Model) {
-        if self.unchanged_since(generation) {
-            put(&self.accounts, account.id.clone(), account.clone());
-        }
+        self.put(&self.accounts, generation, account.id.clone(), account.clone());
     }
 
     /// After any change to a user's account row or sessions (signing out a
@@ -108,9 +104,7 @@ impl Cache {
     }
 
     pub fn keep_spaces(&self, generation: u64, user_id: &str, spaces: &[Space]) {
-        if self.unchanged_since(generation) {
-            put(&self.spaces, user_id.into(), spaces.to_vec());
-        }
+        self.put(&self.spaces, generation, user_id.into(), spaces.to_vec());
     }
 
     pub fn space_seq(&self, space_id: &str) -> Option<i64> {
@@ -118,9 +112,7 @@ impl Cache {
     }
 
     pub fn keep_space_seq(&self, generation: u64, space_id: &str, seq: i64) {
-        if self.unchanged_since(generation) {
-            put(&self.space_seqs, space_id.into(), seq);
-        }
+        self.put(&self.space_seqs, generation, space_id.into(), seq);
     }
 
     /// After any change to a shared board, its members or its records.

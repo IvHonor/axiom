@@ -70,6 +70,18 @@ try {
   await page.getByRole("button", { name: "New sticky note", exact: true }).click();
   await card("note-9").waitFor();
   assert.deepEqual(await xy("note-1"), beforeEdit);
+  // New sticky notes stay off the overview unless that's been switched on.
+  const onOverview = id => page.evaluate(id => JSON.parse(localStorage.getItem("fixture.sticky-notes")).find(d => d.note.id === id).note.onOverview, id);
+  assert.equal(await onOverview("note-9"), false, "a new sticky note isn't put on the overview");
+  await page.getByRole("switch", { name: "Put new sticky notes on my overview" }).click();
+  assert.equal(await page.evaluate(() => localStorage.getItem("axiom.notes.stickyToOverview")), "true");
+  await page.getByRole("button", { name: "New yellow sticky note", exact: true }).click();
+  await card("note-10").waitFor();
+  assert.equal(await onOverview("note-10"), true, "switched on, new ones go on the overview");
+  await page.getByRole("switch", { name: "Put new sticky notes on my overview" }).click();
+  await card("note-10").getByRole("button", { name: "Sticky note options", exact: true }).click();
+  await page.getByRole("button", { name: "Move to the trash", exact: true }).click();
+  await card("note-10").waitFor({ state: "detached" });
   await card("note-9").getByRole("button", { name: "Sticky note options", exact: true }).click();
   await page.getByRole("button", { name: "Move to the trash", exact: true }).click();
   await card("note-9").waitFor({ state: "detached" });
@@ -77,6 +89,44 @@ try {
   await page.reload({ waitUntil: "domcontentloaded" }); await card("note-1").waitFor();
   await card("note-1").locator("[contenteditable=true]").getByText("A note I can still edit", { exact: true }).waitFor();
   console.log("PASS: editing and saving text, colour, overview toggle, new notes and trash preserve positions");
+
+  // Resizing from the corner: bigger, not smaller than the least, Escape cancels, the keyboard
+  // resizes, and the size survives a reload and a move.
+  const size = id => card(id).evaluate(node => ({ w: node.offsetWidth, h: node.offsetHeight }));
+  const corner = async id => {
+    await card(id).hover();
+    const grip = card(id).locator(".nt-board-resize");
+    await grip.scrollIntoViewIfNeeded();
+    const box = await grip.boundingBox();
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2, grip };
+  };
+  const pull = async (id, dx, dy, cancel = false) => {
+    const { x, y } = await corner(id);
+    await page.mouse.move(x, y); await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 8 });
+    if (cancel) await page.keyboard.press("Escape");
+    await page.mouse.up();
+  };
+  // Note 6: nothing has been stacked over it.
+  const placeBefore = await xy("note-6");
+  assert.deepEqual(await size("note-6"), { w: 240, h: 240 });
+  await pull("note-6", 100, 60);
+  assert.deepEqual(await size("note-6"), { w: 340, h: 300 });
+  assert.deepEqual(await xy("note-6"), placeBefore, "resizing doesn't move it");
+  assert.deepEqual((await saved())["note-6"].w, 340);
+  await pull("note-6", -600, -600);
+  assert.deepEqual(await size("note-6"), { w: 160, h: 160 }, "no smaller than the least");
+  await pull("note-6", 200, 200, true);
+  assert.deepEqual(await size("note-6"), { w: 160, h: 160 }, "Escape cancels a resize");
+  const { grip } = await corner("note-6");
+  await grip.focus(); await page.keyboard.press("ArrowRight"); await page.keyboard.press("Shift+ArrowDown");
+  assert.deepEqual(await size("note-6"), { w: 170, h: 161 }, "arrow keys resize");
+  await page.reload({ waitUntil: "domcontentloaded" }); await card("note-6").waitFor();
+  assert.deepEqual(await size("note-6"), { w: 170, h: 161 }, "the size is kept");
+  await move("note-6", 40, 30);
+  assert.deepEqual(await size("note-6"), { w: 170, h: 161 }, "moving keeps the size");
+  await page.screenshot({ path: ".qa.local/sticky-board/resized.png" });
+  console.log("PASS: resizing from the corner, its limits, Escape, the keyboard, and keeping the size");
 
   const beforeScroll = await xy("note-1");
   await move("note-1", 60, 0, false);

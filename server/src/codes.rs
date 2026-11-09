@@ -4,7 +4,8 @@
 //! a code up.
 
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
+use sea_orm::sea_query::{Expr, ExprTrait};
 
 use crate::AppState;
 use crate::auth::tokens::hash_token;
@@ -36,10 +37,12 @@ impl Purpose {
 pub async fn send(s: &AppState, user: &user::Model, purpose: Purpose) -> Result<(), ApiError> {
     let code = new_reset_code();
     let now = Utc::now();
+    let txn = s.db.begin().await?;
+    crate::auth::locked_user(&txn, &user.id).await?;
     email_code::Entity::delete_many()
         .filter(email_code::Column::UserId.eq(&user.id))
         .filter(email_code::Column::Purpose.eq(purpose.as_str()))
-        .exec(&s.db)
+        .exec(&txn)
         .await?;
     email_code::ActiveModel {
         id: Set(new_id()),
@@ -51,8 +54,9 @@ pub async fn send(s: &AppState, user: &user::Model, purpose: Purpose) -> Result<
         expires_at: Set(now + chrono::Duration::minutes(MINUTES)),
         used_at: Set(None),
     }
-    .insert(&s.db)
+    .insert(&txn)
     .await?;
+    txn.commit().await?;
 
     let email = match purpose {
         Purpose::ConfirmEmail => mail::confirm_code(&user.email, &code, MINUTES),
@@ -69,27 +73,30 @@ pub async fn send(s: &AppState, user: &user::Model, purpose: Purpose) -> Result<
 }
 
 /// Uses up the user's code for `purpose` if `code` is it.
-pub async fn check(s: &AppState, user_id: &str, purpose: Purpose, code: &str) -> Result<(), ApiError> {
+pub async fn check(db: &impl ConnectionTrait, user_id: &str, purpose: Purpose, code: &str) -> Result<(), ApiError> {
     let now = Utc::now();
     let found = email_code::Entity::find()
         .filter(email_code::Column::UserId.eq(user_id))
         .filter(email_code::Column::Purpose.eq(purpose.as_str()))
         .filter(email_code::Column::UsedAt.is_null())
         .filter(email_code::Column::ExpiresAt.gt(now))
-        .one(&s.db)
+        .one(db)
         .await?
         .ok_or_else(|| ApiError::bad_request(WRONG_CODE))?;
     if found.attempts >= ATTEMPTS {
         return Err(ApiError::bad_request("Too many wrong codes. Ask for a new one."));
     }
     let right = found.code_hash == hash_token(&normalize_code(code));
-    let attempts = found.attempts + 1;
-    let mut found: email_code::ActiveModel = found.into();
+    let mut update = email_code::Entity::update_many()
+        .filter(email_code::Column::Id.eq(found.id))
+        .filter(email_code::Column::UsedAt.is_null())
+        .filter(email_code::Column::ExpiresAt.gt(Utc::now()))
+        .filter(email_code::Column::Attempts.lt(ATTEMPTS));
     if right {
-        found.used_at = Set(Some(now));
+        update = update.col_expr(email_code::Column::UsedAt, Expr::value(Some(now)));
     } else {
-        found.attempts = Set(attempts);
+        update = update.col_expr(email_code::Column::Attempts, Expr::col(email_code::Column::Attempts).add(1));
     }
-    found.update(&s.db).await?;
-    if right { Ok(()) } else { Err(ApiError::bad_request(WRONG_CODE)) }
+    let changed = update.exec(db).await?;
+    if right && changed.rows_affected == 1 { Ok(()) } else { Err(ApiError::bad_request(WRONG_CODE)) }
 }

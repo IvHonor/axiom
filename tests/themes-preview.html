@@ -1,1 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Theme extension checks</title></head><body><div id="root"></div><script type="module" src="./themes-fixture.tsx"></script></body></html>
+<!doctype html><html lang="en"><head><link rel="icon" type="image/svg+xml" href="/favicon.svg"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Theme extension checks</title><script>
+  // An existing install, not Axiom's first run here (src/shell/firstRun.ts): every area on, no tour.
+  try { if (localStorage.getItem("axiom.disabled") === null) localStorage.setItem("axiom.disabled", "[]"); } catch {}
+</script>
+</head><body><div id="root"></div><script type="module" src="./themes-fixture.tsx"></script></body></html>

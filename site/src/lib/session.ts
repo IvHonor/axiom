@@ -3,7 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { call, type Profile, type Session, type User } from "./axiom";
-import { ACCESS_COOKIE, REFRESH_COOKIE, cookieValues } from "./session-cookies";
+import { ACCESS_COOKIE, REFRESH_COOKIE, BROWSER_SESSION_COOKIE, cookieValues } from "./session-cookies";
 
 export { ACCESS_COOKIE, REFRESH_COOKIE };
 
@@ -22,6 +22,7 @@ export async function clearSession() {
   const jar = await cookies();
   jar.delete(ACCESS_COOKIE);
   jar.delete(REFRESH_COOKIE);
+  jar.delete(BROWSER_SESSION_COOKIE);
 }
 
 /** Whether this browser holds a sign-in, without asking the server. For the header. */

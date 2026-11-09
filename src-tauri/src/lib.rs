@@ -4,6 +4,7 @@ mod app_lock;
 mod db;
 mod desk;
 mod error;
+mod keep_awake;
 mod features;
 mod notifications;
 mod profile;
@@ -43,6 +44,7 @@ pub fn run() {
         .manage(vault::Vault::new(Box::new(vault::Keychain::VAULT)))
         .manage(app_lock::AppLock::new(Box::new(vault::Keychain::APP_LOCK)))
         .manage(ai::Assistant::default())
+        .manage(keep_awake::KeepAwake::default())
         .manage(ai::commands::Turns::default())
         .manage(features::finance::rates::Rates::new(None))
         .manage(features::daily_plan::calendars::accounts::CalendarHub::new(
@@ -128,6 +130,9 @@ pub fn run() {
             desk::desk_weather,
             desk::desk_settle,
             desk::desk_chime,
+            keep_awake::keep_awake_start,
+            keep_awake::keep_awake_stop,
+            keep_awake::keep_awake_status,
             desk::desk_timer_keys,
             desk::desk_open_main,
             ai::commands::assistant_analytics,

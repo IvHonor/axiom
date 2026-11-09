@@ -1,13 +1,18 @@
-import { GripVertical } from "lucide-react";
+import { GripVertical, MoveDiagonal2 } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { usePersistentState } from "../../shell/usePersistentState";
 import { nameOf, type NoteCard } from "./api";
 import { StickyNote } from "./StickyNote";
 
-interface Position { x: number; y: number; z: number }
+/** Where a note sits, how it stacks, and its size (the usual 240 × 240 until it's been resized). */
+interface Position { x: number; y: number; z: number; w?: number; h?: number }
 type Layout = Record<string, Position>;
 const WIDTH = 240, HEIGHT = 240, GAP = 28, MARGIN = 16, LIMIT = 50000;
+/** How small and big a note can be dragged: small enough for a word, big enough for a list. */
+const MIN_SIZE = 160, MAX_SIZE = 640;
 const clamp = (value: number) => Math.max(MARGIN, Math.min(LIMIT, value));
+const clampSize = (value: number) => Math.round(Math.max(MIN_SIZE, Math.min(MAX_SIZE, value)));
+const sizeOf = (p: Position) => ({ w: p.w ?? WIDTH, h: p.h ?? HEIGHT });
 const steps: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
 };
@@ -16,7 +21,9 @@ function readLayout(value: unknown): Layout {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).flatMap(([id, p]) =>
     p && typeof p === "object" && [p.x, p.y, p.z].every((n) => typeof n === "number" && Number.isFinite(n))
-      ? [[id, { x: clamp(p.x), y: clamp(p.y), z: Math.max(0, Math.min(1000000, p.z)) }]] : []));
+      ? [[id, { x: clamp(p.x), y: clamp(p.y), z: Math.max(0, Math.min(1000000, p.z)),
+        ...(typeof p.w === "number" && Number.isFinite(p.w) ? { w: clampSize(p.w) } : {}),
+        ...(typeof p.h === "number" && Number.isFinite(p.h) ? { h: clampSize(p.h) } : {}) }]] : []));
 }
 
 interface Drag {
@@ -35,6 +42,9 @@ export function StickyCanvas({ notes, autofocusId, onOpen }: {
   const drag = useRef<Drag | null>(null);
   const [preview, setPreview] = useState<{ id: string; position: Position } | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  /** A note being resized from its corner: its size so far, shown before it's saved. */
+  const [sizing, setSizing] = useState<{ id: string; w: number; h: number } | null>(null);
+  const resize = useRef<{ id: string; pointer: number; startX: number; startY: number; w: number; h: number } | null>(null);
   const [width, setWidth] = useState(0);
   const layout = { ...saved };
   const columns = Math.max(1, Math.floor((width - MARGIN * 2 + GAP) / (WIDTH + GAP)));
@@ -44,7 +54,7 @@ export function StickyCanvas({ notes, autofocusId, onOpen }: {
     let slot = 0;
     let x = MARGIN, y = MARGIN;
     // Only new notes find an empty place. Moving a note never displaces another.
-    while (Object.values(layout).some((p) => Math.abs(p.x - x) < WIDTH + GAP && Math.abs(p.y - y) < HEIGHT + GAP)) {
+    while (Object.values(layout).some((p) => x < p.x + sizeOf(p).w + GAP && p.x < x + WIDTH + GAP && y < p.y + sizeOf(p).h + GAP && p.y < y + HEIGHT + GAP)) {
       slot++;
       x = MARGIN + (slot % columns) * (WIDTH + GAP);
       y = MARGIN + Math.floor(slot / columns) * (HEIGHT + GAP);
@@ -83,12 +93,21 @@ export function StickyCanvas({ notes, autofocusId, onOpen }: {
       setAnnouncement("Sticky note moved");
     }
   };
+  const cancelResize = () => {
+    if (!resize.current) return;
+    resize.current = null;
+    setSizing(null);
+    setAnnouncement("Resize cancelled");
+  };
+  /** Saves a note's new size (keeping where it is and how it stacks). */
+  const saveSize = (id: string, w: number, h: number) =>
+    setSaved((previous) => ({ ...previous, [id]: { ...(previous[id] ?? layout[id]), w: clampSize(w), h: clampSize(h) } }));
   const finishRef = useRef(finish);
   finishRef.current = finish;
   useEffect(() => {
-    const cancel = () => finishRef.current(true);
+    const cancel = () => { finishRef.current(true); cancelResize(); };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && drag.current) { event.preventDefault(); cancel(); }
+      if (event.key === "Escape" && (drag.current || resize.current)) { event.preventDefault(); cancel(); }
     };
     const visibility = () => { if (document.hidden) cancel(); };
     window.addEventListener("keydown", escape);
@@ -144,15 +163,18 @@ export function StickyCanvas({ notes, autofocusId, onOpen }: {
       scrollX: node.scrollLeft, scrollY: node.scrollTop, frame: requestAnimationFrame(tick), active: false };
   };
 
-  const positions = notes.map((note) => preview?.id === note.id ? preview.position : layout[note.id]);
-  const canvasWidth = Math.max(width, ...positions.map((p) => p.x + WIDTH + MARGIN));
-  const canvasHeight = Math.max(400, ...positions.map((p) => p.y + HEIGHT + 100));
+  const sized = (id: string) => sizing?.id === id ? { w: sizing.w, h: sizing.h } : sizeOf(layout[id]);
+  const positions = notes.map((note) => ({ ...(preview?.id === note.id ? preview.position : layout[note.id]), ...sized(note.id) }));
+  const canvasWidth = Math.max(width, ...positions.map((p) => p.x + p.w + MARGIN));
+  const canvasHeight = Math.max(400, ...positions.map((p) => p.y + p.h + 100));
   return <div className="nt-board" ref={viewport} role="region" aria-label="Sticky note board">
     <div className="nt-board-canvas" style={{ width: canvasWidth, height: canvasHeight }}>
       {notes.map((note) => {
         const position = preview?.id === note.id ? preview.position : layout[note.id];
-        return <div key={note.id} data-note-id={note.id} className={`nt-board-slot${preview?.id === note.id ? " is-moving" : ""}`}
-          style={{ left: position.x, top: position.y, zIndex: layout[note.id].z }}
+        const size = sized(note.id);
+        const label = nameOf(note) || "sticky note";
+        return <div key={note.id} data-note-id={note.id} className={`nt-board-slot${preview?.id === note.id ? " is-moving" : ""}${sizing?.id === note.id ? " is-resizing" : ""}`}
+          style={{ left: position.x, top: position.y, width: size.w, height: size.h, zIndex: layout[note.id].z }}
           onPointerDownCapture={() => front(note.id)} onFocusCapture={() => front(note.id)}
           onPointerDown={(event) => start(event, note.id)}
           onPointerMove={(event) => {
@@ -179,6 +201,41 @@ export function StickyCanvas({ notes, autofocusId, onOpen }: {
                 });
                 setAnnouncement(`${nameOf(note) || "Sticky note"} moved`);
               }}><GripVertical size={14} strokeWidth={1.75} /></button>} />
+          <button type="button" className="nt-board-resize" aria-label={`Resize ${label}`}
+            title="Drag to resize. Arrow keys resize 10px; Shift resizes 1px. Escape cancels a drag."
+            onPointerDown={(event) => {
+              if (event.button !== 0 || !event.isPrimary || drag.current) return;
+              event.preventDefault();
+              event.stopPropagation();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              const { w, h } = sizeOf(layout[note.id]);
+              resize.current = { id: note.id, pointer: event.pointerId, startX: event.clientX, startY: event.clientY, w, h };
+              setSizing({ id: note.id, w, h });
+            }}
+            onPointerMove={(event) => {
+              const current = resize.current;
+              if (current?.pointer !== event.pointerId) return;
+              setSizing({ id: current.id, w: clampSize(current.w + event.clientX - current.startX), h: clampSize(current.h + event.clientY - current.startY) });
+            }}
+            onPointerUp={(event) => {
+              const current = resize.current;
+              if (current?.pointer !== event.pointerId) return;
+              resize.current = null;
+              saveSize(current.id, current.w + event.clientX - current.startX, current.h + event.clientY - current.startY);
+              setSizing(null);
+              setAnnouncement(`${nameOf(note) || "Sticky note"} resized`);
+            }}
+            onPointerCancel={cancelResize}
+            onLostPointerCapture={() => { if (resize.current) cancelResize(); }}
+            onKeyDown={(event) => {
+              const step = steps[event.key];
+              if (!step || resize.current) return;
+              event.preventDefault();
+              const distance = event.shiftKey ? 1 : 10;
+              const { w, h } = sizeOf(layout[note.id]);
+              saveSize(note.id, w + step[0] * distance, h + step[1] * distance);
+              setAnnouncement(`${nameOf(note) || "Sticky note"} resized`);
+            }}><MoveDiagonal2 size={12} strokeWidth={2} /></button>
         </div>;
       })}
     </div>

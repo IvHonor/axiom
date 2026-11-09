@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ACCESS_COOKIE, REFRESH_COOKIE, cookieValues } from "@/lib/session-cookies";
+import { ACCESS_COOKIE, REFRESH_COOKIE, BROWSER_SESSION_COOKIE, cookieValues } from "@/lib/session-cookies";
 import type { Session } from "@/lib/axiom";
 import { accountErrorCode, accountServerUrl } from "@/lib/account-server";
 
@@ -37,10 +37,11 @@ export async function proxy(request: NextRequest) {
   if (!session) {
     const response = NextResponse.next();
     response.cookies.delete(REFRESH_COOKIE);
+    response.cookies.delete(BROWSER_SESSION_COOKIE);
     return response;
   }
   // The page rendering now sees the new cookies, and the browser keeps them.
-  const fresh = cookieValues(session);
+  const fresh = cookieValues(session, request.cookies.get(BROWSER_SESSION_COOKIE)?.value);
   for (const cookie of fresh) request.cookies.set(cookie.name, cookie.value);
   const response = NextResponse.next({ request: { headers: request.headers } });
   for (const cookie of fresh) response.cookies.set(cookie);

@@ -34,7 +34,8 @@ api.save = async (id, update, text, words) => {
 api.change = async (id, change) => { Object.assign(find(id).note, change); save(); return find(id).note; };
 api.trash = async (id) => { find(id).note.trashedAt = "2026-11-08T12:00:00Z"; save(); };
 api.create = async (input) => {
-  const note: Note = { ...notes[0].note, ...input, id: `note-${notes.length + 1}`, title: `Note ${notes.length + 1}`, text: "", words: 0 };
+  // Like the real database: off the overview unless asked.
+  const note: Note = { ...notes[0].note, onOverview: false, ...input, id: `note-${notes.length + 1}`, title: `Note ${notes.length + 1}`, text: "", words: 0 };
   notes = [...notes, { note, tags: [], edits: [], backlinks: [] }]; save(); return note;
 };
 applyTheme(modernThemes.themes![new URLSearchParams(location.search).has("light") ? 1 : 0]);

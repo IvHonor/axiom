@@ -29,7 +29,9 @@ try {
   await item("University").focus(); await page.keyboard.press("Space");
   await page.locator(".activity-sortable.is-dragging").waitFor();
   await page.keyboard.press("ArrowDown");
-  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  // Drop only once the move has registered: the screen-reader announcement says what it's over now
+  // (a fixed couple of frames wasn't always enough on a busy machine).
+  await page.waitForFunction(() => [...document.querySelectorAll('[id^="DndLiveRegion"]')].some(region => /moved over droppable area (?!area:uni\b)/.test(region.textContent ?? "")));
   await page.keyboard.press("Space");
   await page.waitForFunction(() => document.querySelectorAll('.activity-sortable')[1]?.getAttribute('aria-label') === 'University');
   assert.equal((await order())[1], "University", "Keyboard sorting works");

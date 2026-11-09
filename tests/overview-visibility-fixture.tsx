@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { EXTENSIONS } from "../src/extensions";
 import { ActivityBar, type SidePanel } from "../src/shell/ActivityBar";
 import { AreasPanel } from "../src/shell/AreasPanel";
-import { ExtensionsPanel, type ExtensionKind } from "../src/shell/ExtensionsPanel";
+import { ExtensionsPanel } from "../src/shell/ExtensionsPanel";
 import { OverviewView } from "../src/shell/views/OverviewView";
 import { ThemeProvider } from "../src/shell/theme/ThemeProvider";
 import { useInstalled } from "../src/shell/useInstalled";
@@ -21,7 +21,6 @@ function Fixture() {
   const { hiddenIds, setHidden } = useOverviewVisibility();
   const [panel, setPanel] = useState<SidePanel | null>("areas");
   const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<ExtensionKind>("all");
   const [opened, setOpened] = useState("");
   const [dialog, setDialog] = useState(false);
   const installed = EXTENSIONS.filter(isOn);
@@ -36,7 +35,7 @@ function Fixture() {
           admin={{open: opened === "admin", onOpen: () => setOpened("admin")}}
           onToggle={next => setPanel(previous => previous === next ? null : next)} hiddenIds={hiddenIds} onVisibilityChange={setHidden} />
         <SidebarFrame open={panel !== null}>
-        {panel === "extensions" ? <ExtensionsPanel query={query} onQueryChange={setQuery} kind={kind} onKindChange={setKind}
+        {panel === "extensions" ? <ExtensionsPanel query={query} onQueryChange={setQuery}
           installedIds={installedIds} selectedId={null} onOpen={setOpened} onInstall={install} onUninstall={uninstall}
           isOn={isOn} onEnabledChange={setEnabled}
           hiddenIds={hiddenIds} onVisibilityChange={setHidden} />

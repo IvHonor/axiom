@@ -1,3 +1,7 @@
 <!doctype html>
-<html><head><meta charset="UTF-8" /><title>Overview visibility checks</title></head>
+<html><head><link rel="icon" type="image/svg+xml" href="/favicon.svg"><meta charset="UTF-8" /><title>Overview visibility checks</title><script>
+  // An existing install, not Axiom's first run here (src/shell/firstRun.ts): every area on, no tour.
+  try { if (localStorage.getItem("axiom.disabled") === null) localStorage.setItem("axiom.disabled", "[]"); } catch {}
+</script>
+</head>
 <body><div id="root"></div><script type="module" src="./overview-visibility-fixture.tsx"></script></body></html>

@@ -15,7 +15,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 use sea_orm::sea_query::{Condition, Expr};
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set, SqlErr, TransactionTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect, Set, SqlErr, TransactionTrait};
 
 use crate::AppState;
 use crate::codes::{self, Purpose};
@@ -49,19 +49,10 @@ pub async fn sign_up(State(s): State<AppState>, ip: ClientIp, Json(body): Json<C
     let login_key = is_login_key(&body.password);
     let terms = accepted.then(|| TERMS_VERSION.to_owned());
     if let Some(existing) = find_user(&s, &email).await? {
-        // Never confirmed: whoever reads the address can sign up over it, so
-        // nobody can hold someone else's email hostage.
+        // Only the mailbox owner may replace credentials, when confirming.
         if s.confirm_emails && existing.email_confirmed_at.is_none() {
-            let mut active: user::ActiveModel = existing.into();
-            active.password_hash = Set(password::hash(body.password).await?);
-            active.login_key = Set(login_key);
-            active.created_at = Set(now);
-            active.terms_version = Set(terms);
-            active.terms_accepted_at = Set(accepted.then_some(now));
-            let user = active.update(&s.db).await?;
-            s.cache.forget_user(&user.id);
-            send_confirmation_code(&s, &user).await?;
-            return Ok(pending(user.email, true));
+            send_confirmation_code(&s, &existing).await?;
+            return Ok(pending(existing.email, true));
         }
         if !s.is_approved(&existing) {
             return Err(ApiError::new(StatusCode::CONFLICT, WAITING));
@@ -137,6 +128,10 @@ fn tell_admins(s: &AppState, email: &str) {
 /// sign in: the app signs in with the password next.
 pub async fn confirm_email(State(s): State<AppState>, ip: ClientIp, Json(body): Json<ConfirmEmail>) -> Result<StatusCode, ApiError> {
     s.limits.check_ip(&ip)?;
+    if body.password.is_empty() {
+        return Err(ApiError::bad_request("Update Axiom and confirm again so your chosen password can be secured."));
+    }
+    check_password(&body.password).map_err(ApiError::bad_request)?;
     let email = normalize_email(&body.email);
     // An account that's already confirmed answers like a wrong code, so this
     // can't be used to find out who has one.
@@ -144,10 +139,22 @@ pub async fn confirm_email(State(s): State<AppState>, ip: ClientIp, Json(body): 
         .await?
         .filter(|u| u.email_confirmed_at.is_none())
         .ok_or_else(|| ApiError::bad_request(WRONG_CODE))?;
-    codes::check(&s, &user.id, Purpose::ConfirmEmail, &body.code).await?;
+    let login_key = is_login_key(&body.password);
+    let password_hash = password::hash(body.password).await?;
+    let txn = s.db.begin().await?;
+    let user = locked_user(&txn, &user.id).await?;
+    if user.email_confirmed_at.is_some() { return Err(ApiError::bad_request(WRONG_CODE)); }
+    if let Err(wrong) = codes::check(&txn, &user.id, Purpose::ConfirmEmail, &body.code).await {
+        // Keep the wrong try counted: rolling back would undo it, and allow endless guesses.
+        txn.commit().await?;
+        return Err(wrong);
+    }
     let mut active: user::ActiveModel = user.into();
+    active.password_hash = Set(password_hash);
+    active.login_key = Set(login_key);
     active.email_confirmed_at = Set(Some(Utc::now()));
-    let user = active.update(&s.db).await?;
+    let user = active.update(&txn).await?;
+    txn.commit().await?;
     s.cache.forget_user(&user.id);
     if !s.is_approved(&user) {
         tell_admins(&s, &user.email);
@@ -181,8 +188,9 @@ pub async fn sign_in(State(s): State<AppState>, ip: ClientIp, Json(body): Json<C
 
     let user = find_user(&s, &email).await?;
     let stored = user.as_ref().map(|u| u.password_hash.clone());
+    let verified = password::verify(body.password.clone(), stored).await;
     let user = match user {
-        Some(user) if password::verify(body.password.clone(), stored).await => user,
+        Some(user) if verified => user,
         Some(user) if still_plain(&user, &body.password) => return Err(plain_password()),
         _ => {
             // Unknown email and wrong password look identical, so the form
@@ -230,10 +238,28 @@ pub async fn refresh(State(s): State<AppState>, Json(body): Json<RefreshRequest>
                 .one(&s.db)
                 .await?;
             match replaced {
-                // The app never got the answer to its last refresh (it closed,
-                // or the computer slept, mid-request): it hasn't used the new
-                // tokens, so let it retry, however much later.
-                Some(session) if !session.confirmed || now - session.last_used_at < s.reuse_grace => session,
+                // The same refresh again: asked twice at once (a web page's
+                // requests renewing together), or the app never got the answer
+                // (it closed, or the computer slept, mid-request) and hasn't
+                // used the new tokens. Give the same new token again, so
+                // neither copy cuts the other off; however much later, if it
+                // was never used.
+                Some(session) if !session.confirmed || now - session.last_used_at < s.reuse_grace => {
+                    let again = s.keys.rotated_refresh_token(&session.id, &presented);
+                    if hash_token(&again) != session.refresh_hash {
+                        // Swapped before tokens were derived: swap it again, as then.
+                        session
+                    } else {
+                        if session.expires_at < now {
+                            return Err(ApiError::unauthorized(SIGNED_OUT));
+                        }
+                        let user = user::Entity::find_by_id(&session.user_id)
+                            .one(&s.db)
+                            .await?
+                            .ok_or_else(|| ApiError::unauthorized(SIGNED_OUT))?;
+                        return Ok(Json(issue(&s, user, &session.id, again)));
+                    }
+                }
                 // The new tokens are in use, so the old one has been copied.
                 // End the session, so neither copy works any more.
                 Some(session) => {
@@ -252,7 +278,7 @@ pub async fn refresh(State(s): State<AppState>, Json(body): Json<RefreshRequest>
         .await?
         .ok_or_else(|| ApiError::unauthorized(SIGNED_OUT))?;
 
-    let refresh_token = new_refresh_token();
+    let refresh_token = s.keys.rotated_refresh_token(&session.id, &presented);
     let mut active: session::ActiveModel = session.into();
     active.refresh_hash = Set(hash_token(&refresh_token));
     active.previous_hash = Set(Some(presented));
@@ -305,8 +331,10 @@ pub async fn forgot_password(State(s): State<AppState>, ip: ClientIp, Json(body)
     if let Some(user) = find_user(&s, &email).await? {
         let code = new_reset_code();
         let now = Utc::now();
+        let txn = s.db.begin().await?;
+        let user = locked_user(&txn, &user.id).await?;
         // A new code replaces any earlier one.
-        password_reset::Entity::delete_many().filter(password_reset::Column::UserId.eq(&user.id)).exec(&s.db).await?;
+        password_reset::Entity::delete_many().filter(password_reset::Column::UserId.eq(&user.id)).exec(&txn).await?;
         password_reset::ActiveModel {
             id: Set(new_id()),
             user_id: Set(user.id),
@@ -316,8 +344,9 @@ pub async fn forgot_password(State(s): State<AppState>, ip: ClientIp, Json(body)
             expires_at: Set(now + chrono::Duration::minutes(RESET_CODE_MINUTES)),
             used_at: Set(None),
         }
-        .insert(&s.db)
+        .insert(&txn)
         .await?;
+        txn.commit().await?;
 
         // Send in the background: waiting on the email provider would make
         // real accounts answer slower than unknown ones.
@@ -350,19 +379,29 @@ pub async fn reset_password(State(s): State<AppState>, ip: ClientIp, Json(body):
         return Err(ApiError::bad_request("Too many wrong codes. Ask for a new one."));
     }
     if reset.code_hash != hash_token(&normalize_code(&body.code)) {
-        let attempts = reset.attempts + 1;
-        let mut reset: password_reset::ActiveModel = reset.into();
-        reset.attempts = Set(attempts);
-        reset.update(&s.db).await?;
+        password_reset::Entity::update_many()
+            .col_expr(password_reset::Column::Attempts, sea_orm::sea_query::ExprTrait::add(Expr::col(password_reset::Column::Attempts), 1))
+            .filter(password_reset::Column::Id.eq(reset.id))
+            .filter(password_reset::Column::UsedAt.is_null())
+            .filter(password_reset::Column::Attempts.lt(RESET_CODE_ATTEMPTS))
+            .exec(&s.db).await?;
         return Err(ApiError::bad_request(WRONG_CODE));
     }
 
     let login_key = is_login_key(&body.new_password);
     let password_hash = password::hash(body.new_password).await?;
     let txn = s.db.begin().await?;
-    let mut reset: password_reset::ActiveModel = reset.into();
-    reset.used_at = Set(Some(now));
-    reset.update(&txn).await?;
+    let user = locked_user(&txn, &user.id).await?;
+    let consumed = password_reset::Entity::update_many()
+        .col_expr(password_reset::Column::UsedAt, Expr::value(Some(Utc::now())))
+        .filter(password_reset::Column::Id.eq(reset.id))
+        .filter(password_reset::Column::UsedAt.is_null())
+        .filter(password_reset::Column::ExpiresAt.gt(Utc::now()))
+        .filter(password_reset::Column::Attempts.lt(RESET_CODE_ATTEMPTS))
+        .exec(&txn).await?;
+    if consumed.rows_affected != 1 {
+        return Err(ApiError::bad_request(WRONG_CODE));
+    }
     // The emailed code proves they read the address, so it's confirmed too.
     let confirmed = user.email_confirmed_at.or(Some(now));
     let mut active: user::ActiveModel = user.into();
@@ -495,6 +534,10 @@ pub(crate) async fn signed_in(s: &AppState, headers: &HeaderMap) -> Result<Optio
         .one(&s.db)
         .await?
         .ok_or_else(|| ApiError::unauthorized(SIGNED_OUT))?;
+    // Belt and braces: the token is signed, but the session must be its user's too.
+    if session.user_id != claims.sub {
+        return Err(ApiError::unauthorized(SIGNED_OUT));
+    }
     let owner = session.user_id.clone();
     // A token from the last refresh proves the device got its answer (see `refresh`).
     let confirmed = if !session.confirmed && claims.iat >= session.last_used_at.timestamp().max(0) as u64 {
@@ -514,6 +557,13 @@ pub(crate) async fn signed_in(s: &AppState, headers: &HeaderMap) -> Result<Optio
 
 async fn find_user(s: &AppState, email: &str) -> Result<Option<user::Model>, ApiError> {
     Ok(user::Entity::find().filter(user::Column::Email.eq(email)).one(&s.db).await?)
+}
+
+/// Serialize credential changes and code replacement for the same account.
+pub(crate) async fn locked_user(db: &impl ConnectionTrait, id: &str) -> Result<user::Model, ApiError> {
+    let mut found = user::Entity::find_by_id(id);
+    if db.get_database_backend() == DbBackend::Postgres { found = found.lock_exclusive(); }
+    found.one(db).await?.ok_or_else(|| ApiError::unauthorized(SIGNED_OUT))
 }
 
 async fn start_session(s: &AppState, user: user::Model, device_name: &str) -> Result<Json<Session>, ApiError> {

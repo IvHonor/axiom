@@ -28,7 +28,7 @@ use crate::auth::AuthUser;
 use crate::entities::{new_id, space, space_invite, space_member, space_record, sync_record, user};
 use crate::error::ApiError;
 use crate::mail;
-use crate::sync::{MAX_RECORD_BYTES, MAX_RECORDS_PER_ACCOUNT, PullQuery, merge, parse};
+use crate::sync::{MAX_RECORD_BYTES, MAX_RECORDS_PER_ACCOUNT, PullQuery, check_record_size, check_timestamp, merge, parse};
 
 /// How long an invitation can wait for an answer.
 const INVITE_DAYS: i64 = 14;
@@ -200,6 +200,7 @@ async fn locked_membership(txn: &DatabaseTransaction, space_id: &str, user_id: &
 }
 
 async fn upsert_record(txn: &DatabaseTransaction, space_id: &str, table: &str, id: &str, data: String, field_times: String, seq: i64) -> Result<(), ApiError> {
+    check_record_size(&data, &field_times)?;
     let row = space_record::ActiveModel {
         space_id: Set(space_id.to_owned()),
         table_name: Set(table.to_owned()),
@@ -231,6 +232,7 @@ pub async fn push(State(s): State<AppState>, auth: AuthUser, Path(id): Path<Stri
     if body.changes.iter().any(|c| Value::Object(c.fields.clone()).to_string().len() > MAX_RECORD_BYTES) {
         return Err(ApiError::new(StatusCode::PAYLOAD_TOO_LARGE, "One of your items is too large to sync."));
     }
+    for change in &body.changes { check_timestamp(change.changed_at)?; }
 
     let txn = s.db.begin().await?;
     let (found, role) = locked_membership(&txn, &id, &auth.user_id).await?;

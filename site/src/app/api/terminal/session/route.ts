@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { call } from "@/lib/axiom";
 import { clearSession, currentAccount, REFRESH_COOKIE } from "@/lib/session";
 import { sameOrigin } from "../origin";
+import { BROWSER_SESSION_COOKIE, browserCookie } from "@/lib/session-cookies";
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "private, no-store" } });
 
@@ -9,6 +10,8 @@ const json = (body: unknown, status = 200) => Response.json(body, { status, head
 export async function GET() {
   const account = await currentAccount();
   if (!account) return json({ message: "Sign in to use Axiom on the web." }, 401);
+  const jar = await cookies();
+  if (!jar.has(BROWSER_SESSION_COOKIE)) jar.set(browserCookie());
   return json({ id: account.id, email: account.email, displayName: account.display_name, avatar: account.avatar, admin: account.admin, createdAt: account.created_at });
 }
 

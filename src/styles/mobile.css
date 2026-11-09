@@ -120,6 +120,15 @@
     height: 2px;
   }
 
+  /* Along the bottom: the dot sits under the icon. */
+  .activity-here {
+    top: auto;
+    right: auto;
+    bottom: 1px;
+    left: 50%;
+    margin: 0 0 0 -2px;
+  }
+
   .activitybar-fill {
     flex: 1 0 4px;
   }

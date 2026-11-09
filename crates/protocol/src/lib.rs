@@ -395,6 +395,9 @@ pub struct ConfirmEmail {
     pub email: String,
     /// As emailed, e.g. `K7Q2-M9XD`. Case, spaces and dashes don't matter.
     pub code: String,
+    /// The mailbox owner's chosen login key. Installed only after the code verifies.
+    #[serde(default)]
+    pub password: String,
 }
 
 /// Body of `APP_LOCK_CHECK`.

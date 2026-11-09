@@ -5,27 +5,14 @@ import type { ExtensionManifest } from "../extensions/types";
 import { useLabels } from "./theme/ThemeProvider";
 import { ContextMenu, type MenuPosition } from "./ui/ContextMenu";
 import { Section } from "./ui/Section";
-import { ExtensionIcon, ExtensionPalette } from "./ui/ExtensionIcon";
+import { ExtensionIcon } from "./ui/ExtensionIcon";
 import { OverviewVisibilityItem } from "./ui/AreaContextMenu";
 import { Publisher } from "./ui/Publisher";
 import { Switch } from "./ui/Switch";
 
-/** Which kind of extension the list shows. */
-export type ExtensionKind = "all" | "area" | "theme";
-
-const KINDS: { id: ExtensionKind; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "area", label: "Areas" },
-  { id: "theme", label: "Themes" },
-];
-
-const kindOf = (ext: ExtensionManifest): ExtensionKind => (ext.themes ? "theme" : "area");
-
 interface ExtensionsPanelProps {
   query: string;
   onQueryChange: (query: string) => void;
-  kind: ExtensionKind;
-  onKindChange: (kind: ExtensionKind) => void;
   installedIds: string[];
   /** Installed (or built in) and switched on. */
   isOn: (ext: ExtensionManifest) => boolean;
@@ -39,13 +26,13 @@ interface ExtensionsPanelProps {
   onVisibilityChange?: (id: string, hidden: boolean) => void;
 }
 
-/** The extensions sidebar: search, then the built-in extensions (each can be
- * switched off), and any from the library: installed, available, coming soon. */
+/** The extensions sidebar: search, then the built-in areas (each can be
+ * switched off), and any from the library: installed, available, coming soon.
+ * Areas only: themes have the Themes panel, so someone new looking for what
+ * Axiom can do isn't wading through colour schemes. */
 export function ExtensionsPanel({
   query,
   onQueryChange,
-  kind,
-  onKindChange,
   installedIds,
   isOn,
   onEnabledChange,
@@ -62,7 +49,7 @@ export function ExtensionsPanel({
   const q = query.trim().toLowerCase();
   const matches = EXTENSIONS.filter(
     (ext) =>
-      (kind === "all" || kindOf(ext) === kind) &&
+      !!ext.area &&
       (!q || ext.name.toLowerCase().includes(q) || ext.description.toLowerCase().includes(q)),
   );
   const builtIn = matches.filter((ext) => ext.builtIn);
@@ -97,9 +84,8 @@ export function ExtensionsPanel({
             <Publisher name={ext.publisher} short />
             {!soon && <><span className="ext-meta-sep" aria-hidden="true">{sep}</span><span>v{ext.version}</span></>}
             <span className="ext-meta-sep" aria-hidden="true">{sep}</span>
-            <span>{ext.themes ? label(`${ext.themes.length} ${ext.themes.length === 1 ? "theme" : "themes"}`) : label("Area")}</span>
+            <span>{label("Area")}</span>
           </span>
-          <ExtensionPalette ext={ext} />
         </span>
       </button>
       <div className="ext-footer">
@@ -125,28 +111,12 @@ export function ExtensionsPanel({
     );
   };
 
-  const empty = (text: string) => <p className="sidebar-empty">{q || kind !== "all" ? "No matches." : text}</p>;
+  const empty = (text: string) => <p className="sidebar-empty">{q ? "No matches." : text}</p>;
 
-  /** A section's cards. With both kinds showing, areas and themes get their own sub-heading. */
-  const list = (exts: ExtensionManifest[], canInstall: boolean) => {
-    const groups =
-      kind === "all"
-        ? [
-            { title: "Areas", items: exts.filter((e) => kindOf(e) === "area") },
-            { title: "Themes", items: exts.filter((e) => kindOf(e) === "theme") },
-          ].filter((g) => g.items.length > 0)
-        : [{ title: "", items: exts }];
-    const labelled = groups.length > 1;
-    return groups.map((g) => (
-      <div key={g.title || "all"}>
-        {labelled && <h4 className="ext-group">{g.title}</h4>}
-        <ul className="ext-list">{g.items.map((ext) => card(ext, canInstall))}</ul>
-      </div>
-    ));
-  };
+  const list = (exts: ExtensionManifest[], canInstall: boolean) => <ul className="ext-list">{exts.map((ext) => card(ext, canInstall))}</ul>;
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" data-tour="extensions-panel">
       <header className="sidebar-head">Extensions</header>
       <label className="search">
         <Search size={14} strokeWidth={1.5} />
@@ -157,19 +127,6 @@ export function ExtensionsPanel({
           spellCheck={false}
         />
       </label>
-      <div className="ext-filter" role="tablist" aria-label="Show">
-        {KINDS.map((k) => (
-          <button
-            key={k.id}
-            role="tab"
-            aria-selected={kind === k.id}
-            className={kind === k.id ? "is-active" : undefined}
-            onClick={() => onKindChange(k.id)}
-          >
-            {k.label}
-          </button>
-        ))}
-      </div>
       <div className="sidebar-body">
         <Section title="Built-in" count={builtIn.length}>
           {builtIn.length ? list(builtIn, false) : empty("")}

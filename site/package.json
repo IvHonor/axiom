@@ -23,6 +23,11 @@
     "react-dom": "19.3.0",
     "server-only": "^0.0.1"
   },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    }
+  },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",

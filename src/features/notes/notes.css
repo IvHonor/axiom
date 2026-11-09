@@ -554,6 +554,44 @@
   cursor: grabbing;
 }
 
+/* Drag the corner to make a note bigger or smaller. */
+.nt-board-resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: rgb(45 42 34 / 0.55);
+  border-radius: 4px;
+  cursor: nwse-resize;
+  touch-action: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.nt-board-slot:hover .nt-board-resize,
+.nt-board-resize:focus-visible,
+.nt-board-slot.is-resizing .nt-board-resize {
+  opacity: 1;
+}
+
+.nt-board-resize:hover {
+  background: rgb(0 0 0 / 0.07);
+}
+
+/* Touch screens have no hover: the grip stays in view. */
+@media (hover: none) {
+  .nt-board-resize { opacity: 0.8; }
+}
+
+.nt-board-slot.is-resizing .sticky {
+  transform: rotate(0deg);
+  box-shadow: 0 18px 30px -12px rgb(0 0 0 / 0.5);
+}
+
 /* ---------- A sticky note ---------- */
 
 .sticky {

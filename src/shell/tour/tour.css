@@ -1,0 +1,116 @@
+/* Lemma's tour: the app dimmed, a spotlight on what a step is about, and Lemma's card beside it. */
+
+.tour {
+  position: fixed;
+  inset: 0;
+  /* Over dialogs (50), under the app lock (100). */
+  z-index: 60;
+  pointer-events: none;
+  /* Dark enough to read as "not now" in dark themes and light ones alike. */
+  --tour-dim: rgb(0 0 0 / 0.55);
+}
+
+/* Steps that only talk: clicks don't reach the app underneath. */
+.tour-block {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+}
+
+.tour-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--tour-dim);
+}
+
+/* The spotlight: everything round it dimmed by its shadow. */
+.tour-hole {
+  position: absolute;
+  border-radius: var(--radius);
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 200vmax var(--tour-dim);
+  transition:
+    left 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A step that waits: the spotlight pulses to say "here". */
+.tour.is-waiting .tour-hole {
+  animation: tour-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tour-pulse {
+  50% {
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--accent) 60%, transparent),
+      0 0 0 200vmax var(--tour-dim);
+  }
+}
+
+.tour-card {
+  position: absolute;
+  width: min(340px, calc(100vw - 24px));
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px 12px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.35);
+  pointer-events: auto;
+  transition:
+    left 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tour-face {
+  flex: none;
+  width: 56px;
+  height: 56px;
+}
+
+.tour-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.tour-text h2 {
+  margin: 2px 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tour-text p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.tour-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.tour-count {
+  margin-right: auto;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-hole,
+  .tour-card {
+    transition: none;
+  }
+  .tour.is-waiting .tour-hole {
+    animation: none;
+  }
+}

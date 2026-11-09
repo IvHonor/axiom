@@ -1,6 +1,10 @@
 import { FolderClosed, Pin } from "lucide-react";
 import { MAX_ON_OVERVIEW, api, colorOf, edited, nameOf, type Folder, type NewNote, type NoteCard } from "./api";
 import { notesChanged, setNotesUi } from "./notesUi";
+import { readSetting } from "../../lib/settings";
+
+/** Whether a sticky note made in Notes goes on the overview too. Off unless chosen (on the sticky notes board); synced. */
+export const STICKY_TO_OVERVIEW = "axiom.notes.stickyToOverview";
 
 /** Folders in tree order, each with how deep it sits. */
 export function flatten(folders: Folder[]): { folder: Folder; depth: number }[] {
@@ -53,7 +57,9 @@ export async function newNote(note: NewNote = {}) {
 }
 
 /** Starts a sticky note, on the overview if there's room, ready to type in. */
+/** A sticky note made in Notes: on the overview only if that's been chosen (and there's room). Its own button puts it there any time. */
 export async function newSticky(color?: string) {
+  if (readSetting(STICKY_TO_OVERVIEW) !== true) return newNote({ sticky: true, color });
   const showing = (await api.list({ shelf: "overview" })).length;
   return newNote({ sticky: true, color, onOverview: showing < MAX_ON_OVERVIEW });
 }

@@ -44,13 +44,13 @@ try {
   await expectOrder(["Overview", "Reading Tracker", "Lemma", "Admin"]);
   await drag("Admin", "Reading Tracker");
   await expectOrder(["Overview", "Admin", "Reading Tracker", "Lemma"]);
-  assert.equal(await active(), "assistant", "Dragging an inactive tab preserves the selected page");
+  assert.equal(await active(), "extension:lemma", "Dragging an inactive tab preserves the selected page (an old Lemma tab opens Lemma's area)");
   await drag("Overview", "Lemma");
   await expectOrder(["Admin", "Reading Tracker", "Lemma", "Overview"]);
   const moved = await order();
   await page.reload();
   await expectOrder(moved);
-  assert.equal(await active(), "assistant");
+  assert.equal(await active(), "extension:lemma");
   const beforeCancel = await saved();
   await drag("Lemma", "Admin", true);
   assert.equal(await saved(), beforeCancel, "Escape cancels without persisting the temporary order");

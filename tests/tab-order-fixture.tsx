@@ -5,7 +5,10 @@ import { EXTENSIONS } from "../src/extensions";
 import { TopBar } from "../src/shell/TopBar";
 import { ThemeProvider } from "../src/shell/theme/ThemeProvider";
 import { useTabs } from "../src/shell/useTabs";
-import { ASSISTANT, viewKey } from "../src/shell/view";
+import { viewKey, type View } from "../src/shell/view";
+
+// Lemma is an area like any other now.
+const LEMMA: View = { kind: "extension", id: "lemma" };
 import "../src/styles/theme.css";
 import "../src/styles/shell.css";
 
@@ -19,7 +22,7 @@ function Fixture() {
       <TopBar tabs={tabs} active={active} previewKey={previewKey} onSelect={open} onPin={pin} onClose={close} onReorder={reorder} />
       <main>
         <output data-testid="active">{viewKey(active)}</output>
-        <button onClick={() => open(ASSISTANT)}>Open Lemma</button>
+        <button onClick={() => open(LEMMA)}>Open Lemma</button>
         <button onClick={() => open({ kind: "extension-info", id: "uni" }, { preview: true })}>Preview University</button>
         <button onClick={() => open({ kind: "extension-info", id: "reading" }, { preview: true })}>Preview Reading</button>
         <button onClick={() => closeExtension("reading")}>Disable Reading</button>

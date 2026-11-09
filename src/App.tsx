@@ -1,3 +1,5 @@
+// First: it checks whether Axiom has run here before, before anything else saves a setting.
+import { settleFirstRun, tourDue } from "./shell/firstRun";
 import { useEffect, useRef, useState } from "react";
 import { EXTENSIONS, findExtension } from "./extensions";
 import type { ExtensionManifest } from "./extensions/types";
@@ -5,7 +7,7 @@ import { AccountPanel } from "./shell/AccountPanel";
 import { AppLockScreen } from "./shell/AppLockScreen";
 import { ActivityBar, type SidePanel } from "./shell/ActivityBar";
 import { AreasPanel } from "./shell/AreasPanel";
-import { ExtensionsPanel, type ExtensionKind } from "./shell/ExtensionsPanel";
+import { ExtensionsPanel } from "./shell/ExtensionsPanel";
 import { StatusBar } from "./shell/StatusBar";
 import { ThemeProvider } from "./shell/theme/ThemeProvider";
 import { ThemesPanel } from "./shell/ThemesPanel";
@@ -23,7 +25,10 @@ import { AreaNotifications } from "./shell/notifications/AreaNotifications";
 import { setNotificationsOff } from "./lib/notifications";
 import { AdminView } from "./shell/views/AdminView";
 import { AnalyticsView } from "./shell/views/AnalyticsView";
-import { ADMIN, ANALYTICS, viewKey } from "./shell/view";
+import { ADMIN, ANALYTICS, OVERVIEW, viewKey } from "./shell/view";
+import { usePanelRequests } from "./shell/panelRequests";
+import { Tour } from "./shell/tour/Tour";
+import { startTour, useTourRunning } from "./shell/tour/tourState";
 import { ErrorBoundary } from "./shell/ui/ErrorBoundary";
 import { ExtensionInfoView } from "./shell/views/ExtensionInfoView";
 import { ExtensionView } from "./shell/views/ExtensionView";
@@ -55,7 +60,6 @@ export default function App() {
   const overlay = useOverlaySidebar();
   const [panel, setPanel] = useState<SidePanel | null>(() => (isOverlaySidebar() ? null : "areas"));
   const [extQuery, setExtQuery] = useState("");
-  const [extKind, setExtKind] = useState<ExtensionKind>("all");
 
   // Built in or installed, and switched on: everything else stays out of the way.
   const installed: ExtensionManifest[] = EXTENSIONS.filter(isOn);
@@ -120,19 +124,19 @@ export default function App() {
 
   // The sidebar keeps up with what's open: an area brings its own sidebar
   // (or none, if you closed it there last time), the overview or Analytics
-  // the list of areas. Closed, it stays closed (unless the area's left it
-  // open); a panel you went to yourself (account, themes, extensions) stays
-  // put; and pinned, nothing moves it.
+  // the list of areas. Closed, it stays closed: switching tabs never brings
+  // it out (an area's icon does). A panel you went to yourself (account,
+  // themes, extensions) stays put; and pinned, nothing moves it.
   useEffect(() => {
     if (pinned || !sidebarPrefs.follow) return;
     const target = (shown: SidePanel | null): SidePanel | null => {
-      if (shown !== null && shown !== "areas" && !shown.startsWith("area:")) return shown;
+      if (shown === null) return null;
+      if (shown !== "areas" && !shown.startsWith("area:")) return shown;
       if (openArea && sidebarIds.split(",").includes(openArea)) {
         const wants = sidebarPrefs.perArea ? areaWantsSidebar(openArea) : undefined;
-        if (wants === false || (shown === null && wants !== true)) return null;
+        if (wants === false) return null;
         return `area:${openArea}`;
       }
-      if (shown === null) return null;
       return active.kind === "overview" || active.kind === "analytics" ? "areas" : shown;
     };
     // Tucked away meanwhile: what comes back is what's open now.
@@ -202,11 +206,35 @@ export default function App() {
   const badges = useBadges(areas.map((ext) => ext.id), !!running);
   const [switching, setSwitching] = useState(false);
 
-  const browseThemes = () => {
-    setExtQuery("");
-    setExtKind("theme");
-    setPanel("extensions");
+  // A first run: settled with the account once it's known (an existing one
+  // keeps its own areas and skips the tour), then Lemma shows them round.
+  const touring = useTourRunning();
+  useEffect(() => {
+    if (!account) return;
+    settleFirstRun(account);
+    if (tourDue()) startTour();
+  }, [account]);
+
+  // Clicking into an open area: its sidebar (or the list of areas) slides
+  // away, like a drawer. Nothing's remembered for the area, so it comes
+  // back next time it's picked. Not when pinned, on a phone (it already
+  // closes there) or during the tour.
+  const slideAway = (e: React.PointerEvent<HTMLElement>) => {
+    if (!sidebarPrefs.closeOnUse || pinned || overlay || touring || !openArea) return;
+    if (panel !== "areas" && !panel?.startsWith("area:")) return;
+    // A dialog over the area is portalled elsewhere: clicks in it don't count.
+    if (!e.currentTarget.contains(e.target as Node)) return;
+    tucked.current = null;
+    setPanel(null);
   };
+
+  // Asked for from elsewhere, e.g. Lemma's chat wanting an account made.
+  const [signUp, setSignUp] = useState(0);
+  usePanelRequests((request) => {
+    if (request.signUp) setSignUp((n) => n + 1);
+    keepOnPhone.current = true;
+    choose(request.panel);
+  });
 
   // An area's tab closes when it's switched off or uninstalled (its details page stays open).
   useEffect(() => {
@@ -274,8 +302,6 @@ export default function App() {
           onVisibilityChange={setHidden}
           query={extQuery}
           onQueryChange={setExtQuery}
-          kind={extKind}
-          onKindChange={setExtKind}
           installedIds={installedIds}
           isOn={isOn}
           onEnabledChange={setEnabled}
@@ -285,8 +311,8 @@ export default function App() {
           onUninstall={uninstall}
         />
       );
-    if (p === "account") return <AccountPanel status={account} sync={sync} onChange={setAccount} extensions={areas.map((ext) => ext.id)} />;
-    if (p === "themes") return <ThemesPanel onBrowse={browseThemes} />;
+    if (p === "account") return <AccountPanel status={account} sync={sync} onChange={setAccount} extensions={areas.map((ext) => ext.id)} signUp={signUp} />;
+    if (p === "themes") return <ThemesPanel />;
     const ext = withSidebar.find((e) => p === `area:${e.id}`);
     const Sidebar = ext?.area?.Sidebar;
     if (!ext || !Sidebar) return null;
@@ -344,6 +370,7 @@ export default function App() {
             hiddenIds={hiddenIds}
             onVisibilityChange={setHidden}
             active={panel}
+            current={openArea}
             areas={withSidebar.map((ext) => ({ id: `area:${ext.id}` as const, label: nameOf(ext), icon: ext.icon, extension: ext }))}
             onToggle={togglePanel}
             onPeek={peekAt}
@@ -369,7 +396,7 @@ export default function App() {
               {panelFor(peek)}
             </div>
           )}
-          <main className="main">
+          <main className="main" data-tour="main" onPointerDown={slideAway}>
             <ErrorBoundary key={viewKey(active)}>{main}</ErrorBoundary>
           </main>
         </div>
@@ -379,6 +406,7 @@ export default function App() {
         {switching && <QuickSwitcher areas={areas} onOpen={open} onClose={() => setSwitching(false)} />}
         {updater.offered && <UpdatePrompt status={updater.status} onInstall={updater.install} onLater={updater.later} />}
         <WhatsNew version={status.version} onOpenLemma={() => open({ kind: "extension", id: "lemma" })} />
+        {touring && <Tour areas={areas} panel={panel} onShowOverview={() => open(OVERVIEW)} />}
         <AppLockScreen accountState={account?.state} />
         <StatusBar
           status={status}

@@ -1,6 +1,7 @@
 import { call } from "@/lib/axiom";
 import { clearSession, currentAccount } from "@/lib/session";
 import { sameOrigin } from "../origin";
+import { readJson, RequestBodyError } from "@/lib/request-body";
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "private, no-store" } });
 const segment = (value: unknown) => {
@@ -41,13 +42,17 @@ export async function POST(request: Request) {
   if (!account) return json({ message: "Your sign-in has ended. Reload to sign in again." }, 401);
   let op: string, args: Record<string, unknown>, sent: Request_;
   try {
-    const text = await request.text();
-    if (text.length > 256 * 1024) return json({ message: "That's too big to send." }, 413);
-    ({ op, args = {} } = JSON.parse(text));
+    const body = await readJson(request, 256 * 1024);
+    if (body.accountId !== account.id) return json({ message: "Your sign-in changed. Reload this page." }, 409);
+    if (typeof body.op !== "string" || body.args !== undefined && (!body.args || typeof body.args !== "object" || Array.isArray(body.args))) {
+      return json({ message: "Invalid request." }, 400);
+    }
+    op = body.op;
+    args = (body.args ?? {}) as Record<string, unknown>;
     if (!Object.hasOwn(OPS, op)) return json({ message: "That isn't available on the web." }, 400);
     sent = OPS[op](args);
   } catch (error) {
-    return json({ message: error instanceof Error ? error.message : "Invalid request." }, 400);
+    return json({ message: error instanceof Error ? error.message : "Invalid request." }, error instanceof RequestBodyError ? error.status : 400);
   }
   const answer = await call<unknown>(sent.method, sent.path, { token: account.token, body: sent.body });
   if (!answer.ok) return json({ message: op === "delete" && answer.status === 401 ? "That password isn't right." : answer.message }, answer.status || 503);

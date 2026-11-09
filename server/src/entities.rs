@@ -36,7 +36,7 @@ pub mod user {
         /// not of the password itself as before them.
         pub login_key: bool,
         /// When they entered the code emailed at sign-up. None until then:
-        /// the account can't sign in, and someone else may sign up over it.
+        /// the account can't sign in; the mailbox owner sets its credentials at confirmation.
         pub email_confirmed_at: Option<DateTimeUtc>,
         /// The `axiom_protocol::TERMS_VERSION` agreed to at sign-up, and when.
         /// None for accounts made before there were terms.

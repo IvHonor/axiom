@@ -38,7 +38,7 @@ async fn nth_code(outbox: &Outbox, n: usize) -> (String, String) {
 }
 
 fn confirm(email: &str, code: &str) -> Value {
-    json!({ "email": email, "code": code })
+    json!({ "email": email, "code": code, "password": "correct horse" })
 }
 
 #[tokio::test]
@@ -70,11 +70,13 @@ async fn nobody_can_hold_an_unconfirmed_address() {
     let (app, outbox) = confirming(false).await;
     // Someone signs up with Bob's address, but can't confirm it.
     post(&app, routes::SIGN_UP, credentials("bob@example.com", "eve's password")).await;
-    // Bob signs up anyway, gets his own code, and the old password stops working.
+    // Bob's emailed code lets him install his own password at confirmation.
     let (status, _) = post(&app, routes::SIGN_UP, credentials("bob@example.com", "bob's password")).await;
     assert_eq!(status, StatusCode::ACCEPTED);
     let (_, code) = nth_code(&outbox, 2).await;
-    assert_eq!(post(&app, routes::CONFIRM_EMAIL, confirm("bob@example.com", &code)).await.0, StatusCode::NO_CONTENT);
+    let mut confirmation = confirm("bob@example.com", &code);
+    confirmation["password"] = json!("bob's password");
+    assert_eq!(post(&app, routes::CONFIRM_EMAIL, confirmation).await.0, StatusCode::NO_CONTENT);
     assert_eq!(post(&app, routes::SIGN_IN, credentials("bob@example.com", "eve's password")).await.0, StatusCode::UNAUTHORIZED);
     assert_eq!(post(&app, routes::SIGN_IN, credentials("bob@example.com", "bob's password")).await.0, StatusCode::OK);
     // Once confirmed, the address is taken.

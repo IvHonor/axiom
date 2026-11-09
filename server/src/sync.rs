@@ -31,6 +31,20 @@ use crate::error::ApiError;
 pub const MAX_RECORDS_PER_ACCOUNT: u64 = 100_000;
 pub const MAX_RECORD_BYTES: usize = 64 * 1024;
 
+pub(crate) fn check_record_size(data: &str, field_times: &str) -> Result<(), ApiError> {
+    if data.len() > MAX_RECORD_BYTES || field_times.len() > MAX_RECORD_BYTES {
+        return Err(ApiError::new(StatusCode::PAYLOAD_TOO_LARGE, "One of your items is too large to sync."));
+    }
+    Ok(())
+}
+
+pub(crate) fn check_timestamp(changed_at: i64) -> Result<(), ApiError> {
+    if changed_at < 0 || changed_at > chrono::Utc::now().timestamp_millis() + 300_000 {
+        return Err(ApiError::bad_request("Check your device's clock and try again."));
+    }
+    Ok(())
+}
+
 pub async fn push(State(s): State<AppState>, auth: AuthUser, Json(body): Json<PushRequest>) -> Result<Json<PushResponse>, ApiError> {
     crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
     if body.changes.len() > SYNC_BATCH {
@@ -42,6 +56,7 @@ pub async fn push(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Pu
     if body.changes.iter().any(|c| Value::Object(c.fields.clone()).to_string().len() > MAX_RECORD_BYTES) {
         return Err(ApiError::new(StatusCode::PAYLOAD_TOO_LARGE, "One of your items is too large to sync."));
     }
+    for change in &body.changes { check_timestamp(change.changed_at)?; }
 
     let txn = s.db.begin().await?;
 
@@ -90,13 +105,16 @@ pub async fn push(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Pu
 
     for key in touched {
         let (data, times) = merged.remove(&key).unwrap_or_default();
+        let data = Value::Object(data).to_string();
+        let field_times = Value::Object(times).to_string();
+        check_record_size(&data, &field_times)?;
         seq += 1;
         let row = sync_record::ActiveModel {
             user_id: Set(auth.user_id.clone()),
             table_name: Set(key.0),
             record_id: Set(key.1),
-            data: Set(Value::Object(data).to_string()),
-            field_times: Set(Value::Object(times).to_string()),
+            data: Set(data),
+            field_times: Set(field_times),
             seq: Set(seq),
         };
         sync_record::Entity::insert(row)

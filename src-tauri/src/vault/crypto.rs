@@ -117,7 +117,15 @@ pub struct Wrapped {
     recovery: String,
 }
 
+/// The most a stored key may ask for (Axiom uses 19 MiB, two passes): a
+/// tampered one can't make unlocking eat all the memory or run for ever.
+const KDF_MEMORY_MAX_KIB: u32 = 256 * 1024;
+const KDF_PASSES_MAX: u32 = 10;
+
 fn password_key(password: &str, salt: &[u8], memory: u32, passes: u32) -> Result<[u8; 32], Broken> {
+    if memory > KDF_MEMORY_MAX_KIB || passes > KDF_PASSES_MAX {
+        return Err(Broken);
+    }
     let params = Params::new(memory, passes, 1, Some(32)).map_err(|_| Broken)?;
     let mut out = [0u8; 32];
     Argon2::new(Algorithm::Argon2id, Version::V0x13, params).hash_password_into(password.as_bytes(), salt, &mut out).map_err(|_| Broken)?;
@@ -299,5 +307,12 @@ mod tests {
         forged.salt = B64.encode(salt);
         forged.by_password = seal_bytes(&known, b"axiom/key", &DataKey::generate().0);
         assert!(forged.open_with_password("correct horse").is_err());
+    }
+
+    #[test]
+    fn a_stored_key_cant_ask_for_unbounded_work() {
+        assert!(password_key("x", &[0; 16], KDF_MEMORY_MAX_KIB + 1, 2).is_err(), "too much memory");
+        assert!(password_key("x", &[0; 16], 8, KDF_PASSES_MAX + 1).is_err(), "too many passes");
+        assert!(password_key("x", &[0; 16], KDF_MEMORY_KIB, KDF_PASSES).is_ok(), "Axiom's own settings");
     }
 }

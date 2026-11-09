@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { LifeBuoy, ScrollText, ShieldCheck } from "lucide-react";
+import { Compass, LifeBuoy, ScrollText, ShieldCheck } from "lucide-react";
 import { getAppStatus, type AppStatus } from "../../lib/backend";
 import { SupportDialog } from "../support/Support";
+import { startTour } from "../tour/tourState";
 
 function useAppInfo(): AppStatus | null {
   const [info, setInfo] = useState<AppStatus | null>(null);
@@ -20,6 +21,9 @@ export function HelpLinks() {
         <LifeBuoy size={13} strokeWidth={1.75} /> Help and support
       </button>
       {support && <SupportDialog onClose={() => setSupport(false)} />}
+      <button className="link" onClick={startTour}>
+        <Compass size={13} strokeWidth={1.75} /> Replay the tour
+      </button>
       {info?.privacyUrl && (
         <button className="link" onClick={() => void openUrl(info.privacyUrl!)}>
           <ShieldCheck size={13} strokeWidth={1.75} /> Privacy notice

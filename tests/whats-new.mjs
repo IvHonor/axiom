@@ -42,7 +42,19 @@ try {
   assert.equal(await dialog().count(), 0, "nothing new in 0.6.3");
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("axiom.whatsNew.seen"))), "0.6.3");
 
-  await page.evaluate(() => localStorage.removeItem("axiom.whatsNew.seen"));
+  // New here (Axiom first ran on this computer with this version): no back
+  // catalogue of news, Lemma's tour shows them round instead.
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(base);
+  await page.waitForTimeout(500);
+  assert.equal(await dialog().count(), 0, "nothing for a new install");
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("axiom.whatsNew.seen"))), "0.6.2");
+
+  // Updating from a version before news was kept: all of it.
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem("axiom.disabled", "[]");
+  });
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 420, height: 760 });
   await page.goto(base);

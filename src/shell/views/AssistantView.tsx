@@ -27,6 +27,8 @@ import { AssistantSettings } from "../AssistantSettings";
 import { takeHandoff, useHandoff } from "../desk/handoff";
 import { ago } from "../format";
 import { useAssistantAreas } from "../useAssistantAreas";
+import { useAccount } from "../useAccount";
+import { requestPanel } from "../panelRequests";
 import { usePersistentState } from "../usePersistentState";
 import { Face, moodOf } from "../../features/lemma/Face";
 import { askToTalk, useTalkRequests } from "../../features/lemma/talk";
@@ -56,7 +58,11 @@ const SUGGESTIONS: [string, string][] = [
 
 /** The Assistant tab: chats with Lemma down the side, the conversation beside them. */
 export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; name: string | null }) {
-  const { areas: allowed } = useAssistantAreas();
+  const { areas: allowed, setAllowed } = useAssistantAreas();
+  const [account] = useAccount();
+  const signedOut = account?.state === "signed_out";
+  /** Asked before there was an account: kept, and sent once there is. */
+  const [held, setHeld] = useState<string | null>(null);
   const persona = usePersona();
   const [list, setList] = useState<ChatSummary[]>([]);
   const [chatId, setChatId] = usePersistentState<string | null>("axiom.assistant.chat", (saved) => (typeof saved === "string" ? saved : null));
@@ -110,7 +116,14 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
     }
   });
 
-  const ask = async (text: string | null, into: string | null = chatId) => {
+  const ask = async (text: string | null, into: string | null = chatId, sees: string[] = allowed) => {
+    // Lemma's answers come from Axiom's servers, which need an account:
+    // the question waits here while one's made.
+    if (signedOut && text) {
+      setHeld(text);
+      setError(null);
+      return;
+    }
     stopReading();
     const id = crypto.randomUUID();
     turn.current = id;
@@ -121,7 +134,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
     setStopped(false);
     setLemma({ activity: "thinking", feeling: null });
     try {
-      const view = await send(id, into, text, allowed, name, persona);
+      const view = await send(id, into, text, sees, name, persona);
       setChat(view);
       setChatId(view.id);
       const reply = view.entries[view.entries.length - 1];
@@ -167,6 +180,29 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handoff, busy]);
 
+  // Signed in now: the question that was waiting is asked. If Lemma can't
+  // see any areas yet, it asks about that first (see HeldQuestion).
+  const signedIn = account?.state === "signed_in";
+  const needsAreas = allowed.length === 0 && areas.length > 0;
+  useEffect(() => {
+    if (!held || !signedIn || needsAreas || busyRef.current) return;
+    setHeld(null);
+    void ask(held);
+    // `ask` is recreated each render; signing in (or areas allowed in the settings) is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [held, signedIn, needsAreas]);
+  /** Lets Lemma see every area that's on, then asks what was waiting. */
+  const letSee = (then: string | null) => {
+    const ids = areas.map((a) => a.id);
+    for (const id of ids) setAllowed(id, true);
+    setHeld(null);
+    if (then) void ask(then, chatId, ids);
+  };
+  const askAnyway = (text: string) => {
+    setHeld(null);
+    void ask(text);
+  };
+
   /** Stops Lemma part-way: what it had done stays, and nothing more happens. */
   const stop = () => {
     if (!turn.current) return;
@@ -192,6 +228,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
     setChatId(null);
     setChat(null);
     setError(null);
+    setHeld(null);
   };
 
   return (
@@ -267,6 +304,11 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
           onOpenSettings={() => setSettings(true)}
           onChanged={setChat}
           stopped={stopped && !busy}
+          held={held}
+          signedOut={signedOut}
+          areas={areas}
+          onLetSee={letSee}
+          onAskAnyway={askAnyway}
         />
 
         <Composer busy={busy} onSend={(text) => void ask(text)} onStop={stop} onListening={stopReading} />
@@ -299,9 +341,18 @@ interface ThreadProps {
   onChanged: (chat: ChatView) => void;
   /** The person stopped the last turn. */
   stopped: boolean;
+  /** Asked before there was an account, waiting to be sent. */
+  held: string | null;
+  signedOut: boolean;
+  /** The areas that are on, which Lemma could be let see. */
+  areas: ExtensionManifest[];
+  /** Let Lemma see every area that's on, then ask `then` (if anything's waiting). */
+  onLetSee: (then: string | null) => void;
+  /** Ask what was waiting without letting Lemma see any areas. */
+  onAskAnyway: (text: string) => void;
 }
 
-function Thread({ chat, asking, drafts, busy, progress, error, name, allowed, areaOf, onSuggest, onRetry, onOpenSettings, onChanged, stopped }: ThreadProps) {
+function Thread({ chat, asking, drafts, busy, progress, error, name, allowed, areaOf, onSuggest, onRetry, onOpenSettings, onChanged, stopped, held, signedOut, areas, onLetSee, onAskAnyway }: ThreadProps) {
   const me = useAssistantName();
   const end = useRef<HTMLDivElement>(null);
   const count = (chat?.entries.length ?? 0) + (asking ? 1 : 0);
@@ -310,16 +361,19 @@ function Thread({ chat, asking, drafts, busy, progress, error, name, allowed, ar
     end.current?.scrollIntoView({ block: "end" });
   }, [count, busy, error, written]);
 
-  const empty = !chat && !asking;
+  const empty = !chat && !asking && !held;
   const waiting = chat?.entries.filter((e) => e.kind === "proposal" && e.status === "pending") ?? [];
   // While words are arriving, they say what Lemma's doing.
   const writing = !!progress?.text?.trim();
   return (
     <div className="lemma-thread">
-      {empty && <Welcome name={name} allowed={allowed} onSuggest={onSuggest} onOpenSettings={onOpenSettings} />}
+      {empty && <Welcome name={name} allowed={allowed} signedOut={signedOut} areas={areas} onSuggest={onSuggest} onOpenSettings={onOpenSettings} onLetSee={() => onLetSee(null)} />}
       {chat?.entries.map((entry) => <EntryView key={entry.id} entry={entry} areaOf={areaOf} onChanged={onChanged} />)}
       {chat && waiting.length > 1 && !busy && <ConfirmAll chat={chat} count={waiting.length} onChanged={onChanged} />}
       {asking && <div className="lemma-bubble is-user">{asking}</div>}
+      {held && !asking && (signedOut || (allowed.length === 0 && areas.length > 0)) && (
+        <HeldQuestion text={held} signedOut={signedOut} areas={areas} onLetSee={() => onLetSee(held)} onAskAnyway={() => onAskAnyway(held)} />
+      )}
       {busy &&
         drafts.map((text, step) =>
           text.trim() ? (
@@ -347,9 +401,89 @@ function Thread({ chat, asking, drafts, busy, progress, error, name, allowed, ar
   );
 }
 
-function Welcome({ name, allowed, onSuggest, onOpenSettings }: { name: string | null; allowed: string[]; onSuggest: (text: string) => void; onOpenSettings: () => void }) {
+/** "Daily Plan and Notes", or "all 6 of your areas". */
+function areaList(areas: ExtensionManifest[]): string {
+  const names = areas.map((a) => a.name);
+  if (names.length > 3) return `all ${names.length} of your areas`;
+  return names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** Create an account, or sign in: both in the Account panel. */
+function AccountButtons() {
+  return (
+    <div className="row lemma-account-actions">
+      <button className="btn btn-sm" onClick={() => requestPanel({ panel: "account", signUp: true })}>
+        Create a free account
+      </button>
+      <button className="btn btn-sm btn-ghost" onClick={() => requestPanel({ panel: "account" })}>
+        Sign in
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Something asked before Lemma could answer it: with no account yet, why
+ * one's needed; signed in but with no areas to look at, whether it may see
+ * them. Either way, it's answered straight after.
+ */
+function HeldQuestion({ text, signedOut, areas, onLetSee, onAskAnyway }: {
+  text: string;
+  signedOut: boolean;
+  areas: ExtensionManifest[];
+  onLetSee: () => void;
+  onAskAnyway: () => void;
+}) {
+  return (
+    <>
+      <div className="lemma-bubble is-user">{text}</div>
+      <div className="lemma-bubble is-lemma lemma-held" role="status">
+        {signedOut ? (
+          <>
+            <p>I need a free account to answer that. My answers come from Axiom&apos;s servers, and an account keeps that free and fair for everyone. I&apos;ll answer as soon as you&apos;re in.</p>
+            <AccountButtons />
+          </>
+        ) : (
+          <>
+            <p>You&apos;re in. Before I answer: may I see {areaList(areas)}? I only ever see the areas you let me, and you can change that in my settings.</p>
+            <div className="row lemma-account-actions">
+              <button className="btn btn-sm" onClick={onLetSee}>
+                Yes, have a look
+              </button>
+              <button className="btn btn-sm btn-ghost" onClick={onAskAnyway}>
+                Just chat for now
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+function Welcome({ name, allowed, signedOut, areas, onSuggest, onOpenSettings, onLetSee }: {
+  name: string | null;
+  allowed: string[];
+  signedOut: boolean;
+  areas: ExtensionManifest[];
+  onSuggest: (text: string) => void;
+  onOpenSettings: () => void;
+  onLetSee: () => void;
+}) {
   const me = useAssistantName();
   const ideas = SUGGESTIONS.filter(([area]) => allowed.includes(area)).slice(0, 4);
+  if (signedOut && ideas.length === 0) {
+    return (
+      <div className="lemma-welcome">
+        <h3>{`Hi, I'm ${me}.`}</h3>
+        <p>Ask me to plan your day, keep track of birthdays, or anything about your areas. I&apos;ll show you every change before I make it.</p>
+        <div className="lemma-callout">
+          <p>To chat with me you&apos;ll need a free account. Everything else in Axiom works without one.</p>
+          <AccountButtons />
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="lemma-welcome">
       <h3>{name ? `Hi ${name.split(" ")[0]}, I'm ${me}.` : `Hi, I'm ${me}.`}</h3>
@@ -365,9 +499,20 @@ function Welcome({ name, allowed, onSuggest, onOpenSettings }: { name: string | 
       ) : (
         <div className="lemma-callout">
           <p>I can&apos;t see any of your areas yet, so for now I can only chat.</p>
-          <button className="btn btn-sm" onClick={onOpenSettings}>
-            Choose what {me} can see
-          </button>
+          {areas.length > 0 ? (
+            <div className="row lemma-account-actions">
+              <button className="btn btn-sm" onClick={onLetSee}>
+                Let {me} see {areaList(areas)}
+              </button>
+              <button className="btn btn-sm btn-ghost" onClick={onOpenSettings}>
+                Choose
+              </button>
+            </div>
+          ) : (
+            <button className="btn btn-sm" onClick={onOpenSettings}>
+              Choose what {me} can see
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -16,7 +16,8 @@
 // straight at you while you're dealing with him, faces the middle of the
 // screen otherwise, and left alone, he plays about a little.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, CalendarClock, Check, Keyboard, ListPlus, Pause, Play, Square, StickyNote, Timer, type LucideIcon } from "lucide-react";
+import { Bell, CalendarClock, Check, Coffee, Keyboard, ListPlus, Pause, Play, Square, StickyNote, Timer, type LucideIcon } from "lucide-react";
+import { AWAKE_CHOICES, awakeClock, awakeLength, keepAwake, letSleep, MAX_AWAKE_MINUTES, parseKeepAwake, useKeepAwake } from "../../lib/keepAwake";
 import { cursorPosition, getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api, trackedMinutes, type PlanTask } from "../../features/daily_plan/api";
@@ -422,6 +423,8 @@ export function Desk() {
   const reminderList = useReminders();
   const events = useTodaysEvents(areas.includes("daily_plan"));
   const [now, setNow] = useState(Date.now());
+  /** Keeping the screen awake until (ms), if asked to. */
+  const awakeUntil = useKeepAwake();
   const [bubble, setBubble] = useState<Bubble | null>(null);
   const [voice, setVoice] = useState<"idle" | "listening" | "thinking">("idle");
   const [level, setLevel] = useState(0);
@@ -666,8 +669,49 @@ export function Desk() {
 
   // ---------- Talking ----------
 
+  // ---------- Keeping the screen awake ----------
+
+  /** Stopped by asking (not run out): no "it can sleep again" afterwards. */
+  const stoppedAwake = useRef(false);
+  const startAwake = async (asked: number) => {
+    const minutes = Math.max(1, Math.min(asked, MAX_AWAKE_MINUTES));
+    try {
+      await keepAwake(minutes);
+      stoppedAwake.current = false;
+      setGlad(Date.now() + 2500);
+      say(asked > MAX_AWAKE_MINUTES
+        ? `I can keep it awake for up to ${awakeLength(MAX_AWAKE_MINUTES)} at a time, so ${awakeLength(MAX_AWAKE_MINUTES)} it is.`
+        : `I'll keep your screen awake for ${awakeLength(minutes)}.`);
+    } catch (e) {
+      say(errorText(e));
+    }
+  };
+  const stopAwake = async () => {
+    stoppedAwake.current = true;
+    await letSleep().catch(() => {});
+    say("Your screen can sleep again.");
+  };
+  /** "How long?", with the usual lengths to pick from. */
+  const askAwake = () =>
+    say("How long should I keep your screen awake?", {
+      ms: 30_000,
+      actions: AWAKE_CHOICES.map((choice) => ({ label: choice.label, run: () => void startAwake(choice.minutes) })),
+    });
+  // Run out by itself: he says so.
+  const wasAwake = useRef<number | null>(null);
+  useEffect(() => {
+    if (wasAwake.current && !awakeUntil && !stoppedAwake.current) say("Time's up: your screen can sleep again.");
+    wasAwake.current = awakeUntil;
+    // `say` is stable; only the change matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awakeUntil]);
+
   /** What was said (or typed) to him: small things done, bigger ones handed on. */
   const answer = async (text: string) => {
+    // Keeping the screen awake is understood here, straight away, without the AI.
+    const awake = parseKeepAwake(text);
+    if (awake?.kind === "stop") return void (awakeUntil ? stopAwake() : say("Your screen's free to sleep already."));
+    if (awake?.kind === "start") return void (awake.minutes ? startAwake(awake.minutes) : askAwake());
     setVoice("thinking");
     setLemma({ activity: "thinking" });
     try {
@@ -1377,7 +1421,10 @@ export function Desk() {
   const ghost = !notch && !busy && now - lastTouched.current > GHOST_MS;
 
   // Late at night with nothing on, he dozes.
-  const night = (new Date(now).getHours() >= 23 || new Date(now).getHours() < 5) && !timed && !rest && !bubble && voice === "idle";
+  // How long the screen's kept awake for yet, from this moment (his clock ticks once a second).
+  const awakeLeft = awakeUntil ? Math.max(0, awakeUntil - Date.now()) : 0;
+
+  const night = (new Date(now).getHours() >= 23 || new Date(now).getHours() < 5) && !timed && !rest && !bubble && voice === "idle" && !awakeUntil;
 
   // Fading in as a hologram when he comes out (or is asked back), and out before he's put away.
   useEffect(() => {
@@ -1576,6 +1623,7 @@ export function Desk() {
     { label: "Note", icon: StickyNote, run: () => askFor("What shall I note down?", "A thought, an idea…", (t) => doIt("notes_write", { title: t.split("\n")[0].slice(0, 60), text: t }, "Noted.")) },
     { label: "25 min", icon: Timer, run: () => doIt("plan_timer", { action: "start", title: "Focus session", minutes: 25 }, line(p, "focusStart", { n: 25 })) },
     { label: "50 min", icon: Timer, run: () => doIt("plan_timer", { action: "start", title: "Focus session", minutes: 50 }, line(p, "focusStart", { n: 50 })) },
+    { label: "Awake", icon: Coffee, run: askAwake },
     { label: "Type", icon: Keyboard, run: startTyping },
   ];
   const holdDown = () => {
@@ -1888,11 +1936,41 @@ export function Desk() {
         </span>
       )}
 
+      {/* Keeping the screen awake: a small countdown under him. Clicked, how long's left, and Stop. */}
+      {!tucked && awakeUntil && (
+        <button
+          type="button"
+          className="desk-awake"
+          title={`Keeping your screen awake · ${awakeLength(Math.ceil(awakeLeft / 60_000))} left`}
+          aria-label={`Keeping your screen awake, ${awakeLength(Math.ceil(awakeLeft / 60_000))} left`}
+          onClick={() =>
+            say(`I'm keeping your screen awake for another ${awakeLength(Math.ceil(awakeLeft / 60_000))}.`, {
+              actions: [{ label: "Stop", run: () => void stopAwake() }],
+            })
+          }
+        >
+          <Coffee size={11} strokeWidth={2.2} aria-hidden="true" />
+          {awakeClock(awakeLeft)}
+        </button>
+      )}
+
       {/* Tucked: the time under him in the notch, what's on when pointed at, and the day so far. */}
       {tucked && lead && (
         <span className={`desk-tab-time is-${lead.tone}`} style={{ color: lead.color }}>
           {LeadIcon && <LeadIcon size={9} strokeWidth={2.6} aria-hidden="true" />}
           {lead.big}
+        </span>
+      )}
+      {/* Tucked and keeping the screen awake: a coffee cup and the time left, under him in the notch. */}
+      {tucked && awakeUntil && (
+        <span
+          className="desk-tab-time desk-tab-awake"
+          role="timer"
+          title={`Keeping your screen awake · ${awakeLength(Math.ceil(awakeLeft / 60_000))} left`}
+          aria-label={`Keeping your screen awake, ${awakeLength(Math.ceil(awakeLeft / 60_000))} left`}
+        >
+          <Coffee size={9} strokeWidth={2.6} aria-hidden="true" />
+          {awakeClock(awakeLeft)}
         </span>
       )}
       {peeking && (

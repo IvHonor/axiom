@@ -45,7 +45,7 @@ export function DeskSettings() {
         {me} floats over your other windows and becomes the timer while a task, study or reading timer runs. Double-click him to talk, or middle-click
         to type: he does small things straight away (time, add, move or tick off a task, log reading, study time or spending, set a reminder), each
         with an Undo, and hands anything bigger to a chat here. Drop text on him for a task, a link for Learning or Reading, or a file for your
-        journal. Hold him down for a quick menu (a task, a reminder, a note, a 25 or 50 minute focus). Nothing said on the desktop is kept. Drag him anywhere (he snaps to the edges and remembers where), scroll over him to resize him, and right-click him for more.
+        journal. Ask him to keep your screen awake (up to 4 hours) and a small countdown shows under him until it can sleep again. Hold him down for a quick menu (a task, a reminder, a note, a 25 or 50 minute focus, keeping awake). Nothing said on the desktop is kept. Drag him anywhere (he snaps to the edges and remembers where), scroll over him to resize him, and right-click him for more.
       </p>
 
       <div className="desk-setting">

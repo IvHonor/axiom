@@ -21,14 +21,3 @@ export function ExtensionIcon({ ext, size = 16, frame }: {
     <ext.icon size={size} strokeWidth={1.5} />
   </span>;
 }
-
-export function ExtensionPalette({ ext }: { ext: ExtensionManifest }) {
-  if (!ext.themes?.length) return null;
-  return <span className="extension-palettes" aria-hidden="true">
-    {ext.themes.map(theme => <span key={theme.id} className="extension-palette" title={theme.label}>
-      <span style={{ background: theme.colors.background }} />
-      <span style={{ background: theme.colors.surface }} />
-      <span style={{ background: theme.colors.accent }} />
-    </span>)}
-  </span>;
-}

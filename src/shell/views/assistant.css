@@ -613,3 +613,20 @@
   font-size: 11.5px;
   color: var(--text-faint);
 }
+
+/* ---------- Waiting for an account (or for areas to see) ---------- */
+
+.lemma-held p {
+  margin: 0;
+}
+
+.lemma-account-actions {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.lemma-held .lemma-account-actions {
+  justify-content: flex-start;
+  margin-top: 10px;
+}

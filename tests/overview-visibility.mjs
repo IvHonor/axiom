@@ -7,7 +7,8 @@ const errors = [];
 page.on("pageerror", error => errors.push(error.message));
 const base = process.env.OVERVIEW_VISIBILITY_TEST_URL || "http://localhost:1427/tests/overview-visibility-preview.html";
 const hiddenKey = "axiom.overview.hidden.v1";
-const installed = ["daily_plan", "project_board", "reading", "uni", "ember_themes"];
+// Every area is built in: the ones not under test are switched off.
+const off = ["birthdays", "finance", "goals", "journal", "lemma", "learning", "notes"];
 const cells = page.locator(".tile-cell");
 const area = name => page.locator(".sidebar .nav-item").filter({hasText: name});
 const icon = name => page.locator(".activitybar").getByRole("button", {name, exact: true});
@@ -17,10 +18,10 @@ await mkdir(".qa.local", {recursive: true});
 try {
   await page.goto(base);
   await page.evaluate(ids => {
-    localStorage.clear(); localStorage.setItem("axiom.installed", JSON.stringify(ids));
+    localStorage.clear(); localStorage.setItem("axiom.disabled", JSON.stringify(ids));
     localStorage.setItem("axiom.tilePositions.v1", JSON.stringify({daily_plan: {col: 1, row: 1}, project_board: {col: 5, row: 1}, reading: {col: 9, row: 1}, uni: {col: 1, row: 6}}));
     localStorage.setItem("axiom.tileSizes", JSON.stringify({reading: {w: 3, h: 5}}));
-  }, installed);
+  }, off);
   await page.reload(); await cells.nth(3).waitFor();
   const savedPositions = await page.evaluate(() => localStorage.getItem("axiom.tilePositions.v1"));
   const reading = cells.filter({hasText: "Reading Tracker"});
@@ -32,7 +33,7 @@ try {
   assert.equal(await icon("Reading Tracker").count(), 1);
   assert.equal(await area("Reading Tracker").locator(".nav-hidden").count(), 1);
   assert.equal(await page.evaluate(() => localStorage.getItem("axiom.tilePositions.v1")), savedPositions);
-  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("axiom.installed"))), installed);
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("axiom.disabled"))), off, "hiding a tile switches nothing off");
   await page.reload(); await cells.nth(2).waitFor(); assert.equal(await cells.count(), 3);
   await icon("Reading Tracker").click({button: "right"});
   await menuItem("Unhide on overview").click();
@@ -46,13 +47,13 @@ try {
   await icon("Extensions (Ctrl+Shift+X)").click();
   const card = name => page.locator(".ext-item").filter({has: page.locator(".ext-name", {hasText: name})});
   await card("Project Board").locator(".ext-main").click({button: "right"}); await menuItem("Hide from overview").click();
-  await card("Project Board").locator(".ext-main").click({button: "right"}); await menuItem("Uninstall").click();
+  await card("Project Board").locator(".ext-main").click({button: "right"}); await menuItem("Switch Off").click();
   assert.equal(await icon("Project Board").count(), 0);
   assert.deepEqual(await hidden(), ["project_board"]);
-  await card("Project Board").getByRole("button", {name: "Install", exact: true}).click();
+  await card("Project Board").getByRole("switch").click();
   assert.equal(await icon("Project Board").count(), 1); assert.equal(await cells.count(), 3);
   await card("Project Board").locator(".ext-main").click({button: "right"}); await menuItem("Unhide on overview").click();
-  await card("Ember").locator(".ext-main").click({button: "right"}); assert.equal(await menuItem("Hide from overview").count(), 0); await page.keyboard.press("Escape");
+  assert.equal(await card("Ember").count(), 0, "themes live in the Themes panel, not Extensions");
   await card("Finance").locator(".ext-main").click({button: "right"}); assert.equal(await menuItem("Hide from overview").count(), 0); await page.keyboard.press("Escape");
   await page.locator(".sidebar-body").evaluate(node => node.scrollTop = 0);
   await page.screenshot({path: ".qa.local/extension-text-hierarchy.png"});
@@ -62,7 +63,7 @@ try {
   assert.equal(await cells.count(), 0); await page.getByText("Your overview is clear", {exact: true}).waitFor();
   await page.getByRole("button", {name: "Show all areas", exact: true}).click();
   assert.equal(await cells.count(), 4); assert.deepEqual(await hidden(), []);
-  console.log("PASS: installed-area-only controls and restore-all when every tile is hidden");
+  console.log("PASS: switched-on-area-only controls and restore-all when every tile is hidden");
 
   await icon("Areas (Ctrl+B)").click();
   await area("Reading Tracker").focus(); await page.keyboard.press("Shift+F10");

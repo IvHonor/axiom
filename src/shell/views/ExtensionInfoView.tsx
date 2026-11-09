@@ -54,7 +54,7 @@ export function ExtensionInfoView({ ext, installed, enabled, onEnabledChange, on
                   Open
                 </button>
               )}
-              {(ext.builtIn || installed) && !comingSoon && !ext.required && (
+              {(ext.builtIn || installed) && !comingSoon && !ext.required && !ext.themes && (
                 <button className={enabled ? "btn btn-ghost" : "btn"} onClick={() => onEnabledChange(!enabled)}>
                   {enabled ? "Switch off" : "Switch on"}
                 </button>

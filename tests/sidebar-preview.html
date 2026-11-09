@@ -1,6 +1,10 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sidebar checks</title>
+<!doctype html><html lang="en"><head><link rel="icon" type="image/svg+xml" href="/favicon.svg"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sidebar checks</title>
 <script>
   // A fresh start each time: what the sidebar remembers is cleared.
   for (const key of Object.keys(localStorage)) if (key.startsWith("axiom.sidebar") || key === "axiom.tabs" || key === "axiom.activityOrder.v1") localStorage.removeItem(key);
+</script>
+<script>
+  // An existing install, not Axiom's first run here (src/shell/firstRun.ts): every area on, no tour.
+  try { if (localStorage.getItem("axiom.disabled") === null) localStorage.setItem("axiom.disabled", "[]"); } catch {}
 </script>
 </head><body><div id="root"></div><script type="module" src="./sidebar-fixture.tsx"></script></body></html>

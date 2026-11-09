@@ -2,7 +2,7 @@
 
 ## Sticky note board
 
-Run `node tests/sticky-board.mjs` against Vite on port 1427 with the Playwright setup below. It uses the real Notes view and editors with browser-only mock notes, checking free dragging, overlapping and selection order, saved positions, keyboard movement, cancelled drags, touch pointer movement, editing, colour and overview controls, adding and removing notes, narrow layouts and invalid saved positions. Board positions and stacking order are saved on this computer under `axiom.notes.board.v1`, independently of overview tiles. Drag a note's top edge or grip; focused grips move 10px with arrow keys or 1px with Shift. Screenshots go to `.qa.local/sticky-board`.
+Run `node tests/sticky-board.mjs` against Vite on port 1427 with the Playwright setup below. It uses the real Notes view and editors with browser-only mock notes, checking free dragging, overlapping and selection order, saved positions, keyboard movement, cancelled drags, touch pointer movement, editing, colour and overview controls, adding and removing notes (new ones stay off the overview unless "Put new ones on my overview" is switched on), resizing from the corner (limits, Escape, arrow keys, kept after a reload and a move), narrow layouts and invalid saved positions. Board positions and stacking order are saved on this computer under `axiom.notes.board.v1`, independently of overview tiles. Drag a note's top edge or grip; focused grips move 10px with arrow keys or 1px with Shift. Screenshots go to `.qa.local/sticky-board`.
 
 ## Lemma 3D companion
 
@@ -30,11 +30,40 @@ Run `node tests/lemma-cards.mjs` against Vite on port 1427 with the Playwright s
 
 ## Lemma on the desktop
 
-Run `node tests/desk.mjs` against Vite on port 1427 with the Playwright setup below. `desk-preview.html` renders the real desktop view beside the main window's side of it (`useDesk`), against a pretend Axiom: no desktop database, no AI, and `window.deskState` stands in for what's going on at the computer (time away, a full-screen app, a call). It checks him becoming the timer for tasks, study and reading (the time under him, the details when pointed at, the last minute's heartbeat); fading in and out as a hologram; sparks when things are done; what he said and did lately (with Undo); dozing late at night; the quick menu when held down; ducking and getting dizzy at the cursor; glancing at a window that comes up; asking if you're still on it; reactions to the inbox emptying and a task moving again; remembering this week's sessions; flow and its focus rings; the weather; the morning stretch and the goodbye wave; pausing, finishing and cheering; rounds of focus and their summing up; time's up (0:00, shaking, the notification, the chime, 5 more min); asking how study and reading went and logging it with an Undo; the notch with its peek and the day's progress; a meeting's Join; his eyes; talking and typing to him; what's dropped on him (a task, a link for Learning, a file for the journal); time away; the timer keys; keeping out of full screen; reminders; handing on to a chat; birthdays and bills, and the evening check-in (at a fixed time of day); the menu, resizing, hiding and his settings. Screenshots go to `.qa.local`.
+Run `node tests/desk.mjs` against Vite on port 1427 with the Playwright setup below. `desk-preview.html` renders the real desktop view beside the main window's side of it (`useDesk`), against a pretend Axiom: no desktop database, no AI, and `window.deskState` stands in for what's going on at the computer (time away, a full-screen app, a call). It checks him becoming the timer for tasks, study and reading (the time under him, the details when pointed at, the last minute's heartbeat); fading in and out as a hologram; sparks when things are done; what he said and did lately (with Undo); dozing late at night; the quick menu when held down; ducking and getting dizzy at the cursor; glancing at a window that comes up; asking if you're still on it; reactions to the inbox emptying and a task moving again; remembering this week's sessions; flow and its focus rings; the weather; the morning stretch and the goodbye wave; pausing, finishing and cheering; rounds of focus and their summing up; time's up (0:00, shaking, the notification, the chime, 5 more min); asking how study and reading went and logging it with an Undo; the notch with its peek and the day's progress; a meeting's Join; his eyes; talking and typing to him; what's dropped on him (a task, a link for Learning, a file for the journal); time away; the timer keys; keeping out of full screen; reminders; handing on to a chat; birthdays and bills, and the evening check-in (at a fixed time of day); keeping the screen awake (asked how long, the countdown under him, Stop, the 4-hour cap, and a word when it runs out, none of it sent to the AI); the menu, resizing, hiding and his settings. Screenshots go to `.qa.local`.
 
 ## What's new after an update
 
-Run `node tests/whats-new.mjs` against Vite on port 1427 with the Playwright setup below. `whats-new-preview.html` renders the real window with no desktop calls. It checks which updates get the news (from an older version, not again on the same one, still on a later version that skipped it, and for a fresh install), that Open Lemma, Later and Escape all count as seen, that a version with nothing new shows nothing, and that it fits a narrow window in the light theme. The notes live in `src/shell/releaseNotes.ts`: add an entry with the version that brings something worth announcing. Screenshots go to `.qa.local/whats-new`.
+Run `node tests/whats-new.mjs` against Vite on port 1427 with the Playwright setup below. `whats-new-preview.html` renders the real window with no desktop calls. It checks which updates get the news (from an older version, not again on the same one, still on a later version that skipped it, and from before news was kept), that a new install gets none (Lemma's tour shows them round instead), that Open Lemma, Later and Escape all count as seen, that a version with nothing new shows nothing, and that it fits a narrow window in the light theme. The notes live in `src/shell/releaseNotes.ts`: add an entry with the version that brings something worth announcing. Screenshots go to `.qa.local/whats-new`.
+
+## A first run, and Lemma's tour
+
+Run `node tests/first-run.mjs` against the web build (`npm run dev:web`, port 1430; `FIRST_RUN_TEST_URL` changes the address) with the Playwright setup below. It uses the real app in demo mode, so nothing leaves the browser: `?demo&newaccount` is an account made just now, plain `?demo` one made before. It checks that a first run starts with only Lemma, Daily Plan and Notes on and no back catalogue of news; Lemma's tour step by step (steps that talk keep clicks off the app, the Extensions step waits for it to be opened and an area switched on); that finishing or skipping counts as seen, Replay in the Account panel and Escape; that an existing account in a new browser keeps everything on with no tour; that a computer Axiom ran on before is left alone; and that the card fits a phone. Screenshots go to `.qa.local/first-run`.
+
+How it's decided lives in `src/shell/firstRun.ts`: a computer with nothing of Axiom's in local storage is new. Its starter set stays unsynced until someone signs in; an account made within an hour of the first run (or after it) takes the starter set to its other computers, an older one keeps its own choices.
+
+## Links opened on the website
+
+Run `node --test tests/web-links.mjs` (no server needed; CI runs it with the site's security tests). On the website, links come from synced and shared data (a board's cards, a calendar feed, a gift idea), so `src/web/tauri/opener.ts` opens only web, email and phone links, as the desktop's opener does; `javascript:`, `data:` and file links are refused.
+
+## Axiom on the web, end to end
+
+Run `npm run build --prefix site`, then `node tests/web-terminal.mjs` with the Playwright setup below. It starts the production website against a fictional account and sync server (never a live account) and checks:
+- **Signing in:** the sign-in redirect, that no token is written into the page, and the first pull, paginated.
+- **The desktop's own Daily Plan** (`web-desktop-planner-browser.mjs`): tasks, quick-add, timers and focus, scheduling, settings, views, routines, and a calendar link to a private address being refused.
+- **The Project Board** (`web-board-browser.mjs`): projects, card details, checklists, completing a repeating card, every view, and phone width.
+- **Sync and privacy:** edits saved during an outage surviving a reload and replaying, encrypted areas staying locked (with their banner) and out of the browser cache, and the sync API's origin and account checks.
+- **The rest:** theme and sidebar preferences, phone width, overflowing tabs, upgrading an old cache, and switching accounts.
+
+Screenshots go to `.qa.local/terminal`.
+
+## Keeping the screen awake
+
+Run `node --test tests/keep-awake.mjs` (no server; CI runs it with the site's tests). It checks what desktop Lemma understands as keeping the screen awake or letting it sleep (without the AI), how long a request asks for, and how the countdown reads. The desktop holds it in `src-tauri/src/keep_awake.rs` (Windows: `SetThreadExecutionState`; macOS: `caffeinate`), for at most 4 hours.
+
+## Lemma without an account
+
+Run `node tests/lemma-account.mjs` against Vite on port 1427 with the Playwright setup below. `lemma-account-preview.html` renders the real chat view signed out, with only the starter areas on and no AI. It checks the welcome explains an account's needed, that a question asked anyway is kept (not sent) with Lemma saying why, that its buttons open the Account panel on creating an account or signing in, and that once signed in Lemma asks whether it may see the areas that are on, then sends the question that waited ("Just chat for now" sends it seeing nothing). Screenshots go to `.qa.local/lemma-account`.
 
 ## Lemma overview tile
 

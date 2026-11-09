@@ -3,6 +3,7 @@ import { Sparkles } from "lucide-react";
 import { Modal } from "./ui/Modal";
 import { readSetting, saveSetting } from "../lib/settings";
 import { compareVersions, unseen, type Release } from "./releaseNotes";
+import { firstRanHere } from "./firstRun";
 
 /** The last version whose news was shown, on any of the person's computers. */
 const SEEN = "axiom.whatsNew.seen";
@@ -23,6 +24,8 @@ export function WhatsNew({ version, onOpenLemma }: { version: string | null; onO
   const [news, setNews] = useState<Release[]>([]);
   useEffect(() => {
     if (!version) return;
+    // New here: the tour shows them round instead of every release so far.
+    if (readSeen() === null && firstRanHere()) return markSeen(version);
     const fresh = unseen(readSeen(), version);
     if (fresh.length) setNews(fresh);
     else markSeen(version);

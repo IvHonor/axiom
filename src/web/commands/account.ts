@@ -8,11 +8,13 @@ import type { Handlers } from "./types";
 
 async function account<T>(op: string, args: Record<string, unknown> = {}): Promise<T> {
   if (DEMO) throw "There's no account in demo mode.";
+  const accountId = currentAccount()?.id;
+  if (!accountId) throw "Your sign-in changed. Reload this page.";
   const answer = await fetch("/api/terminal/account", {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ op, args }),
+    body: JSON.stringify({ accountId, op, args }),
   }).catch(() => null);
   if (!answer) throw "You're offline. Try again when you're connected.";
   const body = await answer.json().catch(() => ({}));

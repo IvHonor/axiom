@@ -7,7 +7,7 @@ import { useSyncExternalStore } from "react";
 export interface SidebarPrefs {
   /** An area brings its own sidebar; the overview, the list of areas. */
   follow: boolean;
-  /** Each area keeps the sidebar open or closed as you left it there. */
+  /** An area where you closed the sidebar keeps it closed (switching tabs never opens it). */
   perArea: boolean;
   /** Tucked away while the window is narrow. */
   narrow: boolean;
@@ -17,13 +17,16 @@ export interface SidebarPrefs {
   writing: boolean;
   /** Tucked away while a focus timer runs. */
   focus: boolean;
+  /** An area's sidebar slides away once you click into the area, like a drawer. */
+  closeOnUse: boolean;
 }
 
-export const DEFAULT_SIDEBAR: SidebarPrefs = { follow: true, perArea: true, narrow: true, roomy: true, writing: true, focus: false };
+export const DEFAULT_SIDEBAR: SidebarPrefs = { follow: true, perArea: true, narrow: true, roomy: true, writing: true, focus: false, closeOnUse: true };
 
 export const SIDEBAR_SWITCHES: { key: keyof SidebarPrefs; label: string; hint: string }[] = [
+  { key: "closeOnUse", label: "Close when I click into an area", hint: "It shows when you pick an area, then slides away once you're in it." },
   { key: "follow", label: "Follow what's open", hint: "An area brings its own sidebar; the overview, the list of areas." },
-  { key: "perArea", label: "Remember each area", hint: "Open or closed, as you last left it there." },
+  { key: "perArea", label: "Remember each area", hint: "Where you closed it, it stays closed when you come back." },
   { key: "narrow", label: "Hide when the window is narrow", hint: "Under 1100px wide; back when there's room." },
   { key: "roomy", label: "Hide for areas that need room", hint: "The board, the planner's week and month, an open journal entry." },
   { key: "writing", label: "Hide while writing", hint: "After a few seconds of typing in the journal or notes." },

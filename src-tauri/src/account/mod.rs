@@ -137,9 +137,11 @@ impl Account {
         if code.trim().is_empty() {
             return Err(Error::Invalid("Enter the code from the email.".into()));
         }
-        let body = axiom_protocol::ConfirmEmail { email: normalize_email(email), code: code.into() };
+        check_password(password).map_err(Error::Invalid)?;
+        let email = normalize_email(email);
+        let body = axiom_protocol::ConfirmEmail { password: login_key(&email, password), email: email.clone(), code: code.into() };
         self.client.confirm_email(&body).await.map_err(account_error)?;
-        self.sign_in(email, password).await
+        self.sign_in(&email, password).await
     }
 
     /// Emails a new confirmation code (if the account isn't confirmed yet).

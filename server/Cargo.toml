@@ -25,6 +25,8 @@ argon2 = "0.6.0"
 jsonwebtoken = { version = "11.1.0", default-features = false, features = ["rust_crypto"] }
 rand = "0.10.3"
 sha2 = "0.11.1"
+# Derives a rotated refresh token, so the same refresh asked twice at once gets the same answer.
+hmac = "0.13.0"
 base64 = "0.23.1"
 # Streams the assistant's words as they're written.
 futures-util = { version = "0.3", default-features = false }

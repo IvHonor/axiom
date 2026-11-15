@@ -445,11 +445,16 @@ async fn board_actions_are_instant_on_local_storage() {
         add_checklist_item(&db, &t.id, "step").await.unwrap();
     }
 
-    // Each action is timed over several tries and judged by its median, so one
-    // slow disk write on a busy CI machine doesn't fail it. The regression this
-    // guards against took 1-3.5 s per action, far over the budget.
+    // Each action is timed over several tries and judged by its fastest: a busy
+    // CI machine (other tests running alongside) can only make a try slower,
+    // never faster, so the fastest is the action's real cost. On GitHub's macOS
+    // runners even the median went over budget from noise alone. The regression
+    // this guards against took 1-3.5 s per action, so every try would fail.
+    // The budget allows for a debug build (several times slower than the app
+    // people use) and for a heavy test, like the deliberately slow encryption
+    // ones, running alongside for the whole loop: then every try takes ~60 ms.
     const TRIES: usize = 7;
-    let budget = std::time::Duration::from_millis(50);
+    let budget = std::time::Duration::from_millis(200);
     let mut timings: std::collections::BTreeMap<&str, Vec<std::time::Duration>> = Default::default();
     for _ in 0..TRIES {
         let t = std::time::Instant::now();
@@ -467,8 +472,8 @@ async fn board_actions_are_instant_on_local_storage() {
     }
     for (label, mut took) in timings {
         took.sort();
-        let median = took[TRIES / 2];
-        assert!(median < budget, "{label} took {median:?} (median of {TRIES}), budget {budget:?}; all: {took:?}");
+        let fastest = took[0];
+        assert!(fastest < budget, "{label} took {fastest:?} (fastest of {TRIES}), budget {budget:?}; all: {took:?}");
     }
     drop(db);
     let _ = std::fs::remove_dir_all(folder);

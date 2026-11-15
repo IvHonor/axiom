@@ -8,6 +8,7 @@ import { DeleteAccount } from "./account/DeleteAccount";
 import { DeviceList } from "./account/DeviceList";
 import { ExportData } from "./account/ExportData";
 import { HelpLinks } from "./account/HelpLinks";
+import { Features, type FeatureSwitches } from "./account/Features";
 import { Encryption } from "./account/Encryption";
 import { ErrorNote } from "./account/fields";
 import { ProfileHeader } from "./account/ProfileHeader";
@@ -30,21 +31,24 @@ interface AccountPanelProps {
   extensions: string[];
   /** Goes up each time creating an account is asked for (e.g. by Lemma): the form switches to it. */
   signUp?: number;
+  /** Lemma and the Playground on or off (see `ExtensionManifest.core`). */
+  features: FeatureSwitches;
 }
 
 /** Sidebar for the account: signing in, sync, devices, password, data, and signing out. */
-export function AccountPanel({ status, sync, onChange, extensions, signUp }: AccountPanelProps) {
+export function AccountPanel({ status, sync, onChange, extensions, signUp, features }: AccountPanelProps) {
   return (
     <aside className="sidebar">
       <header className="sidebar-head">Account</header>
       <div className="sidebar-body">
         {status?.state === "signed_in" ? (
-          <SignedIn email={status.email} admin={status.admin} sync={sync} onChange={onChange} extensions={extensions} />
+          <SignedIn email={status.email} admin={status.admin} sync={sync} onChange={onChange} extensions={extensions} features={features} />
         ) : (
           status && (
             <>
               <div className="account-brand"><Logo variant="lockup" size={96} /></div>
               <SignInForm onDone={onChange} signUp={signUp} />
+              <div className="account"><Features {...features} signedIn={false} /></div>
             </>
           )
         )}
@@ -67,7 +71,7 @@ function Card({ icon: Icon, title, danger, children }: { icon: LucideIcon; title
   );
 }
 
-function SignedIn({ email, admin, sync, onChange, extensions }: { email: string; admin: boolean; sync: SyncStatus; onChange: (status: AccountStatus) => void; extensions: string[] }) {
+function SignedIn({ email, admin, sync, onChange, extensions, features }: { email: string; admin: boolean; sync: SyncStatus; onChange: (status: AccountStatus) => void; extensions: string[]; features: FeatureSwitches }) {
   const now = useNow();
   const [auto, setAuto] = useState(true);
   useEffect(() => void getAutoSync().then(setAuto, () => {}), []);
@@ -84,6 +88,7 @@ function SignedIn({ email, admin, sync, onChange, extensions }: { email: string;
   return (
     <div className="account">
       <ProfileHeader email={email} admin={admin} />
+      <Features {...features} signedIn />
 
       <Card icon={RefreshCw} title="Sync">
         {sync.state === "needs_choice" ? (

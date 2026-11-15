@@ -101,7 +101,7 @@ try {
     await page.locator(".activitybar").waitFor();
     await page.waitForTimeout(3000);
     assert.equal(await page.locator(".tour-card").count(), 0, "no tour for an existing account");
-    assert.equal((await areaIcons(page)).length, 11, "everything stays on");
+    assert.equal((await areaIcons(page)).length, 12, "everything stays on (Lemma, the Playground and ten areas)");
     await context.close();
   }
 
@@ -120,7 +120,7 @@ try {
     await page.waitForTimeout(3000);
     assert.equal(await page.locator(".tour-card").count(), 0, "no tour for an existing install");
     assert.equal(await page.evaluate(() => localStorage.getItem("axiom.firstRun")), null);
-    assert.equal((await areaIcons(page)).length, 11);
+    assert.equal((await areaIcons(page)).length, 12);
     await context.close();
   }
 

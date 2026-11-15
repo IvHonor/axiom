@@ -6,6 +6,7 @@ import { Blocks, ChartColumn, LayoutDashboard, ShieldCheck, X, type LucideIcon }
 import { findExtension } from "../extensions";
 import { useAreaName } from "../features/lemma/persona";
 import { NotificationBell } from "./notifications/NotificationBell";
+import { FriendsButton } from "./friends/FriendsButton";
 import { SupportButton } from "./support/Support";
 import { ExtensionIcon } from "./ui/ExtensionIcon";
 import { formatTime } from "./format";
@@ -25,6 +26,8 @@ interface TopBarProps {
   onPin: (view: View) => void;
   onClose: (view: View) => void;
   onReorder: (fromKey: string, toKey: string) => void;
+  /** Whether the Playground's on, and opening it (switching it on if need be). */
+  playground: { on: boolean; open: () => void };
 }
 
 function describe(view: View, nameOf: (ext: { id: string; name: string }) => string): { label: string; icon: LucideIcon } {
@@ -37,7 +40,7 @@ function describe(view: View, nameOf: (ext: { id: string; name: string }) => str
 }
 
 /** Logo, open tabs and, in themes that want one, a clock. */
-export function TopBar({ tabs, active, previewKey, onSelect, onPin, onClose, onReorder }: TopBarProps) {
+export function TopBar({ tabs, active, previewKey, onSelect, onPin, onClose, onReorder, playground }: TopBarProps) {
   const showClock = !!useTheme().theme.style.clock;
   // The open tab stays in view when there are more tabs than room (a narrow window, a phone).
   const strip = useRef<HTMLDivElement>(null);
@@ -74,6 +77,7 @@ export function TopBar({ tabs, active, previewKey, onSelect, onPin, onClose, onR
       </DndContext>
 
       <SupportButton />
+      <FriendsButton playgroundOn={playground.on} onOpenPlayground={playground.open} />
       <NotificationBell onOpen={(id) => onSelect({ kind: "extension", id })} />
       <div className="box box-hatch" aria-hidden="true" />
       {showClock && <Clock />}

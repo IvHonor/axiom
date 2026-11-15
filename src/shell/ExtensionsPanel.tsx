@@ -50,6 +50,8 @@ export function ExtensionsPanel({
   const matches = EXTENSIONS.filter(
     (ext) =>
       !!ext.area &&
+      // Lemma and the Playground are part of Axiom, switched on and off in Account.
+      !ext.core &&
       (!q || ext.name.toLowerCase().includes(q) || ext.description.toLowerCase().includes(q)),
   );
   const builtIn = matches.filter((ext) => ext.builtIn);

@@ -11,6 +11,7 @@ use super::entities::{read, session};
 use super::service::{books, reads, sessions};
 use crate::error::Result;
 use crate::features::period::{Compare, Headline, Period};
+use crate::playground::DayCounts;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -107,4 +108,18 @@ pub async fn report(db: &DatabaseConnection, period: Period) -> Result<ReadingAn
         books: read_books,
         ended,
     })
+}
+
+
+/// Every day's pages and finished books, for the Playground (`crate::playground`).
+pub async fn playground_days(db: &DatabaseConnection) -> Result<Vec<(&'static str, DayCounts)>> {
+    let mut pages = DayCounts::new();
+    for s in sessions().all(db).await?.into_iter().filter(|s| s.pages > 0) {
+        *pages.entry(s.day).or_default() += i64::from(s.pages);
+    }
+    let mut books = DayCounts::new();
+    for day in reads().filter(read::Column::Outcome.eq("finished")).all(db).await?.into_iter().filter_map(|r| r.finished_on) {
+        *books.entry(day).or_default() += 1;
+    }
+    Ok(vec![("reading.pages", pages), ("reading.books", books)])
 }

@@ -7,12 +7,13 @@ import { board } from "./board";
 import { learning } from "./learning";
 import { pending } from "./pending";
 import { plan } from "./plan";
+import { playground } from "./playground";
 import { reading } from "./reading";
 import { system } from "./system";
 import type { Args, Handlers } from "./types";
 import { uni } from "./uni";
 
-const handlers: Handlers = { ...pending, ...system, ...accountHandlers, ...plan, ...board, ...reading, ...uni, ...learning };
+const handlers: Handlers = { ...pending, ...system, ...accountHandlers, ...plan, ...board, ...reading, ...uni, ...learning, ...playground };
 
 /** Commands the web doesn't answer at all (yet), for checking coverage. */
 export const handled = (command: string) => Object.hasOwn(handlers, command);

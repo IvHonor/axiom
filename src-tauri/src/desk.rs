@@ -436,6 +436,7 @@ pub struct Weather {
 static WEATHER: Mutex<Option<(String, std::time::Instant, Weather)>> = Mutex::new(None);
 const WEATHER_FOR: std::time::Duration = std::time::Duration::from_secs(30 * 60);
 /// How long Windows has to say where the computer is.
+#[cfg(windows)]
 const LOCATING_FOR: std::time::Duration = std::time::Duration::from_secs(8);
 
 /// The weather now, from Open-Meteo (no account needed), kept for half an

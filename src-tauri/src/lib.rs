@@ -5,8 +5,10 @@ mod db;
 mod desk;
 mod error;
 mod keep_awake;
+mod keychain;
 mod features;
 mod notifications;
+mod playground;
 mod profile;
 mod vault;
 mod sync;
@@ -175,6 +177,24 @@ pub fn run() {
             acct::account_admin_save_settings,
             acct::account_admin_ai_usage,
             acct::account_profile,
+            playground::playground_days,
+            playground::playground_me,
+            playground::playground_save,
+            playground::playground_leave,
+            playground::playground_new_code,
+            playground::playground_publish,
+            playground::playground_board,
+            playground::playground_friends,
+            playground::playground_add_friend,
+            playground::playground_accept,
+            playground::playground_remove,
+            playground::playground_cheer,
+            playground::playground_avatar,
+            playground::hub_enter,
+            playground::hub_sync,
+            playground::hub_act,
+            playground::hub_leave,
+            playground::hub_peek,
             acct::account_update_profile,
             system::data_export,
             sync::sync_status,

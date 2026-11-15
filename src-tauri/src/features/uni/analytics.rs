@@ -12,6 +12,7 @@ use super::entities::{lecture, module, term};
 use super::service::{due, is_behind, lectures, modules, terms};
 use crate::error::Result;
 use crate::features::period::{percent, Compare, Headline, Period};
+use crate::playground::DayCounts;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -118,4 +119,14 @@ pub async fn report(db: &DatabaseConnection, period: Period) -> Result<UniAnalyt
         modules: modules_due,
         confidence,
     })
+}
+
+
+/// Every day's lectures caught up on, for the Playground (`crate::playground`).
+pub async fn playground_days(db: &DatabaseConnection) -> Result<Vec<(&'static str, DayCounts)>> {
+    let mut caught_up = DayCounts::new();
+    for day in lectures().all(db).await?.into_iter().filter_map(|l| l.caught_up_on) {
+        *caught_up.entry(day).or_default() += 1;
+    }
+    Ok(vec![("uni.caught_up", caught_up)])
 }

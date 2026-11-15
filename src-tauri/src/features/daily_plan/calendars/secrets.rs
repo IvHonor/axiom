@@ -82,36 +82,27 @@ pub trait SecretStore: Send + Sync {
     fn delete(&self, account_id: &str);
 }
 
-/// Matches the app identifier in tauri.conf.json.
-const SERVICE: &str = "app.axiom.desktop";
-
+/// In the system's credential store (see `crate::keychain`).
 pub struct Keychain;
 
-impl Keychain {
-    fn entry(account_id: &str) -> Option<keyring::Entry> {
-        // Development builds keep their own entries, like the Axiom sign-in.
-        let prefix = if cfg!(debug_assertions) { "calendar-dev" } else { "calendar" };
-        keyring::Entry::new(SERVICE, &format!("{prefix}-{account_id}")).ok()
-    }
+/// Development builds keep their own entries, like the Axiom sign-in.
+fn name(account_id: &str) -> String {
+    let prefix = if cfg!(debug_assertions) { "calendar-dev" } else { "calendar" };
+    format!("{prefix}-{account_id}")
 }
 
 impl SecretStore for Keychain {
     fn load(&self, account_id: &str) -> Option<Secret> {
-        serde_json::from_str(&Self::entry(account_id)?.get_password().ok()?).ok()
+        serde_json::from_str(&crate::keychain::get(&name(account_id))?).ok()
     }
 
     fn save(&self, account_id: &str, secret: &Secret) -> Result<(), String> {
         let json = serde_json::to_string(secret).map_err(|e| e.to_string())?;
-        Self::entry(account_id)
-            .ok_or("This computer's credential store isn't available.")?
-            .set_password(&json)
-            .map_err(|e| format!("Couldn't save the calendar sign-in: {e}"))
+        crate::keychain::set(&name(account_id), &json).map_err(|e| format!("Couldn't save the calendar sign-in: {e}"))
     }
 
     fn delete(&self, account_id: &str) {
-        if let Some(entry) = Self::entry(account_id) {
-            let _ = entry.delete_credential();
-        }
+        crate::keychain::delete(&name(account_id));
     }
 }
 

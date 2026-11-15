@@ -41,19 +41,22 @@ interface FaceProps {
   /** Double-clicked: talk to him. With it, tapping him instead gets a hint on how. */
   onTalk?: () => void;
   idlePreview?: number;
+  /** Someone else's Lemma (the Playground): its personality, name and keepsakes, not yours. */
+  peer?: { personality: Personality; name: string; admin: boolean; firstLight: boolean };
 }
 
-export function Face({ mood, size = 120, level = 0, tool, alive = true, look: given, interactive = false, facing, gaze, display, quiet = false, idlePreview = 0, onTalk }: FaceProps) {
+export function Face({ mood, size = 120, level = 0, tool, alive = true, look: given, interactive = false, facing, gaze, display, quiet = false, idlePreview = 0, onTalk, peer }: FaceProps) {
   const chosen = useLook();
   const { brightness, movement } = useCompanionPrefs();
-  const persona = usePersona();
+  const own = usePersona();
+  const persona = peer ? { name: peer.name, personality: peer.personality } : own;
   const me = nameOf(persona);
   const context = useLemma();
   const focused = quiet || context.focused;
   const compact = size < 90;
   const [account] = useAccount();
-  const admin = account?.state === "signed_in" && account.admin;
-  const firstLight = hasFirstLight(account);
+  const admin = peer ? peer.admin : account?.state === "signed_in" && account.admin;
+  const firstLight = peer ? peer.firstLight : hasFirstLight(account);
   const look = useMemo(() => lookForRole(given ?? chosen, admin, firstLight), [given, chosen, admin, firstLight]);
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<ReturnType<typeof createCompanionScene> | null>(null);

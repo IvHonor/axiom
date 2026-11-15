@@ -274,6 +274,13 @@ impl Account {
         Ok(result?.into())
     }
 
+    /// A signed-in Playground call; see `crate::playground`.
+    pub async fn playground(&self, method: reqwest::Method, path: &str, body: Option<serde_json::Value>) -> Result<serde_json::Value> {
+        let (method, body) = (&method, body.as_ref());
+        let result = self.authed(|token| async move { self.client.playground(&token, method.clone(), path, body).await }).await;
+        Ok(result?)
+    }
+
     /// Every device signed in to the account.
     pub async fn devices(&self) -> Result<Vec<DeviceView>> {
         let result = self.authed(|token| async move { self.client.devices(&token).await }).await;

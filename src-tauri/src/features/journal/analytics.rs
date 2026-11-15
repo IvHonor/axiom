@@ -11,6 +11,7 @@ use super::entities::entry;
 use super::service::{entries, split_tags};
 use crate::error::Result;
 use crate::features::period::{Compare, Headline, Period};
+use crate::playground::DayCounts;
 
 /// How many tags the period lists.
 const TOP_TAGS: usize = 8;
@@ -90,4 +91,12 @@ pub async fn report(db: &DatabaseConnection, period: Period) -> Result<JournalAn
         }),
         tags,
     })
+}
+
+
+/// The days written on (as in the streak), for the Playground (`crate::playground`).
+/// Only that they were: never the words, mood or energy.
+pub async fn playground_days(db: &DatabaseConnection) -> Result<Vec<(&'static str, DayCounts)>> {
+    let days: DayCounts = entries().all(db).await?.into_iter().filter(|e| e.words > 0 || e.mood.is_some()).map(|e| (e.day, 1)).collect();
+    Ok(vec![("journal.days", days)])
 }

@@ -32,6 +32,28 @@ const OPS: Record<string, (args: Record<string, unknown>) => Request_> = {
   admin_save_settings: (a) => ({ method: "PUT", path: "/v1/admin/settings", body: a.settings }),
   admin_ai_usage: (a) => ({ method: "GET", path: `/v1/admin/ai-usage?days=${Math.max(1, Math.min(365, Number(a.days) || 30))}` }),
   admin_tickets: () => ({ method: "GET", path: "/v1/admin/tickets" }),
+  // The Playground (crates/protocol/src/playground.rs). Bodies are camelCase there.
+  playground_me: () => ({ method: "GET", path: "/v1/playground/me" }),
+  playground_save: (a) => ({ method: "PUT", path: "/v1/playground/me", body: { playground: a.playground !== false, handle: String(a.handle ?? ""), global: !!a.global, shared: Array.isArray(a.shared) ? a.shared.map(String) : [], lemma: a.lemma } }),
+  playground_leave: () => ({ method: "DELETE", path: "/v1/playground/me" }),
+  playground_new_code: () => ({ method: "POST", path: "/v1/playground/me/code" }),
+  playground_publish: (a) => ({ method: "PUT", path: "/v1/playground/stats", body: { today: String(a.today ?? ""), stats: Array.isArray(a.stats) ? a.stats : [] } }),
+  playground_board: (a) => ({
+    method: "GET",
+    path: `/v1/playground/board?${new URLSearchParams({ metric: String(a.metric ?? ""), period: String(a.period ?? ""), scope: String(a.scope ?? ""), today: String(a.today ?? "") })}`,
+  }),
+  playground_friends: () => ({ method: "GET", path: "/v1/playground/friends" }),
+  playground_add_friend: (a) => ({ method: "POST", path: "/v1/playground/friends", body: { handle: a.handle ?? null, code: a.code ?? null } }),
+  playground_accept: (a) => ({ method: "POST", path: `/v1/playground/friends/${segment(a.userId)}/accept` }),
+  playground_remove: (a) => ({ method: "DELETE", path: `/v1/playground/friends/${segment(a.userId)}` }),
+  // The Hub (crates/protocol/src/hub.rs).
+  hub_enter: (a) => ({ method: "POST", path: "/v1/hub/enter", body: { room: String(a.room ?? ""), x: Number(a.x), y: Number(a.y) } }),
+  hub_sync: (a) => ({ method: "POST", path: "/v1/hub/sync", body: { room: String(a.room ?? ""), x: Number(a.x), y: Number(a.y) } }),
+  hub_act: (a) => ({ method: "POST", path: "/v1/hub/act", body: { kind: String(a.kind ?? ""), id: String(a.id ?? ""), to: a.to == null ? null : String(a.to) } }),
+  hub_leave: () => ({ method: "POST", path: "/v1/hub/leave", body: {} }),
+  hub_peek: () => ({ method: "GET", path: "/v1/hub/peek" }),
+  playground_avatar: (a) => ({ method: "GET", path: `/v1/playground/avatar/${segment(a.userId)}` }),
+  playground_cheer: (a) => ({ method: "POST", path: `/v1/playground/friends/${segment(a.userId)}/cheer` }),
   admin_ticket_solved: (a) => ({ method: "PATCH", path: `/v1/admin/tickets/${segment(a.id)}`, body: { solved: !!a.solved } }),
 };
 

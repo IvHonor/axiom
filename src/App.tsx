@@ -41,6 +41,7 @@ import { useBadges } from "./shell/sidebar/useBadges";
 import { useCollapseReason } from "./shell/sidebar/useCollapseReason";
 import { useTimers } from "./shell/desk/timers";
 import { Companion } from "./features/lemma/Companion";
+import { usePlaygroundPublisher } from "./features/playground/store";
 import { useAreaName } from "./features/lemma/persona";
 import { useDesk } from "./shell/desk/useDesk";
 import { isOverlaySidebar, useOverlaySidebar } from "./shell/usePhone";
@@ -56,6 +57,7 @@ export default function App() {
   const { hiddenIds, setHidden } = useOverviewVisibility();
   const { tabs, active, previewKey, open, pin, close, closeExtension, reorder } = useTabs();
   useDesk(open);
+  usePlaygroundPublisher();
   // On a phone or tablet the sidebar slides over what's open, so it starts closed.
   const overlay = useOverlaySidebar();
   const [panel, setPanel] = useState<SidePanel | null>(() => (isOverlaySidebar() ? null : "areas"));
@@ -71,6 +73,8 @@ export default function App() {
     setNotificationsOff(offIds ? offIds.split(",") : []).catch(() => {});
   }, [offIds]);
   const withSidebar = areas.filter((ext) => ext.area?.Sidebar);
+  /** Lemma and the Playground: across every area, not one of them. */
+  const lifeAreas = areas.filter((ext) => !ext.core);
   const shownArea = withSidebar.find((ext) => panel === `area:${ext.id}`);
   const nameOf = useAreaName();
   const isInstalled = (ext: ExtensionManifest) => !!ext.builtIn || installedIds.includes(ext.id);
@@ -294,7 +298,7 @@ export default function App() {
 
   /** A sidebar panel: in the sidebar, or peeking over what's open. */
   const panelFor = (p: SidePanel) => {
-    if (p === "areas") return <AreasPanel areas={areas} view={active} onOpen={open} onBrowse={() => setPanel("extensions")} hiddenIds={hiddenIds} onVisibilityChange={setHidden} />;
+    if (p === "areas") return <AreasPanel areas={lifeAreas} view={active} onOpen={open} onBrowse={() => setPanel("extensions")} hiddenIds={hiddenIds} onVisibilityChange={setHidden} />;
     if (p === "extensions")
       return (
         <ExtensionsPanel
@@ -311,7 +315,7 @@ export default function App() {
           onUninstall={uninstall}
         />
       );
-    if (p === "account") return <AccountPanel status={account} sync={sync} onChange={setAccount} extensions={areas.map((ext) => ext.id)} signUp={signUp} />;
+    if (p === "account") return <AccountPanel status={account} sync={sync} onChange={setAccount} extensions={areas.map((ext) => ext.id)} signUp={signUp} features={{ isOn: (id) => { const ext = findExtension(id); return !!ext && isOn(ext); }, setEnabled }} />;
     if (p === "themes") return <ThemesPanel />;
     const ext = withSidebar.find((e) => p === `area:${e.id}`);
     const Sidebar = ext?.area?.Sidebar;
@@ -364,14 +368,16 @@ export default function App() {
   return (
     <ThemeProvider installed={installed}>
       <div className="app">
-        <TopBar tabs={tabs} active={active} previewKey={previewKey} onSelect={open} onPin={pin} onClose={close} onReorder={reorder} />
+        <TopBar tabs={tabs} active={active} previewKey={previewKey} onSelect={open} onPin={pin} onClose={close} onReorder={reorder}
+          playground={{ on: !!findExtension("playground") && isOn(findExtension("playground")!), open: () => { setEnabled("playground", true); open({ kind: "extension", id: "playground" }); } }} />
         <div className="workbench" style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
           <ActivityBar
             hiddenIds={hiddenIds}
             onVisibilityChange={setHidden}
             active={panel}
             current={openArea}
-            areas={withSidebar.map((ext) => ({ id: `area:${ext.id}` as const, label: nameOf(ext), icon: ext.icon, extension: ext }))}
+            core={withSidebar.filter((ext) => ext.core).map((ext) => ({ id: `area:${ext.id}` as const, label: nameOf(ext), icon: ext.icon, extension: ext }))}
+            areas={withSidebar.filter((ext) => !ext.core).map((ext) => ({ id: `area:${ext.id}` as const, label: nameOf(ext), icon: ext.icon, extension: ext }))}
             onToggle={togglePanel}
             onPeek={peekAt}
             badges={badges}

@@ -210,3 +210,13 @@ Run `npm run build`, then `node tests/production-colours.mjs` with the Playwrigh
 ## The sidebar
 
 Run `node tests/sidebar.mjs` against Vite on port 1427 with the Playwright setup below. `sidebar-preview.html` renders the whole real app against a pretend Axiom (no desktop database; areas answer as if empty). It checks the sidebar following what's open (an area's own sidebar, the list of areas for the overview), an area's icon opening the area, each area remembering whether you left it open, peeking with the sidebar closed, pinning, dragging the edge to resize (and double-clicking it back), Ctrl+P, Recent, a badge for reviews due, tucking away for an area that needs room and for a narrow window (and coming back), staying open when you overrule that, and its settings. Screenshots go to `.qa.local`.
+
+## The Playground
+
+Run `node --test tests/playground-stats.mjs` (no server needed) for the numbers each device shares: weeks from Monday, months, all time, streaks running to today or yesterday, best streaks, future days left out and each day held to its cap (`src/features/playground/rules.ts`, mirrored from `crates/protocol/src/playground.rs`). The server's side (handles, friends by handle and code, cheers, who sees which board, believable numbers only, leaving) is `cargo test -p axiom-server --test playground`.
+
+Run `node --test tests/playground-garden.mjs` for the friends garden's life (`src/features/playground/garden/engine.ts`): Lemmas wandering for minutes without leaving the lawn, visiting and chatting in pairs (both speak), racing for a seed dropped near them (eaten once) while one nobody reaches grows into a plant, resting one to a charging pad at night, reacting to pokes and getting dizzy when overdone, requests waiting at the gate until accepted, new friends arriving, and sleeping at night.
+
+Run `node --test tests/playground-hub.mjs` for the Hub's rooms: every door has a way back, nobody arrives in a doorway or inside furniture, and walking gets there, going round the Plaza's fountain from every side and weaving between the Focus Lab's desks. The server's side (a handle to enter, seeing only your room, waves reaching who they're for, only known phrases, quiet people logged off, peeking without entering) is `cargo test -p axiom-server --test hub`.
+
+`playground-preview.html` (Vite on port 1427) renders the real page, sidebar and overview tile against a pretend server with five Lemmas, every flame tier and a streak at risk. `?new` shows joining, `?lonely` a player with no friends, `?phone` the page alone at phone width. The Playground opens on the Hub, where a pretend live server has friends wandering the Plaza, Ren in the Library and Ada saying hi.

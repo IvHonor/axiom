@@ -15,9 +15,11 @@ pub mod db;
 pub mod housekeeping;
 mod entities;
 mod error;
+pub mod hub;
 mod limit;
 pub mod notify;
 pub mod mail;
+mod playground;
 mod privacy;
 mod spaces;
 mod support;
@@ -91,6 +93,8 @@ pub struct Shared {
     /// Told when an email plan changes, so the sender looks again at when its
     /// next email is due (see `notify::run`).
     pub email_wake: tokio::sync::Notify,
+    /// Who's in the Hub right now (see `hub`).
+    pub hub: hub::Hub,
 }
 
 impl Shared {
@@ -116,6 +120,7 @@ impl Shared {
             settings: RwLock::new(admin::Settings::default()),
             cache: cache::Cache::default(),
             email_wake: tokio::sync::Notify::new(),
+            hub: hub::Hub::default(),
         }
     }
 
@@ -233,6 +238,20 @@ pub fn app(state: AppState) -> Router {
         .route(routes::AI_CHAT_STREAM, post(ai::chat_stream))
         // A minute of audio, base64-encoded, is more than the usual 2 MB.
         .route(routes::AI_TRANSCRIBE, post(ai::transcribe).layer(axum::extract::DefaultBodyLimit::max(4 * 1024 * 1024)))
+        .route(routes::PLAYGROUND_ME, get(playground::me).put(playground::save).delete(playground::leave))
+        .route(routes::PLAYGROUND_CODE, post(playground::new_code))
+        .route(routes::PLAYGROUND_STATS, put(playground::publish))
+        .route(routes::PLAYGROUND_BOARD, get(playground::board))
+        .route(routes::PLAYGROUND_FRIENDS, get(playground::friends).post(playground::add_friend))
+        .route(routes::PLAYGROUND_FRIEND, delete(playground::remove))
+        .route(routes::PLAYGROUND_FRIEND_ACCEPT, post(playground::accept))
+        .route(routes::PLAYGROUND_FRIEND_CHEER, post(playground::cheer))
+        .route(routes::PLAYGROUND_AVATAR, get(playground::avatar))
+        .route(routes::HUB_ENTER, post(hub::enter))
+        .route(routes::HUB_SYNC, post(hub::sync))
+        .route(routes::HUB_ACT, post(hub::act))
+        .route(routes::HUB_LEAVE, post(hub::leave))
+        .route(routes::HUB_PEEK, get(hub::peek))
         .route(routes::NOTIFY_UNSUBSCRIBE, get(notify::unsubscribe_page).post(notify::unsubscribe_now))
         .layer(axum::middleware::from_fn_with_state(state.clone(), boards_changed))
         .layer(TraceLayer::new_for_http())

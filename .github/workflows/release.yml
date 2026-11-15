@@ -85,6 +85,27 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Signs the Mac app with Axiom's own certificate (scripts/make-mac-signing-cert.sh)
+      # rather than a throwaway one, so every release is the same app to macOS
+      # and "Always Allow" on the keychain prompt lasts through updates. Its
+      # hardened runtime stays off (tauri.release.conf.json): that's only for
+      # Apple's notarisation, and would need entitlements for the microphone.
+      - name: Load the macOS signing certificate
+        if: matrix.name == 'macOS'
+        shell: bash
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$MACOS_CERTIFICATE" ] || [ -z "$MACOS_CERTIFICATE_PASSWORD" ]; then
+            echo "::warning::No MACOS_CERTIFICATE / MACOS_CERTIFICATE_PASSWORD secrets: the Mac app is signed with a throwaway identity, so people are asked for keychain access again after this update. Make them with scripts/make-mac-signing-cert.sh."
+            exit 0
+          fi
+          identity="$(bash scripts/import-mac-signing-cert.sh "$RUNNER_TEMP/axiom-signing.keychain-db" | tail -n 1)"
+          echo "Signing as $identity"
+          # Overrides bundle > macOS > signingIdentity ("-") in tauri.conf.json.
+          echo "APPLE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -105,7 +126,7 @@ jobs:
           releaseBody: |
             **Windows:** download the file ending in `_x64-setup.exe` below and run it. "Windows protected your PC"? The installer isn't code-signed yet: choose **More info**, then **Run anyway**.
 
-            **macOS** (Apple Silicon and Intel, macOS 11 or later): download the file ending in `_universal.dmg`, open it and drag Axiom into Applications. The first time you open it, macOS says it can't check the developer: open **System Settings → Privacy & Security**, scroll down and choose **Open Anyway**. If it asks to use your keychain after an update, choose **Always Allow**.
+            **macOS** (Apple Silicon and Intel, macOS 11 or later): download the file ending in `_universal.dmg`, open it and drag Axiom into Applications. The first time you open it, macOS says it can't check the developer: open **System Settings → Privacy & Security**, scroll down and choose **Open Anyway**. If it asks to use your keychain, choose **Always Allow** (once is enough: later updates keep it).
 
             If you already have Axiom, it offers this update by itself.
 

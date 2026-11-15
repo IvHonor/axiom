@@ -11,6 +11,7 @@ use super::service::{goals, list, logs, milestones};
 use super::types::Pace;
 use crate::error::Result;
 use crate::features::period::{Compare, Headline, Period};
+use crate::playground::DayCounts;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -95,4 +96,14 @@ pub async fn report(db: &DatabaseConnection, period: Period) -> Result<GoalsAnal
         }),
         goals: standings,
     })
+}
+
+
+/// Every day's check-ins, for the Playground (`crate::playground`).
+pub async fn playground_days(db: &DatabaseConnection) -> Result<Vec<(&'static str, DayCounts)>> {
+    let mut check_ins = DayCounts::new();
+    for l in logs().all(db).await? {
+        *check_ins.entry(l.day).or_default() += 1;
+    }
+    Ok(vec![("goals.checkins", check_ins)])
 }

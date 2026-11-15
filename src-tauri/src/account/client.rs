@@ -358,6 +358,33 @@ impl Client {
         read(request.send().await).await
     }
 
+    /// A Playground call (`axiom_protocol::playground`): JSON both ways, and
+    /// an empty answer is null. The Playground's types go to React unchanged.
+    pub async fn playground(&self, token: &str, method: reqwest::Method, path: &str, body: Option<&serde_json::Value>) -> Result<serde_json::Value, ClientError> {
+        let mut request = self.http.request(method, self.url(path)).bearer_auth(token);
+        if let Some(body) = body {
+            request = request.json(body);
+        }
+        let response = request.send().await.map_err(|_| ClientError::Offline)?;
+        // A 404 without the server's own message: the route isn't there, so
+        // the server is older than this app (the Playground's 404s explain themselves).
+        if response.status() == reqwest::StatusCode::NOT_FOUND && response.headers().get(reqwest::header::CONTENT_TYPE).is_none_or(|t| !t.as_bytes().starts_with(b"application/json")) {
+            return Err(ClientError::Rejected {
+                status: 404,
+                message: "This Axiom server doesn't have the Playground yet. It will once the server is updated.".into(),
+            });
+        }
+        let response = check(response).await?;
+        let bytes = response.bytes().await.map_err(|_| ClientError::Offline)?;
+        if bytes.is_empty() {
+            return Ok(serde_json::Value::Null);
+        }
+        serde_json::from_slice(&bytes).map_err(|_| ClientError::Rejected {
+            status: 502,
+            message: "The server sent an answer Axiom doesn't understand. Try updating Axiom.".into(),
+        })
+    }
+
     async fn post<B: Serialize, T: DeserializeOwned>(&self, path: &str, body: &B) -> Result<T, ClientError> {
         read(self.http.post(self.url(path)).json(body).send().await).await
     }

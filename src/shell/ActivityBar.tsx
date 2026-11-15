@@ -39,6 +39,8 @@ interface ActivityBarProps {
   active: SidePanel | null;
   /** Installed areas with a sidebar of their own, listed under Extensions. */
   areas: Item[];
+  /** Lemma and the Playground: a group of their own above the areas, in a fixed order. */
+  core?: Item[];
   onToggle: (panel: SidePanel) => void;
   /** Pointing at an icon (null: away): its panel can peek out while the sidebar's closed. */
   onPeek?: (panel: SidePanel | null) => void;
@@ -57,7 +59,7 @@ interface ActivityBarProps {
 }
 
 /** The far-left icon strip. Clicking an icon opens its sidebar; clicking it again closes it. */
-export function ActivityBar({ active, areas, onToggle, onPeek, badges = {}, accountEmail, analytics, admin, hiddenIds = [], onVisibilityChange, current }: ActivityBarProps) {
+export function ActivityBar({ active, areas, core = [], onToggle, onPeek, badges = {}, accountEmail, analytics, admin, hiddenIds = [], onVisibilityChange, current }: ActivityBarProps) {
   const profile = useProfile(accountEmail);
   const [menu, setMenu] = useState<{ item: Item; at: MenuPosition } | null>(null);
   const [order, setOrder] = usePersistentState<string[]>("axiom.activityOrder.v1", saved =>
@@ -141,6 +143,12 @@ export function ActivityBar({ active, areas, onToggle, onPeek, badges = {}, acco
         >
           <ChartColumn size={20} strokeWidth={1.5} />
         </button>
+      )}
+      {core.length > 0 && (
+        <>
+          <div className="activitybar-divider" />
+          {core.map(item => button(item))}
+        </>
       )}
       {areas.length > 0 && <div className="activitybar-divider" />}
       <DndContext sensors={sensors} collisionDetection={closestCenter}

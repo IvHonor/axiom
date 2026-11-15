@@ -6,7 +6,9 @@
 use chrono::{DateTime, Utc};
 
 pub mod ai;
+pub mod hub;
 pub mod notify;
+pub mod playground;
 use serde::{Deserialize, Serialize};
 
 /// The server's routes. Bump the `/v1` prefix only for breaking changes, so
@@ -108,6 +110,33 @@ pub mod routes {
     pub const AI_CHAT_STREAM: &str = "/v1/ai/chat/stream";
     /// `POST` an `ai::Transcribe`: speech to text, on the server's AI keys.
     pub const AI_TRANSCRIBE: &str = "/v1/ai/transcribe";
+    /// The Playground and friends (see `playground`). GET: you (null until you pick a handle); PUT: pick a
+    /// handle, join, or change how you appear; DELETE: leave the boards (your handle and friends stay).
+    pub const PLAYGROUND_ME: &str = "/v1/playground/me";
+    /// POST: a new friend code (the old one stops working).
+    pub const PLAYGROUND_CODE: &str = "/v1/playground/me/code";
+    /// PUT: the numbers this device worked out.
+    pub const PLAYGROUND_STATS: &str = "/v1/playground/stats";
+    /// GET with `BoardQuery`.
+    pub const PLAYGROUND_BOARD: &str = "/v1/playground/board";
+    /// GET: friends and requests; POST: add someone by handle or code.
+    pub const PLAYGROUND_FRIENDS: &str = "/v1/playground/friends";
+    /// DELETE: unfriend, decline a request or cancel one you sent.
+    pub const PLAYGROUND_FRIEND: &str = "/v1/playground/friends/{user_id}";
+    pub const PLAYGROUND_FRIEND_ACCEPT: &str = "/v1/playground/friends/{user_id}/accept";
+    /// POST: cheer a friend on (once a day).
+    pub const PLAYGROUND_FRIEND_CHEER: &str = "/v1/playground/friends/{user_id}/cheer";
+    /// GET: someone's profile picture (`PeerAvatar`), if you can see them: a friend,
+    /// someone you've a request with, or someone on the global boards.
+    pub const PLAYGROUND_AVATAR: &str = "/v1/playground/avatar/{user_id}";
+    /// The Hub (see `hub`). POST `HubWhere`: enter; then check in about once a second.
+    pub const HUB_ENTER: &str = "/v1/hub/enter";
+    pub const HUB_SYNC: &str = "/v1/hub/sync";
+    /// POST `HubAct`: an emote or phrase.
+    pub const HUB_ACT: &str = "/v1/hub/act";
+    pub const HUB_LEAVE: &str = "/v1/hub/leave";
+    /// GET: who's in, without entering.
+    pub const HUB_PEEK: &str = "/v1/hub/peek";
 }
 
 /// Fills in a route's `{name}` placeholders, e.g. `route(SPACE, &[("id", "p1")])`.

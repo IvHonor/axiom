@@ -6,6 +6,7 @@ import { journal } from "../features/journal";
 import { lemma } from "../features/lemma";
 import { learning } from "../features/learning";
 import { notes } from "../features/notes";
+import { playground } from "../features/playground";
 import { projectBoard } from "../features/project_board";
 import { reading } from "../features/reading";
 import { uni } from "../features/uni";
@@ -37,6 +38,7 @@ export const EXTENSIONS: ExtensionManifest[] = [
   journal,
   learning,
   notes,
+  playground,
   projectBoard,
   reading,
   uni,

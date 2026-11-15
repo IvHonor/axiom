@@ -23,6 +23,10 @@ export interface ExtensionManifest {
   builtIn?: boolean;
   /** Can't be switched off either: Axiom needs it (the default themes). */
   required?: boolean;
+  /** Part of Axiom itself, working across every area rather than being one
+   * (Lemma, the Playground): its own group in the activity bar, not listed
+   * with the areas or under Extensions, switched on and off in Account. */
+  core?: boolean;
   /** A life area: listed under Areas and shown as a tile on the overview. */
   area?: AreaContribution;
   /** Themes this extension adds to the theme picker. */

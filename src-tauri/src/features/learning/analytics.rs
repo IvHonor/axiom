@@ -11,6 +11,7 @@ use super::entities::{session, unit};
 use super::service::{sessions, skills, sources, units};
 use crate::error::Result;
 use crate::features::period::{Compare, Headline, Period};
+use crate::playground::DayCounts;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,4 +101,18 @@ pub async fn report(db: &DatabaseConnection, period: Period) -> Result<LearningA
         }),
         skills: by_skill,
     })
+}
+
+
+/// Every day's minutes studied and chapters done, for the Playground (`crate::playground`).
+pub async fn playground_days(db: &DatabaseConnection) -> Result<Vec<(&'static str, DayCounts)>> {
+    let mut minutes = DayCounts::new();
+    for s in sessions().all(db).await?.into_iter().filter(|s| s.minutes > 0) {
+        *minutes.entry(s.day).or_default() += i64::from(s.minutes);
+    }
+    let mut done = DayCounts::new();
+    for day in units().filter(unit::Column::DoneOn.is_not_null()).all(db).await?.into_iter().filter_map(|u| u.done_on) {
+        *done.entry(day).or_default() += 1;
+    }
+    Ok(vec![("learning.minutes", minutes), ("learning.units", done)])
 }

@@ -11,6 +11,7 @@ use super::entities::task;
 use super::service::{projects, tasks};
 use crate::error::Result;
 use crate::features::period::{local_day, percent, Compare, Headline, Period};
+use crate::playground::DayCounts;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +97,27 @@ pub async fn report(db: &DatabaseConnection, period: Period) -> Result<BoardAnal
         }),
         projects: done_by_project,
     })
+}
+
+
+/// Every day's completed tasks, for the Playground (`crate::playground`).
+/// Shared boards are left out: anyone on them may have completed a task.
+pub async fn playground_days(db: &DatabaseConnection) -> Result<Vec<(&'static str, DayCounts)>> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let shared: std::collections::HashSet<String> = db
+        .query_all_raw(Statement::from_string(DbBackend::Sqlite, "SELECT id FROM sync_spaces"))
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|row| row.try_get::<String>("", "id").ok())
+        .collect();
+    let mut done = DayCounts::new();
+    for t in tasks().all(db).await?.into_iter().filter(|t| !shared.contains(&t.project_id)) {
+        if let Some(at) = t.completed_at {
+            *done.entry(local_day(at)).or_default() += 1;
+        }
+    }
+    Ok(vec![("project_board.done", done)])
 }
 
 #[cfg(test)]

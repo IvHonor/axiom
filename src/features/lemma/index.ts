@@ -28,6 +28,7 @@ export const lemma: ExtensionManifest = {
   version: "0.1.0",
   publisher: "Axiom",
   builtIn: true,
+  core: true,
   icon: Sparkles,
   color: "var(--accent)",
   area: { View: LemmaView, Summary: LemmaSummary, Sidebar: LemmaSidebar, fittedSummary: true, analytics: lemmaAnalytics },

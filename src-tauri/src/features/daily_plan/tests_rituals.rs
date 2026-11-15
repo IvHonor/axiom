@@ -189,3 +189,32 @@ async fn fit_into_day_places_top_priorities_first_around_fixed_blocks() {
     let again = fit_into_day(&db, day(TODAY), 9 * 60).await.unwrap();
     assert!(again.scheduled.is_empty(), "already scheduled tasks are left alone");
 }
+
+#[tokio::test]
+async fn the_playground_counts_focus_tasks_and_perfect_days() {
+    let db = setup().await;
+    let top = create_task(&db, "Report", Some(day(TODAY)), None).await.unwrap();
+    // Open, but not a top priority: doesn't matter.
+    create_task(&db, "Email", Some(day(TODAY)), None).await.unwrap();
+    set_focus(&db, &top.id, true).await.unwrap();
+    start_timer(&db, &top.id).await.unwrap();
+    backdate_timer(&db, &top.id, 40).await;
+    set_done(&db, &top.id, true).await.unwrap();
+    update_day(&db, day(TODAY), DayFields { planned: Some(true), ..Default::default() }).await.unwrap();
+
+    let counts = |list: Vec<(&'static str, crate::playground::DayCounts)>| list.into_iter().collect::<std::collections::HashMap<_, _>>();
+    let got = counts(super::analytics::playground_days(&db).await.unwrap());
+    assert_eq!(got["daily_plan.focus"].get(&day(TODAY)), Some(&40));
+    assert_eq!(got["daily_plan.done"].get(&day(TODAY)), Some(&1));
+    assert!(got["daily_plan.perfect"].is_empty(), "not shut down yet");
+
+    // Shut down with every top priority done: a perfect day, whatever else is open.
+    update_day(&db, day(TODAY), DayFields { shut_down: Some(true), ..Default::default() }).await.unwrap();
+    let got = counts(super::analytics::playground_days(&db).await.unwrap());
+    assert_eq!(got["daily_plan.perfect"].get(&day(TODAY)), Some(&1));
+
+    // An undone top priority spoils it.
+    set_done(&db, &top.id, false).await.unwrap();
+    let got = counts(super::analytics::playground_days(&db).await.unwrap());
+    assert!(got["daily_plan.perfect"].is_empty());
+}

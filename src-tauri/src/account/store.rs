@@ -18,37 +18,24 @@ pub trait SessionStore: Send + Sync {
     fn clear(&self);
 }
 
-/// Matches the app identifier in tauri.conf.json.
-const SERVICE: &str = "app.axiom.desktop";
 /// Development builds talk to a local server, so they keep a separate sign-in.
 const ENTRY: &str = if cfg!(debug_assertions) { "account-dev" } else { "account" };
 
+/// In the system's credential store (see `crate::keychain`).
 pub struct Keychain;
-
-impl Keychain {
-    fn entry() -> Option<keyring::Entry> {
-        keyring::Entry::new(SERVICE, ENTRY).ok()
-    }
-}
 
 impl SessionStore for Keychain {
     fn load(&self) -> Option<Saved> {
-        let json = Self::entry()?.get_password().ok()?;
-        serde_json::from_str(&json).ok()
+        serde_json::from_str(&crate::keychain::get(ENTRY)?).ok()
     }
 
     fn save(&self, saved: &Saved) -> Result<(), String> {
         let json = serde_json::to_string(saved).map_err(|e| e.to_string())?;
-        Self::entry()
-            .ok_or("This computer's credential store isn't available.")?
-            .set_password(&json)
-            .map_err(|e| format!("Couldn't save your sign-in: {e}"))
+        crate::keychain::set(ENTRY, &json).map_err(|e| format!("Couldn't save your sign-in: {e}"))
     }
 
     fn clear(&self) {
-        if let Some(entry) = Self::entry() {
-            let _ = entry.delete_credential();
-        }
+        crate::keychain::delete(ENTRY);
     }
 }
 

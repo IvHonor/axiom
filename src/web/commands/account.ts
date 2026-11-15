@@ -6,7 +6,7 @@ import { loginKey } from "../../../site/src/lib/login-key";
 import { DEMO, currentAccount, signOut, sync, syncState } from "../runtime";
 import type { Handlers } from "./types";
 
-async function account<T>(op: string, args: Record<string, unknown> = {}): Promise<T> {
+export async function account<T>(op: string, args: Record<string, unknown> = {}): Promise<T> {
   if (DEMO) throw "There's no account in demo mode.";
   const accountId = currentAccount()?.id;
   if (!accountId) throw "Your sign-in changed. Reload this page.";

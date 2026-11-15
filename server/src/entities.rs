@@ -402,3 +402,118 @@ pub mod web_update {
 
     impl ActiveModelBehavior for ActiveModel {}
 }
+
+pub mod playground_player {
+    use sea_orm::entity::prelude::*;
+
+    /// Someone with a handle, so friends can find them; maybe on the
+    /// Playground's boards too. See `axiom_protocol::playground`.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "playground_players")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub user_id: String,
+        /// On the Playground's boards. A handle alone is enough for friends.
+        pub in_playground: bool,
+        /// Lowercased.
+        #[sea_orm(unique)]
+        pub handle: String,
+        #[sea_orm(unique)]
+        pub friend_code: String,
+        pub global: bool,
+        /// Comma-separated metric ids.
+        pub shared: String,
+        /// `LemmaCard` as JSON.
+        pub lemma: String,
+        pub joined_at: DateTimeUtc,
+        pub updated_at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub mod playground_friendship {
+    use sea_orm::entity::prelude::*;
+
+    /// Two people, the lower id first. Pending until `accepted_at`.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "playground_friendships")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub low: String,
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub high: String,
+        pub requested_by: String,
+        pub created_at: DateTimeUtc,
+        pub accepted_at: Option<DateTimeUtc>,
+    }
+
+    impl Model {
+        /// The other person in it.
+        pub fn other(&self, me: &str) -> &str {
+            if self.low == me { &self.high } else { &self.low }
+        }
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub mod playground_stat {
+    use sea_orm::entity::prelude::*;
+
+    /// One person's numbers for one metric, as their device last sent them.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "playground_stats")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub user_id: String,
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub metric: String,
+        pub global: bool,
+        pub week_key: Date,
+        pub week: i64,
+        pub last_week: i64,
+        pub month_key: Date,
+        pub month: i64,
+        pub last_month: i64,
+        pub total: i64,
+        pub streak: i32,
+        pub best_streak: i32,
+        pub streak_through: Option<Date>,
+        pub as_of: Date,
+        pub updated_at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub mod playground_cheer {
+    use sea_orm::entity::prelude::*;
+
+    /// A friend cheering someone on; one per pair a (UTC) day.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "playground_cheers")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub from_id: String,
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub to_id: String,
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub day: Date,
+        pub created_at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}

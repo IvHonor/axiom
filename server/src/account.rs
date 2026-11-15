@@ -91,6 +91,7 @@ pub async fn delete_account(State(s): State<AppState>, auth: AuthUser, Json(body
     // Boards they own are deleted; they leave the rest.
     crate::spaces::forget_user(&txn, &account.id).await?;
     crate::notify::forget_user(&txn, &account.id).await?;
+    crate::playground::forget_user(&txn, &account.id).await?;
     sync_record::Entity::delete_many().filter(sync_record::Column::UserId.eq(&account.id)).exec(&txn).await?;
     password_reset::Entity::delete_many().filter(password_reset::Column::UserId.eq(&account.id)).exec(&txn).await?;
     email_code::Entity::delete_many().filter(email_code::Column::UserId.eq(&account.id)).exec(&txn).await?;
@@ -103,6 +104,7 @@ pub async fn delete_account(State(s): State<AppState>, auth: AuthUser, Json(body
     s.cache.forget_user(&id);
     s.cache.forget_spaces();
     s.cache.forget_plan(&id);
+    crate::hub::forget_user(&s, &id);
     tracing::info!("Deleted an account and its data");
     Ok(StatusCode::NO_CONTENT)
 }

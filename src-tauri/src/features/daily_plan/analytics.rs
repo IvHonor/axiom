@@ -9,6 +9,7 @@ use super::entities::{day, task};
 use super::service::{days, tasks};
 use crate::error::Result;
 use crate::features::period::{percent, Compare, Headline, Period};
+use crate::playground::DayCounts;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -87,4 +88,37 @@ pub async fn report(db: &DatabaseConnection, period: Period) -> Result<PlanAnaly
             }
         }),
     })
+}
+
+
+/// Every day's focus minutes, tasks done and perfect days (planned, top
+/// priorities all done, shut down), for the Playground (`crate::playground`).
+pub async fn playground_days(db: &DatabaseConnection) -> Result<Vec<(&'static str, DayCounts)>> {
+    let all: Vec<task::Model> = tasks().filter(task::Column::Day.is_not_null()).all(db).await?;
+    let (mut focus, mut done) = (DayCounts::new(), DayCounts::new());
+    // Per day: top priorities, and how many of them are done.
+    let mut top: std::collections::HashMap<Date, (usize, usize)> = std::collections::HashMap::new();
+    for t in &all {
+        let Some(d) = t.day else { continue };
+        if t.actual_minutes > 0 {
+            *focus.entry(d).or_default() += i64::from(t.actual_minutes);
+        }
+        if t.done_at.is_some() {
+            *done.entry(d).or_default() += 1;
+        }
+        if t.focus_rank.is_some() {
+            let slot = top.entry(d).or_default();
+            slot.0 += 1;
+            slot.1 += usize::from(t.done_at.is_some());
+        }
+    }
+    let mut perfect = DayCounts::new();
+    for r in days().all(db).await? {
+        let Ok(d) = r.id.parse::<Date>() else { continue };
+        let all_top_done = top.get(&d).is_some_and(|(count, finished)| *count > 0 && count == finished);
+        if r.planned_at.is_some() && r.shutdown_at.is_some() && all_top_done {
+            perfect.insert(d, 1);
+        }
+    }
+    Ok(vec![("daily_plan.focus", focus), ("daily_plan.done", done), ("daily_plan.perfect", perfect)])
 }

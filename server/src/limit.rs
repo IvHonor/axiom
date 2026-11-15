@@ -31,6 +31,14 @@ pub struct Limits {
     pub code_requests: Limiter,
     /// Support messages per account, or per network without one.
     pub tickets: Limiter,
+    /// Friend requests per account, so nobody can trawl the Playground for handles.
+    pub friend_adds: Limiter,
+    /// Playground numbers per account. The app sends them after changes, a few minutes apart.
+    pub playground_publish: Limiter,
+    /// Entering the Hub, its check-ins (about one a second) and emotes, per account.
+    pub hub_enters: Limiter,
+    pub hub_syncs: Limiter,
+    pub hub_acts: Limiter,
 }
 
 impl Default for Limits {
@@ -42,6 +50,11 @@ impl Default for Limits {
             invites: Limiter::new(20, Duration::from_secs(60 * 60)),
             code_requests: Limiter::new(5, Duration::from_secs(60 * 60)),
             tickets: Limiter::new(5, Duration::from_secs(60 * 60)),
+            friend_adds: Limiter::new(30, Duration::from_secs(60 * 60)),
+            playground_publish: Limiter::new(60, Duration::from_secs(60 * 60)),
+            hub_enters: Limiter::new(30, Duration::from_secs(10 * 60)),
+            hub_syncs: Limiter::new(240, Duration::from_secs(60)),
+            hub_acts: Limiter::new(40, Duration::from_secs(60)),
         }
     }
 }

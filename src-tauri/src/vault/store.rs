@@ -7,9 +7,7 @@ pub trait KeyStore: Send + Sync {
     fn clear(&self);
 }
 
-const SERVICE: &str = "app.axiom.desktop";
-
-/// One entry in the system's credential store.
+/// One secret in the system's credential store (see `crate::keychain`).
 pub struct Keychain(&'static str);
 
 impl Keychain {
@@ -20,28 +18,19 @@ impl Keychain {
     /// Where people's own AI keys were kept when they could bring them;
     /// emptied at startup (see `crate::ai`).
     pub const AI_KEYS: Keychain = Keychain(if cfg!(debug_assertions) { "ai-keys-dev" } else { "ai-keys" });
-
-    fn entry(&self) -> Option<keyring::Entry> {
-        keyring::Entry::new(SERVICE, self.0).ok()
-    }
 }
 
 impl KeyStore for Keychain {
     fn load(&self) -> Option<String> {
-        self.entry()?.get_password().ok()
+        crate::keychain::get(self.0)
     }
 
     fn save(&self, key: &str) -> Result<(), String> {
-        self.entry()
-            .ok_or("This computer's credential store isn't available.")?
-            .set_password(key)
-            .map_err(|e| format!("Couldn't save to this computer's credential store: {e}"))
+        crate::keychain::set(self.0, key).map_err(|e| format!("Couldn't save to this computer's credential store: {e}"))
     }
 
     fn clear(&self) {
-        if let Some(entry) = self.entry() {
-            let _ = entry.delete_credential();
-        }
+        crate::keychain::delete(self.0);
     }
 }
 

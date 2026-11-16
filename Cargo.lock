@@ -588,6 +588,12 @@ dependencies = [
  "iana-time-zone",
  "keyring",
  "lopdf",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-core-graphics",
+ "objc2-foundation",
+ "objc2-quartz-core",
+ "raw-window-handle",
  "reqwest",
  "roxmltree",
  "rrule",
@@ -606,6 +612,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "uuid",
+ "window-vibrancy",
  "windows",
  "windows-registry",
  "wiremock",
@@ -4068,6 +4075,7 @@ dependencies = [
  "bitflags 2.13.2",
  "objc2",
  "objc2-core-foundation",
+ "objc2-core-graphics",
  "objc2-foundation",
 ]
 

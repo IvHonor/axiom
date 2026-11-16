@@ -160,8 +160,6 @@ export interface Theme {
     radius: number;
     /** HUD corner brackets on panels. */
     brackets: boolean;
-    /** Diagonal hatched boxes in the top bar. */
-    hatching: boolean;
     /** "outline" draws buttons as frames; "filled" fills them with the accent. */
     buttons: "outline" | "filled";
     /** A ticking clock at the right of the top bar. */

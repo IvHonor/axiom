@@ -1,4 +1,5 @@
-import { Check } from "lucide-react";
+import { useState } from "react";
+import { Check, Search } from "lucide-react";
 import { useTheme, type ThemeOption } from "./theme/ThemeProvider";
 import { Section } from "./ui/Section";
 import { ThemeSwatch } from "./ui/ThemeSwatch";
@@ -6,8 +7,13 @@ import { ThemeSwatch } from "./ui/ThemeSwatch";
 /** Sidebar for picking the color theme, like VS Code's Ctrl+K Ctrl+T picker. Every theme pack's themes are here. */
 export function ThemesPanel() {
   const { theme: active, options, setTheme, followSystem, setFollowSystem, systemType, preferred } = useTheme();
-  const dark = options.filter((o) => o.theme.type === "dark");
-  const light = options.filter((o) => o.theme.type === "light");
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const matches = options.filter(({ theme, extension }) =>
+    `${theme.label} ${extension.name} ${theme.type}`.toLowerCase().includes(q),
+  );
+  const dark = matches.filter((o) => o.theme.type === "dark");
+  const light = matches.filter((o) => o.theme.type === "light");
 
   const list = (items: ThemeOption[]) => (
     <ul className="theme-list">
@@ -41,6 +47,24 @@ export function ThemesPanel() {
   return (
     <aside className="sidebar">
       <header className="sidebar-head">Themes</header>
+      <label className="search">
+        <Search size={14} strokeWidth={1.5} aria-hidden="true" />
+        <input
+          type="search"
+          aria-label="Search themes"
+          placeholder="Search themes"
+          value={query}
+          onChange={(e) => setQuery(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && query) {
+              e.preventDefault();
+              e.stopPropagation();
+              setQuery("");
+            }
+          }}
+          spellCheck={false}
+        />
+      </label>
       <div className="sidebar-body">
         <label className="theme-follow">
           <input type="checkbox" checked={followSystem} onChange={(e) => setFollowSystem(e.currentTarget.checked)} />
@@ -53,12 +77,13 @@ export function ThemesPanel() {
             </span>
           </span>
         </label>
-        <Section title="Dark" count={dark.length}>
+        {dark.length > 0 && <Section key={q ? "search-dark" : "dark"} title="Dark" count={dark.length}>
           {list(dark)}
-        </Section>
-        <Section title="Light" count={light.length}>
+        </Section>}
+        {light.length > 0 && <Section key={q ? "search-light" : "light"} title="Light" count={light.length}>
           {list(light)}
-        </Section>
+        </Section>}
+        {matches.length === 0 && <p className="sidebar-empty" role="status">No themes match your search.</p>}
       </div>
     </aside>
   );

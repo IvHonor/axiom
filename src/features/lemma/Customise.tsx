@@ -7,6 +7,7 @@ import { DEFAULT_NAME, MAX_NAME, PERSONALITIES, nameOf, setPersona, usePersona }
 import { MAX_OUTFITS, setCompanionPrefs, useCompanionPrefs } from "./preferences";
 import { speak, stopSpeaking } from "../../lib/voice";
 import { Switch } from "../../shell/ui/Switch";
+import { useDialogue } from "./useDialogue";
 import { useAccount } from "../../shell/useAccount";
 import { useLemma } from "./state";
 import { routineFor } from "./itemIdle";
@@ -49,6 +50,7 @@ export function Customise({ onClose }: { onClose: () => void }) {
   }, []);
   // A happy bounce on every change, then back to idle.
   const [mood, setMood] = useState<Mood>("idle");
+  const dialogue = useDialogue("preview", !reading && (mood === "idle" || mood === "happy"));
   const timer = useRef(0);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   const change = (part: Partial<Look>) => {
@@ -68,8 +70,8 @@ export function Customise({ onClose }: { onClose: () => void }) {
       <div className="lemma-wardrobe">
         <div className="lemma-wardrobe-preview">
           <span className="lemma-preview-eyebrow"><span /> YOUR PERSONAL AI</span>
-          <div className="lemma-preview-stage"><Face mood={mood} size={300} interactive idlePreview={idlePreview} /></div>
-          <div className="lemma-preview-caption"><h3>{name} <span>/ {shape.name}</span></h3><p>{shape.description}</p></div>
+          <div className="lemma-preview-stage"><Face mood={mood} size={300} interactive idlePreview={idlePreview} dialogueRef={dialogue.attach} /></div>
+          <div className="lemma-preview-caption"><h3>{name} <span>/ {shape.name}</span></h3><p aria-live="polite" aria-atomic="true" data-lemma-dialogue={dialogue.message?.kind}>{dialogue.message?.text ?? shape.description}</p></div>
           <p className="lemma-preview-hint">Drag to turn · Tap to say hello</p>
           <div className="lemma-reaction-preview" aria-label="Preview automatic expressions">
             {(["idle", "thinking", "listening", "speaking"] as const).map(m => <button key={m} className="btn btn-sm btn-ghost" onClick={() => react(m)}>{m === "speaking" ? "Answering" : m[0].toUpperCase() + m.slice(1)}</button>)}
@@ -169,6 +171,8 @@ export function Customise({ onClose }: { onClose: () => void }) {
             <Slider label="Idle movement" value={prefs.movement} min={0} max={1.5} step={0.1} text={prefs.movement === 0 ? "Still" : `${Math.round(prefs.movement * 100)}%`} onChange={movement => setCompanionPrefs({ movement })} />
             <label className="lemma-control">Companion position<select aria-label="Companion position" value={prefs.spot ? "moved" : prefs.corner} onChange={e => { if (e.currentTarget.value !== "moved") setCompanionPrefs({ corner: e.currentTarget.value as typeof prefs.corner, spot: null }); }}>{prefs.spot && <option value="moved">where you moved it</option>}{(["bottom-right", "bottom-left", "top-right", "top-left"] as const).map(c => <option key={c} value={c}>{c.replace("-", " ")}</option>)}</select></label>
             <div className="lemma-follow-control"><span>Follow me between areas</span><Switch label="Follow me between areas" on={prefs.follow} onChange={follow => setCompanionPrefs({ follow })} /></div>
+            <div className="lemma-follow-control"><span>Occasional comments</span><Switch label="Occasional comments" on={prefs.chatter} onChange={chatter => setCompanionPrefs({ chatter })} /></div>
+            <p className="field-hint">Short, silent reactions to animations, appearance and your day. Focus and conversation take priority.</p>
             <p className="field-hint">Size and position apply to the floating companion inside Axiom. Brightness and idle movement apply to every live Lemma. Your system's reduced-motion setting takes priority.</p>
           </>}
           {tab === "Outfits" && <>

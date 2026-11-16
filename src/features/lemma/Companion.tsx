@@ -10,6 +10,7 @@ import { useLemma } from "./state";
 import { useAssistantName } from "./persona";
 import { useCompanionPrefs } from "./preferences";
 import { useCompanionPlace } from "./companionPlace";
+import { useDialogue } from "./useDialogue";
 
 /**
  * A companion beside your other areas, with a remembered compact mode. Drag
@@ -27,6 +28,7 @@ export function Companion({ onOpen }: { onOpen: () => void }) {
   // A phone, or one held sideways, has no room for the full card.
   const short = useShortScreen();
   const compact = savedCompact || phone || short;
+  const dialogue = useDialogue("companion", prefs.follow && !compact && !customising);
   const tapPill = () => (phone || short ? onOpen() : setCompact(false));
   const pill = useCompanionPlace<HTMLButtonElement>(prefs, tapPill);
   const card = useCompanionPlace<HTMLElement>(prefs);
@@ -66,8 +68,9 @@ export function Companion({ onOpen }: { onOpen: () => void }) {
           <GripHorizontal size={13} />
         </button>
         <button className="icon-btn lemma-companion-min" onClick={() => setCompact(true)} title={`Minimise ${me}`} aria-label={`Minimise ${me}`}><Minus size={13} /></button>
-        <Face mood={moodOf(state)} level={state.level} tool={toolOf(state)} size={prefs.size} interactive onTalk={() => { onOpen(); askToTalk(); }} />
-        <p aria-live="polite">{doing(state) ?? "Right here with you."}</p>
+        <Face mood={moodOf(state)} level={state.level} tool={toolOf(state)} size={prefs.size} interactive onTalk={() => { onOpen(); askToTalk(); }}
+          onIdleComplete={dialogue.completed} dialogueRef={dialogue.attach} />
+        <p aria-live="polite" aria-atomic="true" data-lemma-dialogue={dialogue.message?.kind}>{doing(state) ?? dialogue.message?.text ?? "Right here with you."}</p>
         <div className="lemma-companion-actions">
           <button className="btn btn-sm btn-ghost" onClick={onOpen}><MessageSquare size={12} /> Chat</button>
           <button className="icon-btn" onClick={() => setCustomising(true)} title={`Customise ${me}`} aria-label={`Customise ${me}`}><Palette size={14} /></button>

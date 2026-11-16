@@ -13,7 +13,7 @@ import { useAssistantName, usePersona } from "../lemma/persona";
 import { lineFor } from "./banter";
 import { METRICS, SHARE_HINT } from "./metrics";
 import * as api from "./api";
-import { myLemma, refresh, sendStats, setMe } from "./store";
+import { changeSharing, myLemma, refresh, sendStats, setMe } from "./store";
 
 /** The server's rules (`check_handle`), so mistakes show while typing. */
 export function handleProblem(handle: string): string | null {
@@ -58,9 +58,12 @@ export function Join({ me, onDone }: { me?: api.PlaygroundMe | null; onDone?: ()
     setBusy(true);
     setError(null);
     try {
-      setMe(await api.saveMe(handle, global, shared, myLemma()));
-      await sendStats(true);
-      await refresh();
+      if (me) await changeSharing(global ? "global" : "friends", shared);
+      else {
+        setMe(await api.saveMe(handle, global, shared, myLemma()));
+        await sendStats(true);
+        await refresh();
+      }
       onDone?.();
     } catch (e) {
       setError(String(e));
@@ -72,8 +75,7 @@ export function Join({ me, onDone }: { me?: api.PlaygroundMe | null; onDone?: ()
   const leave = async () => {
     setBusy(true);
     try {
-      await api.leave();
-      await refresh();
+      await changeSharing("off", []);
       onDone?.();
     } catch (e) {
       setError(String(e));

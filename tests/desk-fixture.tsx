@@ -60,11 +60,14 @@ const acts: { tool: string; args: Record<string, unknown> }[] = [];
 const links: string[] = [];
 /** Where the cursor is on the screen, for his eyes; the test moves it. */
 const cursor = { x: 1000, y: 600 };
+const glassFrames: unknown[] = [];
+const pointerReads = { local: 0, global: 0 };
+const nativeThemes: unknown[] = [];
 const deskState = { idleSeconds: 0, fullScreen: false, call: false, active: null };
 /** The plan his reactions watch: today's open tasks, tomorrow's, and how many are in the inbox. */
 const plan = { today: [task] as PlanTask[], tomorrow: [] as PlanTask[], inbox: params.has("inbox") ? 1 : 0 };
 // The hooks only talk to Rust inside Tauri: this page stands in for it.
-Object.assign(window, { deskCalls: calls, opened, deskSizes: sizes, said, undone, acts, links, cursor, deskState, plan, task, isTauri: true, emitTauri: emit, finishAnother: () => { done += 1; changed(); } });
+Object.assign(window, { deskCalls: calls, opened, deskSizes: sizes, said, undone, acts, links, cursor, glassFrames, pointerReads, nativeThemes, deskState, plan, task, isTauri: true, emitTauri: emit, finishAnother: () => { done += 1; changed(); } });
 
 const day = () => new Date().toISOString().slice(0, 10);
 const localDay = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -181,7 +184,17 @@ mockIPC(
         return null;
       // Where he is, and where the cursor is, for his eyes.
       case "plugin:window|cursor_position":
+        pointerReads.global++;
         return { ...cursor };
+      case "desk_pointer":
+        pointerReads.local++;
+        return [cursor.x, cursor.y];
+      case "desk_glass":
+        glassFrames.push(a.panels);
+        return null;
+      case "plugin:window|set_theme":
+        nativeThemes.push(a.value);
+        return null;
       case "plugin:window|outer_position":
         return { x: 0, y: 0 };
       // The window is fitted to him, so it's as big as he is.
@@ -194,7 +207,7 @@ mockIPC(
         return null;
       case "desk_resize":
         sizes.push(`${a.width}x${a.height}${a.dock ? " dock" : ""}`);
-        return a.dock ? "right" : null;
+        return a.dock ? (params.has("left") ? "left" : "right") : null;
       case "desk_show":
       case "desk_hide":
       case "desk_open_main":

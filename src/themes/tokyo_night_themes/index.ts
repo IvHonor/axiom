@@ -6,7 +6,7 @@ import type { ExtensionManifest, Theme } from "../../extensions/types";
 // Palette adapted for Axiom's UI roles; see README.md and LICENSE.
 const appearance = {
   fonts: { ui: '"Space Grotesk Variable", "Segoe UI", sans-serif', label: '"Space Grotesk Variable", "Segoe UI", sans-serif', mono: '"JetBrains Mono Variable", Consolas, monospace', size: 13 },
-  style: { radius: 5, brackets: false, hatching: false, buttons: "filled" },
+  style: { radius: 5, brackets: false, buttons: "filled" },
   labels: { uppercase: false, tracking: 0, joiner: " ", separator: "·" },
 } satisfies Partial<Theme>;
 

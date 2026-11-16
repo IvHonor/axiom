@@ -39,7 +39,7 @@ const summary = (name: string) => AREAS.find((area) => area.name === name)?.summ
 const CAPTIONS = [
   "Your day, projects, reading, goals and money, all on one screen.",
   ...WINDOW_TABS.slice(1).map((tab) => summary(tab.name)),
-  "Eight theme packs, twenty variants, dark and light. Change the look whenever you like.",
+  "Twenty theme packs, forty-three variants, dark and light. Change the look whenever you like.",
 ];
 
 /**

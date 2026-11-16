@@ -46,12 +46,6 @@ const OPS: Record<string, (args: Record<string, unknown>) => Request_> = {
   playground_add_friend: (a) => ({ method: "POST", path: "/v1/playground/friends", body: { handle: a.handle ?? null, code: a.code ?? null } }),
   playground_accept: (a) => ({ method: "POST", path: `/v1/playground/friends/${segment(a.userId)}/accept` }),
   playground_remove: (a) => ({ method: "DELETE", path: `/v1/playground/friends/${segment(a.userId)}` }),
-  // The Hub (crates/protocol/src/hub.rs).
-  hub_enter: (a) => ({ method: "POST", path: "/v1/hub/enter", body: { room: String(a.room ?? ""), x: Number(a.x), y: Number(a.y) } }),
-  hub_sync: (a) => ({ method: "POST", path: "/v1/hub/sync", body: { room: String(a.room ?? ""), x: Number(a.x), y: Number(a.y) } }),
-  hub_act: (a) => ({ method: "POST", path: "/v1/hub/act", body: { kind: String(a.kind ?? ""), id: String(a.id ?? ""), to: a.to == null ? null : String(a.to) } }),
-  hub_leave: () => ({ method: "POST", path: "/v1/hub/leave", body: {} }),
-  hub_peek: () => ({ method: "GET", path: "/v1/hub/peek" }),
   playground_avatar: (a) => ({ method: "GET", path: `/v1/playground/avatar/${segment(a.userId)}` }),
   playground_cheer: (a) => ({ method: "POST", path: `/v1/playground/friends/${segment(a.userId)}/cheer` }),
   admin_ticket_solved: (a) => ({ method: "PATCH", path: `/v1/admin/tickets/${segment(a.id)}`, body: { solved: !!a.solved } }),

@@ -34,11 +34,12 @@ First Light eligibility uses the account server's original creation date. See
 architecture and local browser test. This is separate from the public `/web`
 preview and has not been deployed.
 
-Run `npm ci` at the repository root as well as in `site`. The site's `prebuild`
-runs `npm run build:web` from the repository root into `site/public/app`, so
-every site build includes the current shared components, item descriptions,
-models and animations. For local `next dev`, run that web build first and
-repeat it after editing shared app source.
+Run `npm ci` at the repository root as well as in `site`. The site's `predev`
+and `prebuild` run `npm run build:web` from the repository root into
+`site/public/app`, so every `npm run dev` startup and production build includes
+the current shared themes, theme search, components, models and animations.
+After editing shared app source while the website is already running, rebuild
+with `npm run build:web` or restart `npm run dev`.
 
 ## Accounts
 

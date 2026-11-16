@@ -26,6 +26,8 @@ export const SYNCED: Record<string, string> = {
   "axiom.projectBoard.overviewLayouts.v1": "projectBoard.overviewLayouts",
   "axiom.reading.overviewLayouts.v1": "reading.overviewLayouts",
   "axiom.uni.overviewLayouts.v1": "uni.overviewLayouts",
+  "axiom.playground.overviewLayouts.v1": "playground.overviewLayouts",
+  "axiom.playground.preferences.v1": "playground.preferences",
   "axiom.activityOrder.v1": "activityOrder",
   "axiom.installed": "extensions.installed",
   "axiom.disabled": "extensions.disabled",

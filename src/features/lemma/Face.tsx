@@ -8,6 +8,8 @@ import { nameOf, usePersona, type Personality } from "./persona";
 import { expressionOf, type Mood } from "./expressions";
 import { useCompanionPrefs } from "./preferences";
 import { hasTalked, HINT_TAPS, markTalked, TAP_WINDOW_MS, tapHint } from "./talk";
+import type { IdleContext } from "./idleMotion";
+import type { CompletedAction } from "./dialogue";
 
 export type { Mood } from "./expressions";
 
@@ -41,11 +43,14 @@ interface FaceProps {
   /** Double-clicked: talk to him. With it, tapping him instead gets a hint on how. */
   onTalk?: () => void;
   idlePreview?: number;
+  idleContext?: IdleContext;
+  onIdleComplete?: (kind: CompletedAction) => void;
+  dialogueRef?: (node: HTMLElement | null) => void;
   /** Someone else's Lemma (the Playground): its personality, name and keepsakes, not yours. */
   peer?: { personality: Personality; name: string; admin: boolean; firstLight: boolean };
 }
 
-export function Face({ mood, size = 120, level = 0, tool, alive = true, look: given, interactive = false, facing, gaze, display, quiet = false, idlePreview = 0, onTalk, peer }: FaceProps) {
+export function Face({ mood, size = 120, level = 0, tool, alive = true, look: given, interactive = false, facing, gaze, display, quiet = false, idlePreview = 0, idleContext, onIdleComplete, dialogueRef, onTalk, peer }: FaceProps) {
   const chosen = useLook();
   const { brightness, movement } = useCompanionPrefs();
   const own = usePersona();
@@ -60,8 +65,8 @@ export function Face({ mood, size = 120, level = 0, tool, alive = true, look: gi
   const look = useMemo(() => lookForRole(given ?? chosen, admin, firstLight), [given, chosen, admin, firstLight]);
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<ReturnType<typeof createCompanionScene> | null>(null);
-  const latest = useRef<SceneState>({ look, mood, level, working: !!tool, facing, gaze, display, brightness, movement, personality: persona.personality, focused, compact, admin, firstLight });
-  latest.current = { look, mood, level, working: !!tool, facing, gaze, display, brightness, movement, personality: persona.personality, focused, compact, admin, firstLight };
+  const latest = useRef<SceneState>({ look, mood, level, working: !!tool, facing, gaze, display, brightness, movement, personality: persona.personality, focused, compact, admin, firstLight, idleContext, onIdleComplete });
+  latest.current = { look, mood, level, working: !!tool, facing, gaze, display, brightness, movement, personality: persona.personality, focused, compact, admin, firstLight, idleContext, onIdleComplete };
   const [ready, setReady] = useState(false);
   const [greeted, setGreeted] = useState(false);
   const timer = useRef(0);
@@ -79,7 +84,11 @@ export function Face({ mood, size = 120, level = 0, tool, alive = true, look: gi
     }).catch(() => { if (!cancelled) setReady(false); });
     return () => { cancelled = true; scene.current?.dispose(); scene.current = null; };
   }, [alive]);
-  useEffect(() => { scene.current?.update(latest.current); }, [look, mood, level, !!tool, facing?.x, facing?.y, gaze?.x, gaze?.y, display?.text, display?.color, brightness, movement, persona.personality, focused, compact, admin, firstLight]);
+  useEffect(() => { scene.current?.update(latest.current); }, [look, mood, level, !!tool, facing?.x, facing?.y, gaze?.x, gaze?.y, display?.text, display?.color, brightness, movement, persona.personality, focused, compact, admin, firstLight, idleContext, onIdleComplete]);
+  useEffect(() => {
+    dialogueRef?.(host.current);
+    return () => dialogueRef?.(null);
+  }, [dialogueRef]);
   const previewed = useRef(0);
   useEffect(() => {
     if (ready && idlePreview > 0 && previewed.current !== idlePreview) { previewed.current = idlePreview; scene.current?.previewIdle(); }
@@ -132,6 +141,7 @@ export function Face({ mood, size = 120, level = 0, tool, alive = true, look: gi
       data-mood={displayedMood}
       data-personality={persona.personality}
       data-quiet={focused || undefined}
+      data-idle-context={idleContext}
       data-display={display?.text}
       data-shape={look.shape}
       data-holding={look.holding}
@@ -188,7 +198,7 @@ function Illustration({ look, mood, personality, compact }: { look: Look; mood: 
     <ellipse cx="0" cy="76" rx="42" ry="7" fill="none" stroke="var(--lemma-glow)" opacity="0.35" />
     <g fill={look.finish === "matte" ? "var(--lemma-shell)" : `url(#${id})`} opacity={look.finish === "glass" ? 0.6 : 1} stroke="var(--lemma-glow)" strokeWidth="1.6">
       {look.shape === "orb" ? <circle r="58" /> :
-        look.shape === "prism" ? <>["cap", "beanie", "crown"].includes(look.accessory) ? <path d="M-46 -40Q-46 -54 -30 -54H30Q46 -54 46 -40V45Q46 54 37 54H-37Q-46 54 -46 45Z" /> : <rect x="-46" y="-54" width="92" height="108" rx="9" /></> :
+        look.shape === "prism" ? <rect x="-46" y="-54" width="92" height="108" rx="9" /> :
         look.shape === "pyramid" ? <><path d="M0 -65L62 43L3 62L-59 43Z" /><path d="M0 -65L3 62M3 62L62 43" fill="none" /></> :
         <path d="M0 -61C70 -61 63 0 25 55Q0 87 -25 55C-63 0 -70 -61 0 -61Z" />}
     </g>

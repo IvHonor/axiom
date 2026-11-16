@@ -1,10 +1,11 @@
-// The Hub's commands (src-tauri/src/playground.rs, hub_*) and its fixed
+// Nexus's live commands (src-tauri/src/playground.rs, hub_*) and its fixed
 // emotes and phrases, mirroring crates/protocol/src/hub.rs: the server only
 // accepts these ids, so nobody can type anything that needs moderating.
+// Positions are metres on the city map (see nexus/world.ts).
 import { invoke } from "@tauri-apps/api/core";
 import type { Player } from "../api";
+import type { DistrictId } from "../nexus/world";
 
-export type RoomId = "plaza" | "library" | "lab" | "terrace" | "arcade";
 export type ActKind = "emote" | "phrase";
 
 export interface Shown {
@@ -18,7 +19,7 @@ export interface Shown {
 export interface HubPerson {
   player: Player;
   x: number;
-  y: number;
+  z: number;
   shown: Shown | null;
 }
 
@@ -29,27 +30,29 @@ export interface HubEvent {
   item: string;
 }
 
-export interface RoomCount {
-  id: RoomId;
+export interface DistrictCount {
+  id: DistrictId;
   count: number;
 }
 
 export interface HubState {
-  room: RoomId;
+  /** Everyone within 200 m, nearest first. */
   people: HubPerson[];
-  rooms: RoomCount[];
+  districts: DistrictCount[];
   online: number;
   events: HubEvent[];
 }
 
 export interface HubPeek {
   online: number;
-  rooms: RoomCount[];
-  plaza: HubPerson[];
+  districts: DistrictCount[];
+  /** Some of who's in the Nexus itself. */
+  nexus: HubPerson[];
 }
 
-export const enterHub = (room: RoomId, x: number, y: number) => invoke<HubState>("hub_enter", { room, x, y });
-export const syncHub = (room: RoomId, x: number, y: number) => invoke<HubState>("hub_sync", { room, x, y });
+/** `inside`: the building you're in (x and z from its middle), or null out in the city. */
+export const enterHub = (x: number, z: number, inside: string | null = null) => invoke<HubState>("hub_enter", { x, z, inside });
+export const syncHub = (x: number, z: number, inside: string | null = null) => invoke<HubState>("hub_sync", { x, z, inside });
 export const actHub = (kind: ActKind, id: string, to: string | null = null) => invoke<void>("hub_act", { kind, id, to });
 export const leaveHub = () => invoke<void>("hub_leave");
 export const peekHub = () => invoke<HubPeek>("hub_peek");

@@ -210,7 +210,7 @@ async fn only_believable_shared_numbers_are_kept() {
 }
 
 #[tokio::test]
-async fn a_handle_alone_is_enough_for_friends_but_not_the_boards() {
+async fn a_handle_can_browse_boards_without_sharing_or_publishing() {
     let app = server().await;
     let ada = account(&app, "ada@example.com").await;
     let bob = account(&app, "bob@example.com").await;
@@ -228,14 +228,23 @@ async fn a_handle_alone_is_enough_for_friends_but_not_the_boards() {
     let (status, added) = as_user(&app, &bob, Method::POST, routes::PLAYGROUND_FRIENDS, Some(json!({ "code": ada_me["friendCode"] }))).await;
     assert_eq!((status, added["outcome"].as_str()), (StatusCode::OK, Some("friends")), "{added}");
 
-    // Bob sees his friends, but no boards and no numbers of his are kept.
+    // Bob can browse, but he shares no scores and cannot publish any.
     let (_, list) = as_user(&app, &bob, Method::GET, routes::PLAYGROUND_FRIENDS, None).await;
     assert_eq!(list["friends"][0]["player"]["handle"], "ada");
     let (status, _) = board(&app, &bob, "active", "week", "friends").await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(status, StatusCode::OK);
     let (status, _) = publish(&app, &bob, vec![stats("active", 3, 3)]).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     publish(&app, &ada, vec![stats("active", 4, 4)]).await;
+    let (status, browsed) = board(&app, &bob, "active", "week", "friends").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(handles(&browsed), ["ada"]);
+    assert_eq!(browsed["joined"], false);
+    assert!(browsed["you"].is_null());
+    let (status, global) = board(&app, &bob, "active", "week", "global").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(handles(&global), ["ada"]);
+    assert_eq!(global["joined"], false);
     let (_, b) = board(&app, &ada, "active", "week", "friends").await;
     assert_eq!(handles(&b), ["ada"], "Bob isn't on Ada's board");
 }

@@ -23,7 +23,7 @@ function resolve(colors: string[], host: HTMLElement): string[] {
 
 const withAlpha = (rgb: string, a: number) => rgb.replace(/^rgba?\(([^)]+?)(?:,\s*[\d.]+)?\)$/, (_, inner) => `rgba(${inner.split(",").slice(0, 3).join(",")}, ${a})`);
 
-export function Backdrop({ colors }: { colors: string[] }) {
+export function Backdrop({ colors, reducedMotion = false }: { colors: string[]; reducedMotion?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const palette = useRef<string[]>([]);
   const key = colors.join("|");
@@ -143,11 +143,11 @@ export function Backdrop({ colors }: { colors: string[] }) {
       const dt = Math.min(64, now - last);
       last = now;
       draw(dt);
-      frame = visible && !document.hidden && !still.matches ? requestAnimationFrame(tick) : 0;
+      frame = visible && !document.hidden && !still.matches && !reducedMotion ? requestAnimationFrame(tick) : 0;
     };
     const start = () => {
       if (frame || !visible || document.hidden) return;
-      if (still.matches) return draw(0);
+      if (still.matches || reducedMotion) return draw(0);
       last = performance.now();
       frame = requestAnimationFrame(tick);
     };
@@ -180,7 +180,7 @@ export function Backdrop({ colors }: { colors: string[] }) {
       document.removeEventListener("visibilitychange", shown);
       still.removeEventListener("change", shown);
     };
-  }, []);
+  }, [reducedMotion]);
 
   return (
     <div className="pg-backdrop" aria-hidden="true">

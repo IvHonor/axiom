@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><link rel="icon" type="image/svg+xml" href="/favicon.svg"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Playground tile checks</title>
+<script>
+  // ?view=race forces that layout on every size shown, before the tile reads its saved layouts.
+  const q = new URLSearchParams(location.search), view = q.get("view");
+  if (q.has("theme")) localStorage.setItem("axiom.themePrefs", JSON.stringify({ followSystem: false, dark: "modern-dark", light: "modern-light", fixed: q.get("theme") }));
+  const sizes = (q.get("sizes") || "2x1,3x2,3x3,4x3,4x5,6x2,6x3,6x4,8x3,12x2,12x7").split(",");
+  if (!q.has("keep")) {
+    if (view || q.has("scope")) localStorage.setItem("axiom.playground.overviewLayouts.v1", JSON.stringify(Object.fromEntries(sizes.map((s) => [s, { view: view || "auto", metric: q.get("metric") || "active", period: "week", scope: q.get("scope") || "friends" }]))));
+    else localStorage.removeItem("axiom.playground.overviewLayouts.v1");
+  }
+</script></head><body><div id="root"></div><script type="module" src="./playground-tile-fixture.tsx"></script></body></html>

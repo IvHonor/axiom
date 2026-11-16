@@ -2,6 +2,8 @@
 <script>
   // Settings are read as their modules load, so they're put in place first.
   const params = new URLSearchParams(location.search);
+  Object.defineProperty(navigator, "platform", { value: params.has("mac") ? "MacIntel" : "Win32", configurable: true });
+  if (params.has("theme")) localStorage.setItem("axiom.themePrefs", JSON.stringify({ followSystem: false, dark: "modern-dark", light: "modern-light", fixed: params.get("theme") }));
   localStorage.setItem("axiom.desk", JSON.stringify({ mode: params.has("timers") ? "timers" : "always", style: params.has("notch") ? "notch" : "float", nudges: !params.has("quiet"), rounds: params.has("rounds") ? "25/5" : "off", sound: params.has("sound"), checkin: params.has("checkin"), weatherFrom: params.has("weather") ? "auto" : "off", ...(params.get("size") ? { size: Number(params.get("size")) } : {}) }));
   for (const key of ["axiom.desk.reminders", "axiom.desk.ringing", "axiom.desk.break", "axiom.desk.extra", "axiom.desk.rounds", "axiom.desk.focus", "axiom.desk.sessions", "axiom.desk.pushed", "axiom.desk.spot"]) localStorage.removeItem(key);
   localStorage.setItem("axiom.assistant.areas", JSON.stringify(params.has("heads") ? ["daily_plan", "birthdays", "finance"] : ["daily_plan"]));

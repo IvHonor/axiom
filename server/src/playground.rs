@@ -454,7 +454,7 @@ pub async fn board(State(s): State<AppState>, auth: AuthUser, Query(q): Query<Bo
     if q.scope == Scope::Global && !m.global {
         return Err(ApiError::bad_request("That one's just for friends: everyone counts it differently."));
     }
-    let me = joined(&s.db, &auth.user_id).await?;
+    let me = with_handle(&s.db, &auth.user_id).await?;
     let mine = stat::Entity::find_by_id((auth.user_id.clone(), m.id.to_owned())).one(&s.db).await?;
     let cheered = cheered_today(&s.db, &auth.user_id).await?;
     match q.scope {

@@ -7,7 +7,7 @@ import type { ExtensionManifest, Theme } from "../../extensions/types";
 // Palette adapted for Axiom's UI roles; see README.md and LICENSE.
 const appearance = {
   fonts: { ui: '"Inter Variable", "Segoe UI", sans-serif', label: '"Inter Variable", "Segoe UI", sans-serif', mono: '"IBM Plex Mono", Consolas, monospace', size: 13 },
-  style: { radius: 6, brackets: false, hatching: false, buttons: "filled" },
+  style: { radius: 6, brackets: false, buttons: "filled" },
   labels: { uppercase: false, tracking: 0, joiner: " ", separator: "·" },
 } satisfies Partial<Theme>;
 

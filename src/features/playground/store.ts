@@ -30,21 +30,25 @@ const subscribe = (l: () => void) => {
 };
 
 let loading: Promise<void> | null = null;
+let revision = 0;
+let refreshRequest = 0;
 
 /** Asks the server again for you and your friends. */
 export function refresh(): Promise<void> {
+  const version = revision, request = ++refreshRequest;
   loading = (async () => {
     try {
       const me = await api.getMe();
-      set({ me, error: null, friends: me ? await api.getFriends() : null });
+      const friends = me ? await api.getFriends() : null;
+      if (version === revision && request === refreshRequest) set({ me, error: null, friends });
     } catch (e) {
-      set({ error: String(e) });
-    }
+      if (version === revision && request === refreshRequest) set({ error: String(e) });
+    } finally { if (request === refreshRequest) loading = null; }
   })();
   return loading;
 }
 
-export const setMe = (me: api.PlaygroundMe | null) => set({ me, friends: me ? state.friends : null });
+export const setMe = (me: api.PlaygroundMe | null) => { revision++; set({ me, friends: me ? state.friends : null }); };
 export const setFriends = (friends: api.Friends) => set({ friends });
 export const today = () => dayKey(new Date());
 
@@ -63,7 +67,7 @@ export function usePlayground() {
   const signedIn = account?.state === "signed_in";
   useEffect(() => {
     if (signedIn && s.me === undefined && !loading) void refresh();
-    if (!signedIn && account) set({ me: undefined, friends: null, error: null });
+    if (!signedIn && account) { revision++; set({ me: undefined, friends: null, error: null }); }
   }, [signedIn, account, s.me]);
   return { ...s, signedIn, refresh: useCallback(() => refresh(), []) };
 }
@@ -72,10 +76,41 @@ export function usePlayground() {
 
 let lastSent = "";
 let sending = false;
+let publishing: Promise<api.Published | null> | null = null;
+let changingSharing = false;
+
+/** Finish any in-flight publish before changing consent, so it cannot restore old sharing choices. */
+export async function changeSharing(audience: string, shared: string[]) {
+  if (changingSharing) throw new Error("Sharing preferences are already being saved.");
+  const id = state.me?.player.userId;
+  if (!id) throw new Error("Pick a handle before joining the leaderboards.");
+  changingSharing = true;
+  try {
+    await publishing;
+    const me = state.me;
+    if (!me || me.player.userId !== id) throw new Error("Your account changed. Please try again.");
+    if (audience === "off") {
+      await api.leave();
+      setMe({ ...me, inPlayground: false, global: false, shared: [] });
+    } else {
+      setMe(await api.saveMe(me.player.handle, audience === "global", shared, myLemma(), true));
+    }
+    lastSent = "";
+  } finally { changingSharing = false; }
+  if (audience !== "off") await sendStats(true);
+  await refresh();
+}
 
 /** Keeps your Lemma up to date for friends, and (on the boards) works out
  * your shared numbers and sends them if they've changed. Quiet on failure. */
-export async function sendStats(force = false): Promise<api.Published | null> {
+export function sendStats(force = false): Promise<api.Published | null> {
+  if (changingSharing) return Promise.resolve(null);
+  if (publishing) return publishing;
+  publishing = publishStats(force).finally(() => { publishing = null; });
+  return publishing;
+}
+
+async function publishStats(force: boolean): Promise<api.Published | null> {
   const me = state.me;
   if (!me || sending) return null;
   sending = true;
@@ -86,7 +121,7 @@ export async function sendStats(force = false): Promise<api.Published | null> {
     if (!me.inPlayground) return null;
     const day = today();
     const stats = allStats(await api.getDays(), me.shared, day);
-    const payload = JSON.stringify({ day, stats });
+    const payload = JSON.stringify({ user: me.player.userId, day, stats });
     if (!force && payload === lastSent) return null;
     const published = await api.publish(day, stats);
     lastSent = payload;

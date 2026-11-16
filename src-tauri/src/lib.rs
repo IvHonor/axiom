@@ -127,6 +127,8 @@ pub fn run() {
             desk::desk_hotkey,
             desk::desk_notify,
             desk::desk_state,
+            desk::desk_pointer,
+            desk::desk_glass,
             desk::desk_background,
             desk::desk_quit,
             desk::desk_weather,

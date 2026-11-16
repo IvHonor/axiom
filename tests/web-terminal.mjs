@@ -61,6 +61,10 @@ const errors = [];
 let diagnosticPage;
 async function until(check, message) { for (let i = 0; i < 120; i++) { if (await check()) return; await delay(100); } const alerts = await diagnosticPage?.getByRole('alert').allTextContents().catch(() => []); throw new Error(`${message}\nAlerts: ${JSON.stringify(alerts)}\n${logs.slice(-2000)}`); }
 const rowWithTitle = title => [...accounts.get('a').rows.values()].find(row => row.data.title === title);
+const savedTheme = () => {
+  const value = accounts.get('a').rows.get('profile_settings/theme')?.data.value;
+  return typeof value === 'string' ? JSON.parse(value).fixed : null;
+};
 // The status bar's sync state, e.g. "Synced just now" or "Error"; its tooltip has the detail.
 const syncStatus = page => page.locator('.statusbar .status-button').filter({ hasText: 'Sync' });
 const synced = page => syncStatus(page).filter({ hasText: /Synced/ }).waitFor();
@@ -85,7 +89,9 @@ try {
   console.log('PASS: signed-in app and initial pull');
   assert.equal(await page.locator('.site-header').count(), 0, 'the app owns its screen');
   assert.equal(await page.locator('.site-footer').count(), 0);
-  assert.equal(await page.locator('.activitybar [data-tour^="area:"]').count(), 11, 'an existing account keeps every area');
+  assert.deepEqual(await page.locator('.activitybar [data-tour^="area:"]').evaluateAll(nodes => nodes.map(node => node.dataset.tour).sort()),
+    ['birthdays', 'daily_plan', 'finance', 'goals', 'journal', 'learning', 'lemma', 'notes', 'playground', 'project_board', 'reading', 'uni'].map(id => 'area:' + id).sort(),
+    'an existing account keeps every area, including Lemma and the Playground');
   assert.equal(await page.locator('.tour-card').count(), 0, 'and gets no first-run tour');
   const html = await (await context.request.get(base + '/terminal')).text();
   assert.equal(html.includes('fixture-access-a'), false, 'no access token is serialized into the page');
@@ -131,11 +137,62 @@ try {
   console.log('PASS: encryption boundary, origin check and account validation');
 
   // ---------- Preferences survive a reload; the keyboard and a phone width work ----------
-  await icon('Themes (Ctrl+K Ctrl+T)').click();
+  const themesButton = page.locator('.activitybar [data-tour="themes"]');
+  await themesButton.click();
+  const themeSearch = page.getByRole('searchbox', { name: 'Search themes' });
+  const themeItem = name => page.locator('.theme-item').filter({ has: page.locator('.theme-name').getByText(name, { exact: true }) });
+  const newThemes = [
+    ...['Evergreen', 'Ocean Glass', 'Velvet', 'Copper', 'Sakura', 'Graphite', 'Desert', 'Lagoon', 'Electric Iris', 'Midnight Gold', 'Ruby'].flatMap(name => [name + ' Dark', name + ' Light']),
+    'Crimson',
+  ];
+  const availableThemes = await page.locator('.theme-name').allTextContents();
+  for (const name of newThemes) {
+    assert.ok(availableThemes.includes(name), name + ' is available on the website');
+    await themeSearch.fill(name);
+    await themeItem(name).click();
+    assert.equal(await themeItem(name).getAttribute('aria-pressed'), 'true');
+    const fontsLoaded = await page.evaluate(async () => {
+      const root = getComputedStyle(document.documentElement);
+      const families = [...new Set(['--font-ui', '--font-label', '--font-mono'].map(key => root.getPropertyValue(key).trim().split(',')[0]))];
+      const loaded = await Promise.all(families.map(family => document.fonts.load('13px ' + family, 'Axiom 12:30')));
+      return loaded.every(faces => faces.length > 0 && faces.every(face => face.status === 'loaded'));
+    });
+    assert.equal(fontsLoaded, true, name + ' fonts load under the website content security policy');
+    assert.equal(await page.locator('.topbar .box-hatch').count(), 0, name + ' has no decorative top-bar squares');
+  }
+  const crimsonBackground = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim());
+  // The existing in-app companion can react on any browser page; this is not the native desktop mini.
+  await themeSearch.fill('Modern Dark');
+  await themeItem('Modern Dark').click();
+  await page.waitForTimeout(13000);
+  await themeSearch.fill('Crimson');
+  await themeItem('Crimson').click();
+  await page.locator('.lemma-companion-dock [data-lemma-dialogue="crimson"]').waitFor();
+  assert.equal(await crimsonBackground(), '#060607');
+  assert.equal(await page.locator('html').getAttribute('data-brackets'), 'off', 'Crimson has smooth panels on the website');
+  await page.screenshot({ path: '.qa.local/terminal/crimson.png', animations: 'disabled' });
+  await until(() => savedTheme() === 'shadow-dark', 'Crimson did not reach the profile');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await synced(page);
+  await until(async () => (await crimsonBackground()) === '#060607', 'Crimson did not persist on the website');
+  if (!await themeSearch.isVisible()) await themesButton.click();
+  assert.equal(await themeItem('Crimson').getAttribute('aria-pressed'), 'true');
+  await themeSearch.fill('no-such-theme');
+  await page.getByText('No themes match your search.', { exact: true }).waitFor();
+  await themeSearch.press('Escape');
+  assert.equal(await themeSearch.inputValue(), '');
+  assert.equal(await page.locator('.theme-item').count(), availableThemes.length);
+  for (const name of ['Wireframe Dark', 'Wireframe Light']) {
+    await themeItem(name).click();
+    assert.equal(await page.locator('.topbar .box-hatch').count(), 0, name + ' has no decorative top-bar squares on the website');
+  }
+  console.log('PASS: all 23 new themes, local fonts, theme search, Crimson persistence and removal of top-bar squares on the production website');
+  console.log('PASS: local character dialogue in the web companion reacts to Crimson without a native desktop window');
   await page.locator('.theme-follow input').uncheck();
   await page.locator('.theme-item').filter({ has: page.locator('.theme-name').getByText('Modern Light', { exact: true }) }).click();
   const themeType = () => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
   await until(async () => (await themeType()) === 'light', 'the theme did not apply');
+  await until(() => savedTheme() === 'modern-light', 'the light theme did not reach the profile');
   await page.reload({ waitUntil: 'domcontentloaded' });
   await synced(page);
   await until(async () => (await themeType()) === 'light', 'the saved theme did not restore');
@@ -206,6 +263,52 @@ try {
   await synced(page);
   assert.equal(await page.getByText('Saved during an outage', { exact: true }).count(), 0);
   assert.equal(accounts.get('b').rows.size, 0);
+  // ---------- Shared idle motions run in web views; the native mini stays desktop-only ----------
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.clock.install({ time: new Date(today + 'T12:00:00') });
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  const overviewFace = page.locator('.lemma-face[data-idle-context="overview"]');
+  await overviewFace.scrollIntoViewIfNeeded();
+  await page.locator('.lemma-face[data-idle-context="overview"][data-renderer="3d"]').waitFor();
+  const words = page.locator('.lemma-brief .lemma-speech-words');
+  await words.hover();
+  await words.evaluate(node => node.click());
+  await page.waitForFunction(() => ['idle', 'sleepy'].includes(document.querySelector('[data-idle-context="overview"]').dataset.mood));
+  await page.clock.runFor(150);
+  await page.clock.fastForward(121000);
+  await page.clock.runFor(1000);
+  assert.ok(['spin', 'hover', 'follow-light'].includes(await overviewFace.getAttribute('data-idle-motion')), 'the web overview plays its idle repertoire');
+  assert.equal(await page.locator('[data-idle-context="desktop"]').count(), 0, 'no native desktop mini appears on the website');
+  await page.screenshot({ path: '.qa.local/terminal/overview-idle.png', animations: 'disabled' });
+  await area('Lemma');
+  await page.mouse.move(1400, 940);
+  if (await page.locator('.sidebar-frame.is-open').count()) {
+    await page.keyboard.press('Control+b');
+  }
+  await page.clock.runFor(600);
+  await page.locator('.sidebar-peek').waitFor({ state: 'detached' });
+  const chatFace = page.locator('.lemma-chat-companion .lemma-face[data-idle-context="chat"]');
+  await page.locator('.lemma-chat-companion .lemma-face[data-renderer="3d"]').waitFor();
+  await chatFace.scrollIntoViewIfNeeded();
+  const chatVisibility = await chatFace.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    const top = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    return { onTop: node.contains(top), rect: rect.toJSON(), top: top?.outerHTML.slice(0, 200),
+      sidebar: document.querySelector('.sidebar-frame')?.className,
+      chats: getComputedStyle(node.closest('.lemma-chats')).display };
+  });
+  assert.equal(chatVisibility.onTop, true, 'the AI-tab companion is visible: ' + JSON.stringify(chatVisibility));
+  await page.mouse.move(10, 10);
+  await page.clock.runFor(150);
+  await page.clock.fastForward(121000);
+  await page.clock.runFor(1000);
+  assert.ok(['tilt', 'stretch', 'doodle'].includes(await chatFace.getAttribute('data-idle-motion')), 'the web AI tab plays its idle repertoire');
+  await page.screenshot({ path: '.qa.local/terminal/chat-idle.png', animations: 'disabled' });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.clock.runFor(150);
+  assert.equal(await chatFace.getAttribute('data-idle-motion'), '', 'the website respects reduced motion');
+  assert.equal(await page.locator('[data-idle-context="desktop"]').count(), 0);
+  console.log('PASS: overview and AI-tab idle animations in the production web build; no native desktop mini; reduced motion');
   assert.deepEqual(errors, [], 'no uncaught browser errors');
   console.log('PASS: the web app end to end: sign-in, desktop sync format and pagination, planner and board, durable outbox, locked encryption, origin/account isolation, preferences, phone width, tabs, cache upgrade and account switching.');
   if (process.env.CHECK_MARKETING === '1') {

@@ -19,6 +19,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, CalendarClock, Check, Coffee, Keyboard, ListPlus, Pause, Play, Square, StickyNote, Timer, type LucideIcon } from "lucide-react";
 import { AWAKE_CHOICES, awakeClock, awakeLength, keepAwake, letSleep, MAX_AWAKE_MINUTES, parseKeepAwake, useKeepAwake } from "../../lib/keepAwake";
 import { cursorPosition, getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
+import { isMacDesktop } from "../../lib/platform";
+import { useDesktopGlass } from "./useDesktopGlass";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api, trackedMinutes, type PlanTask } from "../../features/daily_plan/api";
 import { addDays, clock, mondayOf, nowMinute, today } from "../../features/daily_plan/time";
@@ -29,6 +32,8 @@ import { useName } from "../../features/lemma/parts";
 import { nameOf, usePersona } from "../../features/lemma/persona";
 import { feel, setLemma, useLemma } from "../../features/lemma/state";
 import { useBriefing } from "../../features/lemma/useBriefing";
+import { useDialogue, noteDialogueSpeech } from "../../features/lemma/useDialogue";
+import { dialogueStatus } from "../../features/lemma/dialogue";
 import { api as reading } from "../../features/reading/api";
 import { act, quick, quickUndo, transcribe, type QuickReply } from "../../lib/ai";
 import { readSetting } from "../../lib/settings";
@@ -58,7 +63,8 @@ const RINGING_MS = 5 * 60_000;
 /** How often, at most, Lemma says something about the day by himself. */
 const NUDGE_MS = 6 * 60_000;
 /** Between his little antics, when he's left alone. */
-const ANTIC_MS: [number, number] = [18_000, 45_000];
+// Short shared idle motions fill the rests between these desktop-only antics.
+const ANTIC_MS: [number, number] = [90_000, 180_000];
 const ANTICS = ["hop", "wiggle", "spin", "peek", "look", "smile", "yawn"] as const;
 type Antic = (typeof ANTICS)[number];
 /** Antics that move him about; the rest only change his face. */
@@ -135,6 +141,7 @@ interface Question {
 interface Bubble {
   id: number;
   text: string;
+  chatter?: boolean;
   /** Buttons in the bubble. */
   actions?: Action[];
   form?: Question;
@@ -293,6 +300,7 @@ function useLooking(attentive: boolean, react: (what: "duck" | "dizzy") => void)
   reacting.current = react;
   useEffect(() => {
     const window_ = getCurrentWindow();
+    const mac = isMacDesktop();
     let rect: { x: number; y: number; w: number; h: number } | null = null;
     let last = { x: NaN, y: NaN };
     let movedAt = 0;
@@ -345,15 +353,23 @@ function useLooking(attentive: boolean, react: (what: "duck" | "dizzy") => void)
     const same = (a: { x: number; y: number } | null, b: { x: number; y: number } | null) => a?.x === b?.x && a?.y === b?.y;
     const measure = async () => {
       setFacing((was) => (same(was, towardsMiddle()) ? was : towardsMiddle()));
-      const [at, size] = await Promise.all([window_.outerPosition(), window_.innerSize()]);
-      rect = { x: at.x, y: at.y, w: size.width, h: size.height };
+      if (mac) {
+        const face = document.querySelector(".desk-lemma .lemma-face")?.getBoundingClientRect();
+        rect = face ? { x: face.x, y: face.y, w: face.width, h: face.height }
+          : { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+      }
+      else {
+        const [at, size] = await Promise.all([window_.outerPosition(), window_.innerSize()]);
+        rect = { x: at.x, y: at.y, w: size.width, h: size.height };
+      }
     };
     const follow = async () => {
       try {
-        const cursor = await cursorPosition();
+        const local = mac ? await invoke<[number, number]>("desk_pointer") : null;
+        const cursor = local ? { x: local[0], y: local[1] } : await cursorPosition();
         if (gone) return;
         if (!rect) await measure();
-        const scale = window.devicePixelRatio || 1;
+        const scale = mac ? 1 : window.devicePixelRatio || 1;
         if (cursor.x !== last.x || cursor.y !== last.y) {
           last = { x: cursor.x, y: cursor.y };
           movedAt = Date.now();
@@ -444,6 +460,7 @@ export function Desk() {
   const [side, setSide] = useState<"left" | "right">("right");
   const recording = useRef<Recording | null>(null);
   const box = useRef<HTMLElement>(null);
+  useDesktopGlass(box);
   const press = useRef<{ x: number; y: number } | null>(null);
   const shownBubble = useRef<Bubble | null>(null);
   /** What's waiting to be said, once what's in the bubble goes. */
@@ -510,7 +527,10 @@ export function Desk() {
     const was = shownBubble.current;
     shownBubble.current = next;
     if (was?.onGone) was.onGone();
-    if (next) setSaid((all) => [{ text: next.text, at: Date.now() }, ...all.filter((s) => s.text !== next.text)].slice(0, RECALLED));
+    if (next) {
+      noteDialogueSpeech();
+      if (!next.chatter) setSaid((all) => [{ text: next.text, at: Date.now() }, ...all.filter((s) => s.text !== next.text)].slice(0, RECALLED));
+    }
     setBubble(next);
   }, []);
   /**
@@ -519,12 +539,12 @@ export function Desk() {
    * to something you did) it's said at once.
    */
   const say = useCallback(
-    (text: string | null, more: { actions?: Action[]; form?: Question; ms?: number; onGone?: () => void; queue?: boolean } = {}) => {
+    (text: string | null, more: { actions?: Action[]; form?: Question; ms?: number; onGone?: () => void; queue?: boolean; chatter?: boolean } = {}) => {
       if (!text) return show(null);
       const ms = more.ms ?? (more.form ? ASK_MS : BUBBLE_MS);
-      const next: Bubble = { id: ++bubbles, text, actions: more.actions, form: more.form, onGone: more.onGone, ms, until: Date.now() + ms };
+      const next: Bubble = { id: ++bubbles, text, actions: more.actions, form: more.form, onGone: more.onGone, ms, until: Date.now() + ms, chatter: more.chatter };
       const current = shownBubble.current;
-      if (more.queue && current) {
+      if (more.queue && current && !current.chatter) {
         if (current.text !== text && !queue.current.some((b) => b.text === text)) queue.current.push(next);
         return;
       }
@@ -1056,7 +1076,7 @@ export function Desk() {
     const everything = done === timers.today.total;
     // Just finished here, he's already said so: the day's last one still gets its fireworks.
     if (Date.now() - justFinished.current < 5000) return everything ? sparkle(true) : undefined;
-    cheer(everything ? line(p, "dayDone") : line(p, "doneCount", { n: done }), false, everything);
+    cheer(everything ? dialogueStatus({ kind: "dayDone" }, p) : line(p, "doneCount", { n: done }), false, everything);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done]);
 
@@ -1088,6 +1108,12 @@ export function Desk() {
   // goals, how was today, and now and then something else worth knowing:
   // when he's free to talk.
   const free = !bubble && voice === "idle" && !menu && !typing && !ringing && !focused;
+  const dialogue = useDialogue("desktop", (!bubble || !!bubble.chatter) && voice === "idle" && !menu
+    && !typing && !ringing && !focused && !dragging && !story && !antic && !move);
+  useEffect(() => {
+    if (dialogue.message) say(dialogue.message.text, { ms: 8000, chatter: true });
+    else if (shownBubble.current?.chatter) say(null);
+  }, [dialogue.message, say]);
   const lastNudge = useRef(Date.now());
   useEffect(() => {
     if (!free) return;
@@ -1696,7 +1722,10 @@ export function Desk() {
       ref={box}
       className={["desk", ...states].filter(Boolean).join(" ")}
       aria-label={`${me} on the desktop`}
+      data-native-os={isMacDesktop() ? "macos" : undefined}
       data-looking={attentive ? "you" : glance ? "window" : gaze ? "cursor" : "middle"}
+      data-gaze-x={gaze?.x}
+      data-gaze-y={gaze?.y}
       style={{ "--lemma-glow": look.glow, "--breath": `${breath}s`, "--u": tucked ? 1 : prefs.size / 130 } as React.CSSProperties}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -1777,7 +1806,7 @@ export function Desk() {
       }}
     >
       {out && bubble && (
-        <div className="desk-bubble" role="status">
+        <div className="desk-bubble" role="status" data-lemma-dialogue={bubble.chatter ? "remark" : undefined}>
           <p>
             <Words text={bubble.text} />
           </p>
@@ -1879,7 +1908,9 @@ export function Desk() {
             )}
           </svg>
         )}
-        <Face mood={mood} size={size} level={level} facing={facing} gaze={gaze} display={null} idlePreview={pet} />
+        <Face mood={mood} size={size} level={level} facing={facing} gaze={gaze} display={null} idlePreview={pet}
+          onIdleComplete={dialogue.completed} dialogueRef={dialogue.attach}
+          idleContext={free && !antic && !story && !move && !tucked ? "desktop" : undefined} />
         {burst && !tucked && <Burst key={burst.id} big={burst.big} scale={size / 130} onDone={() => setBurst(null)} />}
         {night && !tucked && (
           <span className="desk-zzz" aria-hidden="true">
@@ -1956,7 +1987,7 @@ export function Desk() {
 
       {/* Tucked: the time under him in the notch, what's on when pointed at, and the day so far. */}
       {tucked && lead && (
-        <span className={`desk-tab-time is-${lead.tone}`} style={{ color: lead.color }}>
+        <span className={`desk-tab-time is-${lead.tone}`} style={isMacDesktop() ? undefined : { color: lead.color }}>
           {LeadIcon && <LeadIcon size={9} strokeWidth={2.6} aria-hidden="true" />}
           {lead.big}
         </span>

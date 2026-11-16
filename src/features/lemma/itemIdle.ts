@@ -7,7 +7,7 @@ export interface IdleInput { now: number; eligible: boolean; holding: Holding; a
 export interface IdleFrame { kind: IdleRoutine; progress: number }
 
 /** The countdown runs independently of pointer activity; busy moments defer it. */
-export function createIdleDirector(random = Math.random) {
+export function createIdleDirector(random = Math.random, completed?: (kind: IdleRoutine) => void) {
   let current: IdleRoutine | null = null, nextAt = Infinity, started: number | null = null, lastNow = 0;
   const delay = () => 60 + random() * 120;
   const reset = () => { current = null; nextAt = Infinity; started = null; };
@@ -28,7 +28,7 @@ export function createIdleDirector(random = Math.random) {
       if (started === null && input.now >= nextAt) started = input.now;
       if (started === null) return null;
       const progress = (input.now - started) / IDLE_DURATION[kind];
-      if (progress >= 1) { started = null; nextAt = input.now + delay(); return null; }
+      if (progress >= 1) { started = null; nextAt = input.now + delay(); completed?.(kind); return null; }
       return { kind, progress: Math.max(0, progress) };
     },
   };

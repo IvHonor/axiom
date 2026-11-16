@@ -7,6 +7,8 @@ import type { Personality } from "./persona";
 import { createIdleDirector } from "./itemIdle";
 import { performItem } from "./itemPerformance";
 import { createCompanionMotion } from "./motion";
+import { createIdleMotion, idleMotionPose, type IdleContext } from "./idleMotion";
+import type { CompletedAction } from "./dialogue";
 
 /**
  * `facing`: which way to turn, from -1 (left, up) to 1 (right, down); left out, he faces the viewer.
@@ -25,6 +27,8 @@ export interface SceneState {
   compact: boolean;
   admin: boolean;
   firstLight: boolean;
+  idleContext?: IdleContext;
+  onIdleComplete?: (kind: CompletedAction) => void;
   facing?: { x: number; y: number };
   gaze?: { x: number; y: number } | null;
   display?: { text: string; color?: string } | null;
@@ -64,7 +68,8 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
   let hovered = false, lastInteraction = performance.now(), awayAt: number | null = null;
   let notice: { x: number; y: number } | null = null;
   const presence = createCompanionMotion();
-  const itemIdle = createIdleDirector();
+  const itemIdle = createIdleDirector(Math.random, kind => state.onIdleComplete?.(kind));
+  const idleMotion = createIdleMotion(Math.random, kind => state.onIdleComplete?.(kind));
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const colorCanvas = document.createElement("canvas");
   colorCanvas.width = colorCanvas.height = 1;
@@ -158,8 +163,16 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
       idleY = (Math.random() - 0.5) * 0.45;
       idleTilt = (Math.random() - 0.5) * 0.065;
     }
-    const idleGlance = moving && idle && t < idleUntil && now - pointerAt > 1800;
     const routine = itemIdle.tick(idleInput(now));
+    const readingPage = state.idleContext === "overview" && mood === "speaking";
+    const resting = idleMotion.tick({ now: now / 1000, context: state.idleContext,
+      paused: readingPage,
+      eligible: moving && !state.focused && !state.working && !state.display && !hovered && !routine
+        && (!state.compact || state.idleContext === "desktop") && (mood === "idle" || mood === "sleepy" || readingPage) });
+    const restPose = idleMotionPose(resting);
+    const restName = resting?.kind ?? "";
+    if (host.dataset.idleMotion !== restName) host.dataset.idleMotion = restName;
+    const idleGlance = !resting && moving && idle && t < idleUntil && now - pointerAt > 1800;
     const routineName = routine?.kind ?? "";
     if (host.dataset.idleRoutine !== routineName) host.dataset.idleRoutine = routineName;
     const movement = state.movement * (state.focused ? 0.12 : 1);
@@ -172,8 +185,8 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
     const facing = state.facing;
     const base = yaw + (facing ? facing.x * 0.65 : 0);
     // His eyes (and a little of him) follow `gaze`, or else the mouse over him.
-    const px = idleGlance ? idleX : state.gaze ? state.gaze.x : pointerX;
-    const py = idleGlance ? idleY : state.gaze ? state.gaze.y : pointerY;
+    const px = resting ? restPose.gazeX : idleGlance ? idleX : state.gaze ? state.gaze.x : pointerX;
+    const py = resting ? restPose.gazeY : idleGlance ? idleY : state.gaze ? state.gaze.y : pointerY;
     const pose = presence.tick({ dt, now: now / 1000, mood, personality: state.personality, x: px, y: py,
       hovered, focused: state.focused, enabled: moving && !state.compact && !routine, movement: state.movement, notice });
     const greeting = pose.greeting ? "true" : "false";
@@ -200,6 +213,15 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
       drawn = display.text + (display.color ?? "");
     }
     const action = performItem(model, routine, t);
+    model.idleBody.position.set(restPose.x * movement, restPose.y * movement, 0);
+    model.idleBody.rotation.set(restPose.pitch * movement, restPose.yaw, restPose.tilt * movement);
+    model.idleBody.scale.set(1 - restPose.stretch * movement * 0.45, 1 + restPose.stretch * movement, 1);
+    model.idleLight.visible = restPose.light > 0;
+    model.idleSpark.position.set(restPose.lightX, restPose.lightY, 1.5);
+    model.idleSpark.scale.setScalar(restPose.light * Math.min(1, movement));
+    model.idleTrail.visible = resting?.kind === "doodle";
+    model.idleTrail.geometry.setDrawRange(0, Math.floor(restPose.trail * 65));
+    model.idleTrail.material.opacity = restPose.light * 0.5 * Math.min(1, movement);
     model.body.position.x += pose.shift;
     const normalExpression = expressionOf(mood, state.personality, state.compact);
     const expression = action ? { ...normalExpression, ...action } : normalExpression;
@@ -213,7 +235,7 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
       fade(eye.open, !smilingEyes);
       fade(eye.happy, smilingEyes);
       const closed = blink || !!action?.closed;
-      const height = closed ? 0.08 : expression.eyes[i] + (mood === "listening" ? level * 0.2 : 0);
+      const height = closed ? 0.08 : expression.eyes[i] * restPose.eyes + (mood === "listening" ? level * 0.2 : 0);
       eye.group.scale.y = THREE.MathUtils.lerp(eye.group.scale.y, height, closed ? 1 : lerp);
       eye.group.rotation.z = THREE.MathUtils.lerp(eye.group.rotation.z, mood === "concerned" ? (i === 0 ? -0.25 : 0.25) : 0, lerp);
       const eyeLerp = moving ? 1 - Math.exp(-dt * 18 * pose.speed) : 1;
@@ -257,7 +279,9 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
     renderer.render(scene, camera);
   }
   function schedule() {
-    if (document.hidden || !visible || motion.matches || lost) itemIdle.reset();
+    if (document.hidden || !visible || motion.matches || lost) {
+      itemIdle.reset(); idleMotion.reset(); host.dataset.idleMotion = "";
+    }
     renderer.setAnimationLoop(!disposed && !lost && visible && !document.hidden && !motion.matches ? (now) => render(now) : null);
     render(performance.now(), true);
   }
@@ -287,10 +311,11 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
   function leave() { hovered = false; pointerX = 0; pointerY = 0; }
   function interrupt(event: Event) {
     interact();
+    idleMotion.reset();
     if (event instanceof KeyboardEvent && ["Enter", " "].includes(event.key) && event.target instanceof Node && host.contains(event.target)) return;
     itemIdle.interrupt(); render(performance.now(), true);
   }
-  function away() { if (awayAt === null) awayAt = performance.now(); itemIdle.reset(); leave(); }
+  function away() { if (awayAt === null) awayAt = performance.now(); itemIdle.reset(); idleMotion.reset(); host.dataset.idleMotion = ""; leave(); }
   function returned() {
     const now = performance.now();
     if (awayAt !== null && now - awayAt >= 30_000) presence.greet(now / 1000);
@@ -344,17 +369,20 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
 
   return {
     update(next: SceneState) {
-      if (next.look !== state.look || next.admin !== state.admin || next.firstLight !== state.firstLight) itemIdle.reset();
+      if (next.look !== state.look || next.admin !== state.admin || next.firstLight !== state.firstLight) {
+        itemIdle.reset(); idleMotion.reset();
+      }
       state = next; rebuild(); schedule();
     },
-    previewIdle() { const started = itemIdle.preview(idleInput(performance.now())); schedule(); return started; },
+    previewIdle() { idleMotion.reset(); const started = itemIdle.preview(idleInput(performance.now())); schedule(); return started; },
     greet() {
       const now = performance.now();
+      idleMotion.reset();
       const started = itemIdle.preview(idleInput(now));
       happyUntil = started ? 0 : now + 1600;
       presence.tap(now / 1000); schedule();
     },
-    turn(dx: number, dy = 0) { itemIdle.interrupt(); yaw += dx; tilt = THREE.MathUtils.clamp(tilt + dy, -0.4, 0.4); schedule(); },
+    turn(dx: number, dy = 0) { itemIdle.interrupt(); idleMotion.reset(); yaw += dx; tilt = THREE.MathUtils.clamp(tilt + dy, -0.4, 0.4); schedule(); },
     dispose() {
       disposed = true;
       renderer.setAnimationLoop(null);

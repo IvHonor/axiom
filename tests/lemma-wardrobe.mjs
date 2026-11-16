@@ -55,38 +55,48 @@ try {
     const make = (glow, accessory) => buildCompanion({ ...STANDARD, shape: "prism", holding: "plant", accessory, neckwear: "bow", facewear: "glasses", holdingColor: "#ff0000", jewelColor: "#000000" }, new Color(glow), new Color("#444444"));
     const colours = group => { const found = []; group.traverse(object => { if (object.material?.color) found.push(object.material.color.getHexString()); }); return found; };
     const results = [];
+    const plain = make("#ff0000", "none");
+    const baseGeometry = plain.body.children[0].geometry;
+    const same = (a, b) => a.length === b.length && a.every((n, i) => n === b[i]);
     for (const accessory of ["headphones", "cap", "beanie", "crown", "halo"]) {
       const a = make("#ff0000", accessory), b = make("#0000ff", accessory);
       const positions = a.body.children[0].geometry.attributes.position;
       let xy = 0;
       for (let i = 0; i < positions.count; i++) xy += positions.getX(i) * positions.getY(i);
-      const top = [], band = [];
-      for (let i = 0; i < positions.count; i++) if (positions.getY(i) > 0.82) top.push(Math.hypot(positions.getX(i), positions.getZ(i)));
+      const band = [];
+      const geometry = a.body.children[0].geometry;
+      const unchanged = ["position", "normal", "uv"].every(key => same(geometry.attributes[key].array, baseGeometry.attributes[key].array));
       if (accessory === "headphones") {
         const vertices = a.hat.children[0].geometry.attributes.position;
         for (let i = 0; i < vertices.count; i++) band.push(Math.abs(vertices.getX(i)) > 0.755 || vertices.getY(i) > 0.83);
       }
-      results.push({ accessory, xy, band, top, palette: [a.hat, a.neckwear, a.facewear, a.prop].map(colours), other: [b.hat, b.neckwear, b.facewear, b.prop].map(colours), plant: colours(a.prop) });
+      results.push({ accessory, xy, band, unchanged, palette: [a.hat, a.neckwear, a.facewear, a.prop].map(colours), other: [b.hat, b.neckwear, b.facewear, b.prop].map(colours), plant: colours(a.prop) });
       disposeModel(a.root); disposeModel(b.root);
     }
+    disposeModel(plain.root);
     const legacy = normaliseLook({ holdingColor: "#ff0000", jewelColor: "#000000" });
     return { results, legacy };
   });
   for (const result of fitted.results) {
     assert.ok(Math.abs(result.xy) < 0.001, "Prism geometry stands upright");
+    assert.equal(result.unchanged, true, `${result.accessory} keeps the unequipped Prism's exact vertices, normals and UVs`);
     assert.deepEqual(result.palette, result.other, "Accessories keep their own colours when body glow changes");
     for (const colour of ["64dc95", "493329", "edf8f5"]) assert.ok(result.plant.includes(colour), "Plant retains green leaves, brown soil and pale pot");
   }
   assert.ok(fitted.results[0].band.every(Boolean), "Headphone band clears the square casing");
-  assert.ok(Math.max(...fitted.results.find(r => r.accessory === "crown").top) < 0.475, "Prism upper corners fit inside the crown opening");
   assert.equal(fitted.legacy.holdingColor, "auto"); assert.equal(fitted.legacy.jewelColor, "#000000");
   await choose("Prism"); await choose("Headphones"); await choose("Plant");
   await page.screenshot({ path: ".qa.local/lemma-wardrobe/prism-headphones-dark.png" });
   await page.emulateMedia({ colorScheme: "light" });
   await page.screenshot({ path: ".qa.local/lemma-wardrobe/prism-headphones-light.png" });
   await page.emulateMedia({ colorScheme: "dark" });
+  await choose("None");
+  const stillBody = () => page.locator('[data-testid="small-face"] svg > g').first().innerHTML();
+  const standardBody = await stillBody();
+  assert.match(standardBody, /^<rect /);
   for (const headwear of ["Headphones", "Cap", "Beanie", "Crown", "Halo"]) {
     await choose(headwear);
+    assert.equal(await stillBody(), standardBody, `${headwear} keeps the standard illustrated Prism body`);
     await preview().screenshot({ path: `.qa.local/lemma-wardrobe/prism-fit-${headwear.toLowerCase()}.png` });
     await preview().press("ArrowRight"); await preview().press("ArrowRight");
     await preview().screenshot({ path: `.qa.local/lemma-wardrobe/prism-fit-${headwear.toLowerCase()}-turned.png` });
@@ -166,7 +176,7 @@ try {
   assert.equal(validated.prefs.size, 240); assert.equal(validated.prefs.brightness, 1); assert.equal(validated.prefs.movement, 0); assert.equal(validated.prefs.rate, 1.4); assert.equal(validated.prefs.outfits.length, 1);
   assert.equal(validated.look.accessory, "none"); assert.equal(validated.look.neckwear, "bow"); assert.equal(validated.look.facewear, "none"); assert.equal(validated.look.finish, "hologram"); assert.equal(validated.look.headwearColor, "auto");
   assert.deepEqual(errors, []);
-  console.log("PASS: independent slots, contextual wearable colours and Prism headwear clearance, all body/finish previews, outfits save/update/apply/delete, persistence, presence controls, voice preference/fallback, personality samples, migration, validation and narrow layouts");
+  console.log("PASS: independent slots, wearable colours, identical Prism body with all headwear, headphone clearance, all body/finish previews, outfits, persistence, presence, voice, personality, validation and narrow layouts");
 } catch (error) {
   await page.screenshot({ path: ".qa.local/lemma-wardrobe/failure.png", timeout: 5000 }).catch(() => {});
   throw error;

@@ -28,6 +28,7 @@ export const WINDOW_THEMES = [
   { id: "rose-pine", name: "Rosé Pine", swatch: ["#191724", "#ebbcba"] },
   { id: "catppuccin", name: "Catppuccin Mocha", swatch: ["#1e1e2e", "#cba6f7"] },
   { id: "gruvbox", name: "Gruvbox Dark", swatch: ["#282828", "#fabd2f"] },
+  { id: "crimson", name: "Crimson", swatch: ["#060607", "#CE203C"] },
   { id: "modern-light", name: "Modern Light", swatch: ["#ffffff", "#005fb8"] },
 ];
 

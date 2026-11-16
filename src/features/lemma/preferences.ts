@@ -13,6 +13,7 @@ export interface CompanionPrefs {
   size: number;
   brightness: number;
   movement: number;
+  chatter: boolean;
   corner: "bottom-right" | "bottom-left" | "top-right" | "top-left";
   spot: Spot | null;
   follow: boolean;
@@ -20,7 +21,7 @@ export interface CompanionPrefs {
   rate: number;
   outfits: Outfit[];
 }
-export const DEFAULT_PREFS: CompanionPrefs = { size: 160, brightness: 1, movement: 1, corner: "bottom-right", spot: null, follow: true, voice: "", rate: 1, outfits: [] };
+export const DEFAULT_PREFS: CompanionPrefs = { size: 160, brightness: 1, movement: 1, chatter: true, corner: "bottom-right", spot: null, follow: true, voice: "", rate: 1, outfits: [] };
 const share = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : null);
 function normaliseSpot(v: unknown): Spot | null {
   if (!v || typeof v !== "object") return null;
@@ -46,7 +47,7 @@ export function normalisePrefs(saved: unknown): CompanionPrefs {
     size: number("size", 120, 240, 160), brightness: number("brightness", 0.25, 1.5, 1), movement: number("movement", 0, 1.5, 1),
     corner: (["bottom-right", "bottom-left", "top-right", "top-left"] as const).find(c => c === p.corner) ?? "bottom-right",
     spot: normaliseSpot(p.spot),
-    follow: p.follow !== false, voice: typeof p.voice === "string" ? p.voice.slice(0, 256) : "", rate: number("rate", 0.6, 1.4, 1), outfits,
+    follow: p.follow !== false, chatter: p.chatter !== false, voice: typeof p.voice === "string" ? p.voice.slice(0, 256) : "", rate: number("rate", 0.6, 1.4, 1), outfits,
   };
 }
 let prefs = normalisePrefs(readSetting(KEY));

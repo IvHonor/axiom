@@ -38,7 +38,8 @@ export function applyTheme(theme: Theme) {
 
   root.style.colorScheme = theme.type;
   root.dataset.colorScheme = theme.type;
+  root.dataset.theme = theme.id;
+  root.dataset.themeName = theme.label;
   root.dataset.brackets = style.brackets ? "on" : "off";
-  root.dataset.hatching = style.hatching ? "on" : "off";
   root.dataset.buttons = style.buttons;
 }

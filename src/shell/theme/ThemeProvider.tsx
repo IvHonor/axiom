@@ -5,6 +5,7 @@ import type { ExtensionManifest, Theme } from "../../extensions/types";
 import { DEFAULT_THEMES } from "../../themes/modern_themes";
 import { usePersistentState } from "../usePersistentState";
 import { applyTheme } from "./applyTheme";
+import { isMacDesktop } from "../../lib/platform";
 
 export interface ThemeOption {
   theme: Theme;
@@ -111,12 +112,12 @@ export function ThemeProvider({ installed, children, transparent = false }: Them
       // otherwise it matches the chosen theme. This also keeps the webview's
       // prefers-color-scheme honest, which useSystemType relies on.
       const win = getCurrentWindow();
-      win.setTheme(prefs.followSystem ? null : theme.type).catch(() => {});
+      win.setTheme((transparent && isMacDesktop()) || prefs.followSystem ? null : theme.type).catch(() => {});
       if (!transparent) win.setBackgroundColor(theme.colors.background).catch(() => {});
     } catch {
       // Not running inside Tauri (e.g. a plain browser tab).
     }
-  }, [theme, prefs.followSystem]);
+  }, [theme, prefs.followSystem, transparent]);
 
   // The window starts hidden (tauri.conf.json): show it once the themed first
   // screen has painted, so it never flashes another colour.

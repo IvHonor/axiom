@@ -14,7 +14,7 @@ const MONO = '"Ubuntu Mono", Consolas, monospace';
 
 const ember = {
   fonts: { ui: UI, label: UI, mono: MONO, size: 13 },
-  style: { radius: 4, brackets: false, hatching: false, buttons: "filled" },
+  style: { radius: 4, brackets: false, buttons: "filled" },
   labels: { uppercase: false, tracking: 0, joiner: " ", separator: "·" },
 } satisfies Partial<Theme>;
 

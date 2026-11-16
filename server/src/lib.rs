@@ -16,7 +16,7 @@ pub mod housekeeping;
 mod entities;
 mod error;
 pub mod hub;
-mod limit;
+pub mod limit;
 pub mod notify;
 pub mod mail;
 mod playground;

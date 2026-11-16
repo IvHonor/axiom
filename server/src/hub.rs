@@ -1,16 +1,17 @@
-//! The Hub's live presence (see `axiom_protocol::hub`). Everything's in
-//! memory: who's in which room, where, what they're showing, and what's been
-//! done to them since they last checked in. Nothing touches the database
-//! after entering, so a room full of people checking in every second costs
-//! nothing but memory. Someone quiet for `timeout` is gone.
+//! Nexus's live presence (see `axiom_protocol::hub`). Everything's in memory:
+//! who's where in the city, what they're showing, and what's been done to them
+//! since they last checked in. Nothing touches the database after entering, so
+//! a city full of people checking in every second costs nothing but memory.
+//! Each check-in sends back only who's near you (within `VIEW`, the nearest
+//! `MAX_SEEN`). Someone quiet for `timeout` is gone.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use axiom_protocol::hub::{
-    ActKind, EMOTES, HubAct, HubEvent, HubPeek, HubPerson, HubState, HubWhere, PHRASES, ROOM_CAPACITY, ROOMS, RoomCount, Shown, is_room,
-    on_floor,
+    ActKind, CAPACITY, DISTRICTS, DistrictCount, EMOTES, HubAct, HubEvent, HubPeek, HubPerson, HubState, HubWhere, MAX_SEEN, PHRASES, Shown, VIEW,
+    district_at, district_of, somewhere,
 };
 use axiom_protocol::playground::Player;
 use axum::Json;
@@ -25,14 +26,15 @@ use crate::error::ApiError;
 const SHOW: Duration = Duration::from_secs(5);
 /// Most waves and hi's waiting for someone.
 const MAX_EVENTS: usize = 20;
-/// Most people the plaza peek shows.
+/// Most people the peek into the Nexus shows.
 const PEEK: usize = 12;
 
 struct Presence {
     player: Player,
-    room: String,
     x: f32,
-    y: f32,
+    z: f32,
+    /// The building they're inside, if any (`x` and `z` are then from its middle).
+    inside: Option<String>,
     shown: Option<(ActKind, String, Instant, Option<String>)>,
     seen: Instant,
     events: Vec<HubEvent>,
@@ -68,15 +70,21 @@ impl Hub {
         people.retain(|_, p| p.seen.elapsed() < timeout);
     }
 
-    fn counts(people: &HashMap<String, Presence>) -> Vec<RoomCount> {
-        ROOMS.iter().map(|room| RoomCount { id: (*room).into(), count: people.values().filter(|p| p.room == *room).count() as u32 }).collect()
+    fn counts(people: &HashMap<String, Presence>) -> Vec<DistrictCount> {
+        let mut counts: Vec<DistrictCount> = DISTRICTS.iter().map(|(id, ..)| DistrictCount { id: (*id).into(), count: 0 }).collect();
+        for id in people.values().filter_map(|p| district_of(p.x, p.z, p.inside.as_deref())) {
+            if let Some(c) = counts.iter_mut().find(|c| c.id == id) {
+                c.count += 1;
+            }
+        }
+        counts
     }
 
     fn person(p: &Presence) -> HubPerson {
         HubPerson {
             player: p.player.clone(),
             x: p.x,
-            y: p.y,
+            z: p.z,
             shown: p.shown.as_ref().filter(|(_, _, at, _)| at.elapsed() < SHOW).map(|(kind, id, at, to)| Shown {
                 kind: *kind,
                 id: id.clone(),
@@ -87,32 +95,44 @@ impl Hub {
     }
 
     fn state(people: &mut HashMap<String, Presence>, me: &str) -> HubState {
-        let (room, events) = match people.get_mut(me) {
-            Some(p) => (p.room.clone(), std::mem::take(&mut p.events)),
-            None => (ROOMS[0].into(), Vec::new()),
+        let (x, z, inside, events) = match people.get_mut(me) {
+            Some(p) => (p.x, p.z, p.inside.clone(), std::mem::take(&mut p.events)),
+            None => (0.0, 0.0, None, Vec::new()),
         };
         HubState {
-            people: people.iter().filter(|(id, p)| *id != me && p.room == room).map(|(_, p)| Self::person(p)).collect(),
-            rooms: Self::counts(people),
+            people: Self::near(people, me, x, z, inside.as_deref()).into_iter().map(Self::person).collect(),
+            districts: Self::counts(people),
             online: people.len() as u32,
-            room,
             events,
         }
+    }
+
+    /// Everyone but `me` in the same place (the city, or the same building) and
+    /// within `VIEW` of a spot, nearest first, at most `MAX_SEEN`.
+    fn near<'a>(people: &'a HashMap<String, Presence>, me: &str, x: f32, z: f32, inside: Option<&str>) -> Vec<&'a Presence> {
+        let mut near: Vec<(f32, &Presence)> = people
+            .iter()
+            .filter(|(id, p)| *id != me && p.inside.as_deref() == inside)
+            .map(|(_, p)| ((p.x - x).hypot(p.z - z), p))
+            .filter(|(d, _)| *d <= VIEW)
+            .collect();
+        near.sort_by(|a, b| a.0.total_cmp(&b.0));
+        near.into_iter().take(MAX_SEEN).map(|(_, p)| p).collect()
     }
 }
 
 fn check_where(w: &HubWhere) -> Result<(), ApiError> {
-    if !is_room(&w.room) || !on_floor(w.x, w.y) {
-        return Err(ApiError::bad_request("That isn't somewhere in the Hub."));
+    if !somewhere(w) {
+        return Err(ApiError::bad_request("That isn't somewhere in Nexus."));
     }
     Ok(())
 }
 
 fn gone() -> ApiError {
-    ApiError::new(StatusCode::CONFLICT, "You've left the Hub. Enter again to come back.")
+    ApiError::new(StatusCode::CONFLICT, "You've left Nexus. Enter again to come back.")
 }
 
-/// Enters the Hub. A full room puts you in the quietest one instead.
+/// Enters Nexus.
 pub async fn enter(State(s): State<AppState>, auth: AuthUser, Json(body): Json<HubWhere>) -> Result<Json<HubState>, ApiError> {
     check_where(&body)?;
     if !s.limits.hub_enters.hit(&auth.user_id) {
@@ -122,23 +142,15 @@ pub async fn enter(State(s): State<AppState>, auth: AuthUser, Json(body): Json<H
     let player = crate::playground::player_for(&s, &auth.user_id).await?;
     let mut people = s.hub.people.lock().unwrap();
     s.hub.prune(&mut people);
-    let full = |room: &str, people: &HashMap<String, Presence>| people.iter().filter(|(id, p)| p.room == room && **id != auth.user_id).count() >= ROOM_CAPACITY;
-    let room = if full(&body.room, &people) {
-        let counts = Hub::counts(&people);
-        let quietest = counts.iter().min_by_key(|c| c.count).map(|c| c.id.clone()).unwrap_or_else(|| ROOMS[0].into());
-        if full(&quietest, &people) {
-            return Err(ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "The Hub's full right now. Try again in a little while."));
-        }
-        quietest
-    } else {
-        body.room
-    };
+    if !people.contains_key(&auth.user_id) && people.len() >= CAPACITY {
+        return Err(ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "Nexus is full right now. Try again in a little while."));
+    }
     let events = people.remove(&auth.user_id).map(|p| p.events).unwrap_or_default();
-    people.insert(auth.user_id.clone(), Presence { player, room, x: body.x, y: body.y, shown: None, seen: Instant::now(), events });
+    people.insert(auth.user_id.clone(), Presence { player, x: body.x, z: body.z, inside: body.inside, shown: None, seen: Instant::now(), events });
     Ok(Json(Hub::state(&mut people, &auth.user_id)))
 }
 
-/// Checks in: where you are now, and your room as it is.
+/// Checks in: where you are now, and who's around you.
 pub async fn sync(State(s): State<AppState>, auth: AuthUser, Json(body): Json<HubWhere>) -> Result<Json<HubState>, ApiError> {
     check_where(&body)?;
     if !s.limits.hub_syncs.hit(&auth.user_id) {
@@ -146,32 +158,26 @@ pub async fn sync(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Hu
     }
     let mut people = s.hub.people.lock().unwrap();
     s.hub.prune(&mut people);
-    let changing = people.get(&auth.user_id).ok_or_else(gone)?.room != body.room;
-    if changing {
-        let crowd = people.iter().filter(|(id, p)| p.room == body.room && **id != auth.user_id).count();
-        if crowd >= ROOM_CAPACITY {
-            return Err(ApiError::new(StatusCode::CONFLICT, "That room's full. Try another."));
-        }
-    }
     let me = people.get_mut(&auth.user_id).ok_or_else(gone)?;
-    me.room = body.room;
-    me.x = body.x;
-    me.y = body.y;
-    me.seen = Instant::now();
-    if changing {
+    if me.inside != body.inside {
+        // Through a door: what you were showing stays where you were.
         me.shown = None;
     }
+    me.x = body.x;
+    me.z = body.z;
+    me.inside = body.inside;
+    me.seen = Instant::now();
     Ok(Json(Hub::state(&mut people, &auth.user_id)))
 }
 
-/// Shows an emote or says a phrase to the room; aimed at someone, they're told.
+/// Shows an emote or says a phrase to everyone near; aimed at someone near, they're told.
 pub async fn act(State(s): State<AppState>, auth: AuthUser, Json(body): Json<HubAct>) -> Result<StatusCode, ApiError> {
     let known = match body.kind {
         ActKind::Emote => EMOTES.contains(&body.id.as_str()),
         ActKind::Phrase => PHRASES.iter().any(|(id, _)| *id == body.id),
     };
     if !known {
-        return Err(ApiError::bad_request("That isn't something you can do in the Hub."));
+        return Err(ApiError::bad_request("That isn't something you can do in Nexus."));
     }
     if !s.limits.hub_acts.hit(&auth.user_id) {
         return Err(ApiError::too_many("Give everyone a moment to catch up."));
@@ -182,8 +188,8 @@ pub async fn act(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Hub
     me.seen = Instant::now();
     let to = body.to.filter(|to| *to != auth.user_id);
     me.shown = Some((body.kind, body.id.clone(), Instant::now(), to.clone()));
-    let (room, from) = (me.room.clone(), me.player.clone());
-    if let Some(target) = to.and_then(|to| people.get_mut(&to)).filter(|t| t.room == room) {
+    let (x, z, inside, from) = (me.x, me.z, me.inside.clone(), me.player.clone());
+    if let Some(target) = to.and_then(|to| people.get_mut(&to)).filter(|t| t.inside == inside && (t.x - x).hypot(t.z - z) <= VIEW) {
         let mut next = s.hub.next_event.lock().unwrap();
         *next += 1;
         target.events.push(HubEvent { id: *next, from: Player { you: false, friend: false, ..from }, kind: body.kind, item: body.id });
@@ -200,16 +206,16 @@ pub async fn leave(State(s): State<AppState>, auth: AuthUser) -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
-/// A look in without entering: how many are where, and some of the plaza.
+/// A look in without entering: how many are where, and some of who's in the Nexus.
 pub async fn peek(State(s): State<AppState>, _auth: AuthUser) -> Json<HubPeek> {
     let mut people = s.hub.people.lock().unwrap();
     s.hub.prune(&mut people);
-    let mut plaza: Vec<&Presence> = people.values().filter(|p| p.room == ROOMS[0]).collect();
-    plaza.sort_by_key(|p| std::cmp::Reverse(p.seen));
+    let mut nexus: Vec<&Presence> = people.values().filter(|p| p.inside.is_none() && district_at(p.x, p.z) == Some(DISTRICTS[0].0)).collect();
+    nexus.sort_by_key(|p| std::cmp::Reverse(p.seen));
     Json(HubPeek {
         online: people.len() as u32,
-        rooms: Hub::counts(&people),
-        plaza: plaza.into_iter().take(PEEK).map(Hub::person).collect(),
+        districts: Hub::counts(&people),
+        nexus: nexus.into_iter().take(PEEK).map(Hub::person).collect(),
     })
 }
 

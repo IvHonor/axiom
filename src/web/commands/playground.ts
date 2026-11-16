@@ -1,4 +1,4 @@
-// The Playground on the web: the server calls go through the website's
+// The Playground on the web (not Nexus, which is desktop only): the server calls go through the website's
 // /api/terminal/account (see OPS there), and `playground_days` mirrors
 // src-tauri/src/playground.rs over the synced rows the browser can read.
 // Journal and Goals are encrypted (locked here), so the web leaves them out
@@ -64,9 +64,4 @@ export const playground: Handlers = {
   playground_remove: ({ userId }) => call("playground_remove", { userId }),
   playground_cheer: ({ userId }) => call("playground_cheer", { userId }),
   playground_avatar: ({ userId }) => call("playground_avatar", { userId }),
-  hub_enter: ({ room, x, y }) => call("hub_enter", { room, x, y }),
-  hub_sync: ({ room, x, y }) => call("hub_sync", { room, x, y }),
-  hub_act: ({ kind, id, to }) => call("hub_act", { kind, id, to }),
-  hub_leave: () => call("hub_leave"),
-  hub_peek: () => call("hub_peek"),
 };

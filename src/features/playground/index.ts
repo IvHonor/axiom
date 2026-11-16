@@ -3,6 +3,7 @@ import { Trophy } from "lucide-react";
 import type { ExtensionManifest } from "../../extensions/types";
 import { PlaygroundSidebar } from "./PlaygroundSidebar";
 import { PlaygroundSummary } from "./PlaygroundSummary";
+import { PlaygroundSummaryTitle } from "./overview/PlaygroundOverviewMenu";
 import { PlaygroundView } from "./PlaygroundView";
 
 export const playground: ExtensionManifest = {
@@ -27,5 +28,5 @@ export const playground: ExtensionManifest = {
   core: true,
   icon: Trophy,
   color: "var(--accent)",
-  area: { View: PlaygroundView, Summary: PlaygroundSummary, Sidebar: PlaygroundSidebar, fittedSummary: true },
+  area: { View: PlaygroundView, Summary: PlaygroundSummary, SummaryTitle: PlaygroundSummaryTitle, Sidebar: PlaygroundSidebar, fittedSummary: true },
 };

@@ -35,6 +35,8 @@ import { askToTalk, useTalkRequests } from "../../features/lemma/talk";
 import { feel, setLemma, useLemma } from "../../features/lemma/state";
 import { doing, toolOf } from "../../features/lemma/parts";
 import { Customise } from "../../features/lemma/Customise";
+import { useDialogue } from "../../features/lemma/useDialogue";
+import { dialogueStatus } from "../../features/lemma/dialogue";
 import { nameOf, useAssistantName, usePersona } from "../../features/lemma/persona";
 import { ConfirmButton } from "../ui/ConfirmButton";
 import { Dropdown } from "../ui/Dropdown";
@@ -215,6 +217,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
 
   const lemma = useLemma();
   const faceMood = reading || (busy && !stopped && progress?.text?.trim()) ? "speaking" : busy && !stopped && lemma.activity === "idle" ? "thinking" : moodOf(lemma);
+  const dialogue = useDialogue("chat", !busy && !reading && !customising);
 
   // Changes waiting for you: Lemma raises an eyebrow until they're dealt with.
   const waiting = chat?.entries.filter((e) => e.kind === "proposal" && e.status === "pending").length ?? 0;
@@ -222,6 +225,14 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
     setLemma({ waiting });
     return () => setLemma({ waiting: 0 });
   }, [waiting]);
+  const caption = reading ? "Reading the reply aloud…"
+    : busy && !stopped ? doing(lemma) ?? "Thinking…"
+    : lemma.activity !== "idle" ? doing(lemma)
+    : waiting > 0 ? dialogueStatus({ kind: "approval", values: { changes: waiting + (waiting === 1 ? " change" : " changes") } }, persona.personality)
+    : dialogue.message?.text
+      ?? (held ? dialogueStatus({ kind: "missingContext" }, persona.personality)
+        : !allowed.some(id => areas.some(area => area.id === id)) ? dialogueStatus({ kind: "noAccess" }, persona.personality)
+        : doing(lemma) ?? "Here with you. Ready when you are.");
 
   const areaOf = (id: string) => areas.find((a) => a.id === id) ?? findExtension(id);
   const startNew = () => {
@@ -235,8 +246,9 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
     <div className="lemma-view">
       <aside className="lemma-chats" aria-label="Chats">
         <div className="lemma-chat-companion">
-          <Face mood={faceMood} size={200} level={lemma.level} tool={toolOf(lemma)} interactive onTalk={askToTalk} />
-          <p aria-live="polite">{doing(lemma) ?? "Here with you. Ready when you are."}</p>
+          <Face mood={faceMood} size={200} level={lemma.level} tool={toolOf(lemma)} idleContext="chat" interactive onTalk={askToTalk}
+            onIdleComplete={dialogue.completed} dialogueRef={dialogue.attach} />
+          <p aria-live="polite" aria-atomic="true" data-lemma-dialogue={dialogue.message?.kind}>{caption}</p>
           <button className="btn btn-sm btn-ghost" onClick={() => setCustomising(true)}><Palette size={12} /> Customise {nameOf(persona)}</button>
         </div>
         <button className="btn btn-sm lemma-new" onClick={startNew} disabled={busy}>

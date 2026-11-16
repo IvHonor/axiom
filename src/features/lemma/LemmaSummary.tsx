@@ -10,6 +10,7 @@ import { doing, toolOf } from "./parts";
 import { useAssistantName } from "./persona";
 import { useLemma } from "./state";
 import { useBriefing } from "./useBriefing";
+import { useDialogue } from "./useDialogue";
 
 /** How the tile arranges Lemma and its words, from the space it measures:
  *  - pill: one row (2 high, or very narrow and short): a little face and one thing at a time
@@ -198,6 +199,7 @@ export function LemmaSummary({ onOpen, onOpenArea }: { onOpen: () => void; onOpe
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
   const [aloud, setAloud] = useState(false);
+  const dialogue = useDialogue("overview", width > 0 && height > 0 && !aloud);
   const mounted = useRef(true);
   useEffect(() => () => {
     mounted.current = false;
@@ -207,7 +209,9 @@ export function LemmaSummary({ onOpen, onOpenArea }: { onOpen: () => void; onOpe
   const layout = layoutOf(width, height);
   const single = oneAtATime(layout, height);
   const g = geometry(layout, width, height, briefing?.stats.length ?? 0);
-  const items = said(briefing, doing(state), single, width, me);
+  const items: Said[] = dialogue.message
+    ? [{ id: "dialogue:" + dialogue.message.at, kind: "status", text: dialogue.message.text }]
+    : said(briefing, doing(state), single, width, me);
   const itemsKey = items.map((s) => s.text).join("\n");
 
   // Bubblefuls from the real heights: a hidden copy of everything is measured
@@ -253,7 +257,7 @@ export function LemmaSummary({ onOpen, onOpenArea }: { onOpen: () => void; onOpe
       return setAloud(false);
     }
     setAloud(true);
-    speak(said(briefing, null, false, Infinity, me).map((s) => plain(s.text)).join(" "), () => { if (mounted.current) setAloud(false); });
+    speak(dialogue.message?.text ?? said(briefing, null, false, Infinity, me).map((s) => plain(s.text)).join(" "), () => { if (mounted.current) setAloud(false); });
   };
   const aloudButton = briefing && (
     <button className="icon-btn" onClick={readAloud} title={aloud ? "Stop" : "Read it aloud"} aria-label={aloud ? "Stop reading aloud" : "Read it aloud"} aria-pressed={aloud}>
@@ -286,7 +290,8 @@ export function LemmaSummary({ onOpen, onOpenArea }: { onOpen: () => void; onOpe
 
   const face = (
     <button className="lemma-brief-face" onClick={onOpen} title={`Talk to ${me}`} aria-label={`Open ${me}`} style={{ width: g.face, height: g.face }}>
-      <Face mood={mood} size={g.face} level={state.level} tool={toolOf(state)} />
+      <Face mood={mood} size={g.face} level={state.level} tool={toolOf(state)} idleContext="overview"
+        onIdleComplete={dialogue.completed} dialogueRef={dialogue.attach} />
     </button>
   );
   const words = (
@@ -300,7 +305,7 @@ export function LemmaSummary({ onOpen, onOpenArea }: { onOpen: () => void; onOpe
     </div>
   );
   const speech = (
-    <div className="lemma-speech" data-tail={layout === "column" || (layout === "stage" && !g.split) ? "top" : "left"}>
+    <div className="lemma-speech" data-lemma-dialogue={dialogue.message?.kind} data-tail={layout === "column" || (layout === "stage" && !g.split) ? "top" : "left"}>
       {words}
       {layout !== "pill" && pager}
     </div>
@@ -341,7 +346,7 @@ export function LemmaSummary({ onOpen, onOpenArea }: { onOpen: () => void; onOpe
               {speech}
               {g.actions && (
                 <div className="lemma-brief-actions">
-                  <button className="btn btn-sm btn-ghost" onClick={onOpen}><MessageSquare size={13} strokeWidth={1.75} /> Talk to {me}</button>
+                  <button className="btn btn-sm btn-ghost" onClick={onOpen}><MessageSquare size={13} strokeWidth={1.75} /><span>Talk to {me}</span></button>
                   {aloudButton}
                 </div>
               )}

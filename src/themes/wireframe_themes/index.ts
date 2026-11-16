@@ -11,7 +11,7 @@ const MONO = '"JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace';
 
 const hud = {
   fonts: { ui: UI, label: MONO, mono: MONO, size: 13 },
-  style: { radius: 0, brackets: true, hatching: true, buttons: "outline", clock: true },
+  style: { radius: 0, brackets: true, buttons: "outline", clock: true },
   labels: { uppercase: true, tracking: 1, joiner: "_", separator: "//" },
 } satisfies Partial<Theme>;
 
@@ -68,7 +68,7 @@ export const wireframeThemes: ExtensionManifest = {
   ],
   features: [
     "A dark and a light version",
-    "Bracket-cornered panels and hatched details",
+    "Bracket-cornered panels and a top-bar clock",
     "Uppercase labels in Chakra Petch and JetBrains Mono",
   ],
   version: "0.1.0",

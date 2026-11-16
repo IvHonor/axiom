@@ -119,21 +119,22 @@ pub async fn playground_cheer(account: State<'_, Account>, user_id: String) -> R
     account.playground(Method::POST, &user_path(routes::PLAYGROUND_FRIEND_CHEER, &user_id)?, None).await.map(drop)
 }
 
-// ---------- The Hub (see `axiom_protocol::hub`) ----------
+// ---------- Nexus, live (see `axiom_protocol::hub`) ----------
 
-fn hub_where(room: String, x: f32, y: f32) -> Value {
-    json!({ "room": room, "x": x, "y": y })
+/// Where you are, in metres on the city map (or from the middle of the building you're `inside`).
+fn hub_where(x: f32, z: f32, inside: Option<String>) -> Value {
+    json!({ "x": x, "z": z, "inside": inside })
 }
 
 #[tauri::command]
-pub async fn hub_enter(account: State<'_, Account>, room: String, x: f32, y: f32) -> Result<Value> {
-    account.playground(Method::POST, routes::HUB_ENTER, Some(hub_where(room, x, y))).await
+pub async fn hub_enter(account: State<'_, Account>, x: f32, z: f32, inside: Option<String>) -> Result<Value> {
+    account.playground(Method::POST, routes::HUB_ENTER, Some(hub_where(x, z, inside))).await
 }
 
-/// Checks in (about once a second while in the Hub): where you are, and your room as it is.
+/// Checks in (about once a second while in Nexus): where you are, and who's around you.
 #[tauri::command]
-pub async fn hub_sync(account: State<'_, Account>, room: String, x: f32, y: f32) -> Result<Value> {
-    account.playground(Method::POST, routes::HUB_SYNC, Some(hub_where(room, x, y))).await
+pub async fn hub_sync(account: State<'_, Account>, x: f32, z: f32, inside: Option<String>) -> Result<Value> {
+    account.playground(Method::POST, routes::HUB_SYNC, Some(hub_where(x, z, inside))).await
 }
 
 /// An emote or phrase (`kind`), maybe aimed at someone.

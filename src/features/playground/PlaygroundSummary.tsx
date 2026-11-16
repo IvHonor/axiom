@@ -1,79 +1,73 @@
-// The Playground's overview tile: a live look into the Hub (who's online,
-// where, and the AIs in the Plaza right now), with your place among friends
-// beside it when you're on the boards.
-import { useEffect, useState, type CSSProperties } from "react";
-import { ArrowUpRight, Sparkles } from "lucide-react";
+// Responsive standings shared by desktop and web. Load only the selected board.
+import { ArrowUpRight, Globe2, Users } from "lucide-react";
+import { openLeaderboards } from "./preferences";
 import { useTileLayout } from "../../shell/ui/ResizableTile";
 import { Face } from "../lemma/Face";
 import { useAssistantName } from "../lemma/persona";
-import { Flame, atRisk } from "./Flame";
-import { PeerLemma, glowOf, lemmaName } from "./PeerLemma";
-import * as api from "./api";
-import { type Board } from "./api";
-import { peekHub, type HubPeek } from "./hub/api";
-import { ROOMS } from "./hub/rooms";
-import { today, usePlayground } from "./store";
+import { metricInfo, PERIODS } from "./metrics";
+import { resolveView, viewOf } from "./overview/model";
+import { usePlaygroundPreferences } from "./overview/preferences";
+import { VIEW_COMPONENTS, type ViewProps } from "./overview/views";
+import { useTileBoard } from "./overview/data";
+import { usePlayground } from "./store";
+import "./overview/overview.css";
 
 export function PlaygroundSummary({ onOpen }: { onOpen: () => void }) {
-  const { me, signedIn } = usePlayground();
-  const { width, height } = useTileLayout();
+  const { me, friends, signedIn } = usePlayground();
+  const { size, width, height } = useTileLayout();
+  const { prefs, update } = usePlaygroundPreferences(size);
   const lemma = useAssistantName();
-  const [peek, setPeek] = useState<HubPeek | null>(null);
-  const [board, setBoard] = useState<Board | null>(null);
-  const hasHandle = !!me;
   const competing = !!me?.inPlayground;
+  const metric = metricInfo(prefs.metric);
+  const scope = metric.global ? prefs.scope : "friends";
+  const toolbar = !!me && width >= 170 && height >= 130;
+  const bodyHeight = height - (toolbar ? 58 : 0);
+  const view = resolveView(prefs, width, bodyHeight, competing);
+  const needsBoard = !!me && viewOf(view).boards;
+  const { board, error, reload } = useTileBoard(prefs.metric, prefs.period, needsBoard, scope);
 
-  useEffect(() => {
-    if (!hasHandle) return;
-    let live = true;
-    const load = () => peekHub().then((p) => live && setPeek(p), () => {});
-    void load();
-    const every = window.setInterval(load, 30_000);
-    return () => { live = false; window.clearInterval(every); };
-  }, [hasHandle]);
-
-  useEffect(() => {
-    if (!competing) return;
-    let live = true;
-    const load = () => api.getBoard("active", "week", "friends", today()).then((b) => live && setBoard(b), () => {});
-    void load();
-    const every = window.setInterval(load, 5 * 60_000);
-    return () => { live = false; window.clearInterval(every); };
-  }, [competing]);
-
-  if (!signedIn || me === null) {
+  const periodLabel = PERIODS.find(p => p.id === prefs.period)!.label;
+  const openBoards = () => {
+    openLeaderboards({ metric: prefs.metric, period: prefs.period, scope });
+    onOpen();
+  };
+  if (!width || height < 24) return null;
+  if (!signedIn || !me) {
     return (
-      <button className="pg-tile is-invite" onClick={onOpen}>
-        {height >= 150 && <Face mood="happy" size={Math.min(84, height - 80)} alive={false} />}
-        <span><strong>Bring {lemma} to the Hub</strong><small>{signedIn ? "Meet everyone's AIs, live." : "Sign in to meet everyone's AIs."}</small></span>
+      <button className="pg-tile is-invite" onClick={openBoards}>
+        {height >= 150 && width >= 200 && <Face mood="happy" size={Math.min(84, height - 80)} alive={false} />}
+        <span>
+          <strong>{signedIn ? "Pick a handle" : `Bring ${lemma} to the Playground`}</strong>
+          {height >= 70 && <small>{signedIn ? "Compare your progress with friends and global rankings." : "Sign in to compare progress with friends and the world."}</small>}
+        </span>
         <ArrowUpRight size={14} />
       </button>
     );
   }
-  if (!peek) return <div className="pg-tile is-status"><Sparkles size={16} className="pg-spin" /> Looking into the Hub…</div>;
 
-  const mine = board?.entries.find((e) => e.player.you);
-  const busiest = [...peek.rooms].sort((a, b) => b.count - a.count)[0];
-  const fit = Math.max(1, Math.floor((width - 16) / 50));
+  const props: ViewProps = {
+    width, height: bodyHeight, me, board, friends,
+    metric, period: prefs.period,
+    onOpen: openBoards, openBoards,
+  };
+  const Layout = VIEW_COMPONENTS[view];
   return (
-    <button className="pg-tile pg-tile-hub" onClick={onOpen} aria-label="Open the Hub">
-      <span className="pg-tile-head">
-        <span className="pg-tile-live"><i aria-hidden="true" /> {peek.online}<small>online</small></span>
-        <span className="pg-tile-text">
-          <strong>The Hub</strong>
-          <small>{peek.online && busiest ? `Busiest: ${ROOMS[busiest.id].name.replace("The ", "")} (${busiest.count})` : "Quiet right now. Be the first in."}</small>
+    <div className={`pg-ov${toolbar ? " has-toolbar" : ""}`} data-view={view} data-scope={scope}>
+      {toolbar && <div className="pg-ov-toolbar">
+        <div className="pg-ov-scope" role="group" aria-label="Leaderboard audience">
+          <button aria-pressed={scope === "friends"} onClick={() => update({ scope: "friends" })}><Users size={12} /> Friends</button>
+          <button aria-pressed={scope === "global"} disabled={!metric.global} title={metric.global ? undefined : "This board is friends only"}
+            onClick={() => update({ scope: "global" })}><Globe2 size={12} /> Global</button>
+        </div>
+        <span className="pg-ov-board-caption" title={`${metric.label} · ${periodLabel}`}>
+          {metric.label} · {periodLabel}
         </span>
-        {mine && <span className="pg-tile-rank-mini" title="Your rank among friends this week">#{mine.rank}<Flame streak={mine.streak} risk={atRisk(mine.streakThrough, mine.asOf)} size={14} count={false} /></span>}
-      </span>
-      {height >= 150 && (
-        <span className="pg-tile-plaza">
-          {peek.plaza.length ? peek.plaza.slice(0, fit).map((p, i) => (
-            <span key={p.player.userId} className="pg-tile-lemma" style={{ "--glow": glowOf(p.player), animationDelay: `${-i * 0.5}s` } as CSSProperties} title={`${lemmaName(p.player)} · @${p.player.handle}`}>
-              <PeerLemma player={p.player} size={42} />
-            </span>
-          )) : <span className="pg-tile-empty">The Plaza's empty. Step in and say hi when others arrive.</span>}
-        </span>
-      )}
-    </button>
+      </div>}
+      <div className="pg-ov-content">
+        {error && !board ? (
+          <button className="pg-ov-retry" onClick={reload} title={error}>Couldn't load rankings · Retry</button>
+        ) : <Layout {...props} />}
+      </div>
+    </div>
   );
 }

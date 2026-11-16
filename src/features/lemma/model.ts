@@ -8,7 +8,9 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
   const colourUpdates: ((next: Look, glow: THREE.Color) => void)[] = [];
   const root = new THREE.Group();
   const body = new THREE.Group();
-  root.add(body);
+  const idleBody = new THREE.Group();
+  root.add(idleBody);
+  idleBody.add(body);
   const finish = look.finish;
   const casing = new THREE.MeshPhysicalMaterial({
     color: shell.clone().lerp(glow, finish === "hologram" ? 0.22 : 0.06),
@@ -46,20 +48,6 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
       // Smooth corners (enough segments that light glides round them, rather
       // than catching on facets), so it reads as one clean, solid prism.
       geometry = new RoundedBoxGeometry(1.5, 1.65, 1.05, 10, 0.14);
-      if (["cap", "beanie", "crown"].includes(look.accessory)) {
-        // Round the shoulders into the hat opening, leaving the lower body square.
-        const positions = geometry.getAttribute("position");
-        const normals = geometry.getAttribute("normal");
-        const radius = look.accessory === "crown" ? 0.40 : look.accessory === "beanie" ? 0.32 : 0.28;
-        for (let i = 0; i < positions.count; i++) {
-          if (positions.getY(i) <= 0) continue;
-          positions.setXYZ(i,
-            (0.75 - radius) * Math.sign(positions.getX(i)) + normals.getX(i) * radius,
-            0.825 - radius + normals.getY(i) * radius,
-            (0.525 - radius) * Math.sign(positions.getZ(i)) + normals.getZ(i) * radius);
-        }
-        geometry.computeVertexNormals();
-      }
       faceZ = 0.55;
       hatY = 0.86;
       break;
@@ -449,13 +437,25 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
     mesh(motes, new THREE.OctahedronGeometry(i % 3 === 0 ? 0.025 : 0.012), soft, Math.sin(a) * 1.2, (i % 4) * 0.48 - 0.65, Math.cos(a) * 0.8 - 0.3);
   }
   const bodyMaterials = new Map<THREE.Material, number>();
+  const idleLight = new THREE.Group(), idleSpark = new THREE.Group();
+  idleLight.visible = false;
+  idleLight.add(idleSpark);
+  root.add(idleLight);
+  mesh(idleSpark, new THREE.SphereGeometry(0.04, 12, 8), light);
+  mesh(idleSpark, new THREE.SphereGeometry(0.09, 12, 8), soft);
+  const idleTrailMaterial = new THREE.LineBasicMaterial({ color: glow, transparent: true, opacity: 0.5, depthWrite: false });
+  const idleTrail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 65 }, (_, i) => {
+    const angle = i / 64 * Math.PI * 2;
+    return new THREE.Vector3(1 + Math.cos(angle) * 0.32, 0.55 + Math.sin(angle) * 0.32, 1.5);
+  })), idleTrailMaterial);
+  idleLight.add(idleTrail);
   if (code) body.traverse(object => {
     if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial) {
       bodyMaterials.set(object.material, object.material.opacity);
       object.material.transparent = true;
     }
   });
-  return { root, body, eyes, face, facewear, neckwear, mouth, mouths, hat, hatOrigin: hat.position.clone(), held, heldOrigin: held.position.clone(), prop, work, base, pulse, motes, hologram, sprout, bookCover, page, steam, drop, sneeze, code, lantern, bodyMaterials,
+  return { root, body, idleBody, idleLight, idleSpark, idleTrail, eyes, face, facewear, neckwear, mouth, mouths, hat, hatOrigin: hat.position.clone(), held, heldOrigin: held.position.clone(), prop, work, base, pulse, motes, hologram, sprout, bookCover, page, steam, drop, sneeze, code, lantern, bodyMaterials,
     updateColours(next: Look, glow: THREE.Color) { colourUpdates.forEach(update => update(next, glow)); },
   };
 }
@@ -550,7 +550,7 @@ export function disposeModel(root: THREE.Object3D) {
   const materials = new Set<THREE.Material>();
   const textures = new Set<THREE.Texture>();
   root.traverse((object) => {
-    if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
+    if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
       geometries.add(object.geometry);
       for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material);
     }

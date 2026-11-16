@@ -219,7 +219,7 @@
 /* Theme packs from the app (src/themes/*), shown when the tour flicks through themes.
    Colours are the themes' own; fonts fall back to the system font where the site doesn't ship the theme's. */
 .win { transition: background-color .35s, color .35s, border-color .35s; }
-.win[data-theme="nord"], .win[data-theme="rose-pine"], .win[data-theme="catppuccin"], .win[data-theme="gruvbox"] {
+.win[data-theme="nord"], .win[data-theme="rose-pine"], .win[data-theme="catppuccin"], .win[data-theme="gruvbox"], .win[data-theme="crimson"] {
   --bright: var(--text);
   --link: var(--accent);
   --groove: color-mix(in srgb, var(--text) 14%, var(--panel));
@@ -229,6 +229,7 @@
 .win[data-theme="rose-pine"] { --bg: #191724; --surface: #1f1d2e; --panel: #26233a; --line: #403d52; --line-strong: #6e6a86; --text: #e0def4; --dim: #b7b3cc; --faint: #a6a1bd; --accent: #ebbcba; --on-accent: #191724; --radius: calc(var(--px) * 9); --radius-sm: calc(var(--px) * 5); }
 .win[data-theme="catppuccin"] { --bg: #1e1e2e; --surface: #181825; --panel: #313244; --line: #45475a; --line-strong: #6c7086; --text: #cdd6f4; --dim: #bac2de; --faint: #a6adc8; --accent: #cba6f7; --on-accent: #1e1e2e; --radius: calc(var(--px) * 10); --radius-sm: calc(var(--px) * 5); }
 .win[data-theme="gruvbox"] { --bg: #282828; --surface: #1d2021; --panel: #32302f; --line: #504945; --line-strong: #7c6f64; --text: #ebdbb2; --dim: #d5c4a1; --faint: #bdae93; --accent: #fabd2f; --on-accent: #282828; --radius: calc(var(--px) * 3); --radius-sm: calc(var(--px) * 2); }
+.win[data-theme="crimson"] { --bg: #060607; --surface: #030304; --panel: #101012; --line: #302126; --line-strong: #67434D; --text: #F5F3F4; --dim: #C7B9BE; --faint: #AA959D; --accent: #CE203C; --on-accent: #FFFFFF; --radius: calc(var(--px) * 6); --radius-sm: calc(var(--px) * 3); --ui: var(--font-display), "Segoe UI", sans-serif; }
 .win[data-theme="modern-light"] {
   --bg: #ffffff; --surface: #f8f8f8; --panel: #f8f8f8; --line: #e5e5e5; --line-strong: #cecece; --text: #3b3b3b; --bright: #1f1f1f; --dim: #616161; --faint: #8b949e;
   --accent: #005fb8; --link: #005fb8; --on-accent: #ffffff; --success: #357b50; --groove: #e5e5e5; --raised: #ececec;

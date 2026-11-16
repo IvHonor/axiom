@@ -17,6 +17,9 @@ use tauri::{AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalSize
 
 use crate::error::{Error, Result};
 
+#[cfg(target_os = "macos")]
+mod macos;
+
 /// The window's label: the page it loads reads it (`?desk`) to show the
 /// desktop view instead of the app.
 pub const LABEL: &str = "desk";
@@ -185,10 +188,72 @@ fn create(app: &AppHandle, listen: bool) -> Result<WebviewWindow> {
         .visible(false)
         .build()
         .map_err(|err| Error::Invalid(format!("Lemma couldn't open on the desktop: {err}")))?;
+    #[cfg(target_os = "macos")]
+    macos::configure(&window)?;
     if !place_at_spot(&window) {
         place(app, &window, *CORNER.lock().unwrap());
     }
     Ok(window)
+}
+
+/// macOS reads the cursor in the webview's own logical coordinates: global
+/// cursor and window positions can use different scales on mixed-DPI displays.
+#[tauri::command]
+pub async fn desk_pointer(app: AppHandle) -> Result<Option<(f64, f64)>> {
+    #[cfg(target_os = "macos")]
+    {
+        let window = app.get_webview_window(LABEL).ok_or_else(|| Error::Invalid("Lemma's desktop window is closed.".into()))?;
+        let (send, receive) = tokio::sync::oneshot::channel();
+        let native = window.clone();
+        window.run_on_main_thread(move || { let _ = send.send(macos::pointer(&native)); })
+            .map_err(|err| Error::Invalid(err.to_string()))?;
+        receive.await.map_err(|err| Error::Invalid(err.to_string()))?.map(Some)
+    }
+    #[cfg(not(target_os = "macos"))]
+    { let _ = app; Ok(None) }
+}
+
+#[derive(Clone, Deserialize)]
+pub struct GlassOutline {
+    start: [f64; 2],
+    curves: Vec<[f64; 6]>,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct GlassPanel {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    radius: f64,
+    outline: Option<GlassOutline>,
+}
+
+/// Native glass only behind the companion's panels, leaving the character's
+/// window transparent. The calling window supplies its own visible panel bounds.
+#[tauri::command]
+pub async fn desk_glass(window: WebviewWindow, panels: Vec<GlassPanel>) -> Result<()> {
+    if window.label() != LABEL || panels.len() > 16 || panels.iter().any(|p|
+        [p.x, p.y, p.width, p.height, p.radius].iter().any(|n| !n.is_finite())
+        || p.width <= 0.0 || p.height <= 0.0 || p.width > LARGEST * 2.0 || p.height > LARGEST * 2.0
+        || p.x.abs() > LARGEST * 2.0 || p.y.abs() > LARGEST * 2.0 || !(0.0..=720.0).contains(&p.radius)
+        || p.outline.as_ref().is_some_and(|outline| outline.curves.len() > 12 || outline.curves.is_empty()
+            || outline.start.iter().chain(outline.curves.iter().flatten()).any(|n| !n.is_finite())
+            || std::iter::once(outline.start.as_slice()).chain(outline.curves.iter().map(|c| c.as_slice()))
+                .any(|points| points.chunks_exact(2).any(|xy| xy[0] < 0.0 || xy[0] > p.width || xy[1] < 0.0 || xy[1] > p.height)))
+    ) {
+        return Err(Error::Invalid("Invalid desktop glass bounds.".into()));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let (send, receive) = tokio::sync::oneshot::channel();
+        let native = window.clone();
+        window.run_on_main_thread(move || { let _ = send.send(macos::glass(&native, panels)); })
+            .map_err(|err| Error::Invalid(err.to_string()))?;
+        receive.await.map_err(|err| Error::Invalid(err.to_string()))?
+    }
+    #[cfg(not(target_os = "macos"))]
+    Ok(())
 }
 
 /// Shows the desktop view, making it the first time: where he was last
@@ -291,9 +356,15 @@ pub async fn desk_resize(app: AppHandle, width: f64, height: f64, dock: Option<b
     let wide = (width.clamp(SMALLEST, LARGEST) * scale) as u32;
     let tall = (height.clamp(SMALLEST, LARGEST) * scale) as u32;
     if dock == Some(true) {
-        let area = *window.current_monitor().ok().flatten().or_else(|| screen(&app, &window))?.work_area();
-        let (left, top) = (area.position.x, area.position.y);
-        let (right, bottom) = (left + area.size.width as i32, top + area.size.height as i32);
+        let monitor = window.current_monitor().ok().flatten().or_else(|| screen(&app, &window))?;
+        let area = *monitor.work_area();
+        let (top, bottom) = (area.position.y, area.position.y + area.size.height as i32);
+        // The Mac's Dock can inset its work area: a tucked tab joins the actual
+        // display edge, while its vertical position still clears the menu bar/Dock.
+        #[cfg(target_os = "macos")]
+        let (left, right) = (monitor.position().x, monitor.position().x + monitor.size().width as i32);
+        #[cfg(not(target_os = "macos"))]
+        let (left, right) = (area.position.x, area.position.x + area.size.width as i32);
         let side = if at.x + size.width as i32 / 2 > (left + right) / 2 { Side::Right } else { Side::Left };
         let x = if side == Side::Right { right - wide as i32 } else { left };
         let y = (at.y + size.height as i32 / 2 - tall as i32 / 2).clamp(top, (bottom - tall as i32).max(top));

@@ -60,6 +60,9 @@ try {
   await still.getByRole('button', { name: /Themes/ }).click();
   await still.getByRole('button', { name: /Gruvbox/ }).click();
   assert.equal(await still.evaluate(() => document.querySelector('#tour [data-theme]').dataset.theme), 'gruvbox');
+  await still.getByRole('button', { name: 'Crimson', exact: true }).click();
+  assert.equal(await still.evaluate(() => document.querySelector('#tour [data-theme]').dataset.theme), 'crimson');
+  assert.equal(await still.locator('#tour [data-theme]').evaluate(node => getComputedStyle(node).getPropertyValue('--accent').trim().toLowerCase()), '#ce203c');
 
   // Signed out: the account sends you to sign in, and the forms render without waiting for scripts.
   const account = await open('/account');
@@ -69,7 +72,7 @@ try {
     assert.match(html, /name="password"/, `${path} has its form in the HTML`);
   }
   const web = await open('/web');
-  assert.equal(await web.getByRole('button', { name: /Notify me/ }).isVisible(), true);
+  assert.equal(await web.locator('a[href="/sign-in?next=/terminal"]').isVisible(), true, 'the web page opens the current sign-in flow');
   await web.screenshot({ path: `${output}/web.png` });
 
   // Phone: no sideways scrolling.

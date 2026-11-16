@@ -10,7 +10,7 @@ const MONO = 'Consolas, Menlo, Monaco, "Courier New", monospace';
 
 const modern = {
   fonts: { ui: UI, label: UI, mono: MONO, size: 13 },
-  style: { radius: 8, brackets: false, hatching: false, buttons: "filled" },
+  style: { radius: 8, brackets: false, buttons: "filled" },
   labels: { uppercase: false, tracking: 0, joiner: " ", separator: "·" },
 } satisfies Partial<Theme>;
 

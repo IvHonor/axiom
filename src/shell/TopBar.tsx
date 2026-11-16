@@ -64,7 +64,6 @@ export function TopBar({ tabs, active, previewKey, onSelect, onPin, onClose, onR
         <Logo />
       </button>
       <div className="topbar-brand"><Logo variant="wordmark" size={13} /></div>
-      <div className="box box-hatch" aria-hidden="true" />
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}
         accessibility={{ screenReaderInstructions: { draggable: "Press Space to pick up a tab, Left or Right to move it, Space to drop, or Escape to cancel. Press Enter to open a tab." } }}>
@@ -79,7 +78,6 @@ export function TopBar({ tabs, active, previewKey, onSelect, onPin, onClose, onR
       <SupportButton />
       <FriendsButton playgroundOn={playground.on} onOpenPlayground={playground.open} />
       <NotificationBell onOpen={(id) => onSelect({ kind: "extension", id })} />
-      <div className="box box-hatch" aria-hidden="true" />
       {showClock && <Clock />}
     </header>
   );

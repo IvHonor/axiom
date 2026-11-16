@@ -4,8 +4,10 @@
 // below with their Lemma, streak flames and a way to cheer them on; and a
 // signal log on the side narrates what's going on.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Crown, Globe2, Lock, RefreshCw, Settings2, Sparkles, Swords, Trophy, Users, Zap } from "lucide-react";
-import { usePersistentState } from "../../shell/usePersistentState";
+import { Crown, Globe2, Lock, RefreshCw, Settings2, Sparkles, Swords, Trophy, Users, X, Zap } from "lucide-react";
+import { useBoardFilters, usePlaygroundMode, usePlaygroundOptions, type BoardFilters } from "./preferences";
+import { useBoardAlerts } from "./useBoardAlerts";
+import "./preferences.css";
 import { useAssistantName, usePersona } from "../lemma/persona";
 import { Face } from "../lemma/Face";
 import { Modal } from "../../shell/ui/Modal";
@@ -15,26 +17,16 @@ import { Join } from "./Join";
 import { glowOf, lemmaName } from "./PeerLemma";
 import { Duo } from "./Duo";
 import { lineFor } from "./banter";
-import { METRICS, PERIODS, before, formatValue, metricInfo, type MetricInfo } from "./metrics";
+import { PERIODS, before, formatValue, metricInfo, type MetricInfo } from "./metrics";
 import * as api from "./api";
 import { displayName, type Board, type BoardEntry, type Period, type Scope } from "./api";
 import { sendStats, setFriends, today, usePlayground } from "./store";
 import { FriendCode } from "./parts";
 import { BoardPicker } from "./BoardPicker";
 import { Hub } from "./hub/Hub";
+import { isWeb } from "../../lib/platform";
 
-interface ViewPrefs { metric: string; period: Period; scope: Scope }
-const DEFAULT_PREFS: ViewPrefs = { metric: "active", period: "week", scope: "friends" };
-const parsePrefs = (saved: unknown): ViewPrefs => {
-  const p = saved && typeof saved === "object" ? (saved as Partial<ViewPrefs>) : {};
-  return {
-    metric: METRICS.some((m) => m.id === p.metric) ? p.metric! : DEFAULT_PREFS.metric,
-    period: PERIODS.some((x) => x.id === p.period) ? p.period! : DEFAULT_PREFS.period,
-    scope: p.scope === "global" ? "global" : "friends",
-  };
-};
-
-function useBoard(prefs: ViewPrefs, enabled: boolean) {
+function useBoard(prefs: BoardFilters, enabled: boolean, revision: string) {
   const [board, setBoard] = useState<Board | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,8 +43,8 @@ function useBoard(prefs: ViewPrefs, enabled: boolean) {
     } finally {
       if (ticket === asked.current) setLoading(false);
     }
-  }, [prefs.metric, prefs.period, prefs.scope, enabled]);
-  useEffect(() => { void load(); }, [load]);
+  }, [prefs.metric, prefs.period, prefs.scope, enabled, revision]);
+  useEffect(() => { setBoard(null); setError(null); void load(); return () => { asked.current++; }; }, [load]);
   // Fresh every couple of minutes while open.
   useEffect(() => {
     const every = window.setInterval(() => void load(), 120_000);
@@ -64,14 +56,16 @@ function useBoard(prefs: ViewPrefs, enabled: boolean) {
 /** The leaderboards: friends or everyone, by period and board. */
 function BoardsView({ switcher }: { switcher: ReactNode }) {
   const { me, friends, signedIn, error: meError, refresh } = usePlayground();
-  const [prefs, setPrefs] = usePersistentState("axiom.playground.view", parsePrefs);
+  const [prefs, setPrefs] = useBoardFilters();
+  const { options } = usePlaygroundOptions();
   const [settings, setSettings] = useState(false);
   const [card, setCard] = useState<BoardEntry | null>(null);
   const metric = metricInfo(prefs.metric);
   // A friends-only metric can't be on the global boards.
   const scope: Scope = prefs.scope === "global" && !metric.global ? "friends" : prefs.scope;
   const view = { ...prefs, scope };
-  const { board, setBoard, error, loading, reload } = useBoard(view, !!me?.inPlayground);
+  const { board, setBoard, error, loading, reload } = useBoard(view, !!me, `${me?.player.userId}:${me?.inPlayground}:${me?.global}:${me?.shared.join("|")}`);
+  const { notices, dismiss } = useBoardAlerts(board, friends, me?.player.userId, options.alerts);
 
   // Send fresh numbers when the page opens, then show them.
   const joined = !!me?.inPlayground;
@@ -86,7 +80,7 @@ function BoardsView({ switcher }: { switcher: ReactNode }) {
   if (!signedIn) return <Shell colors={[]}>{switcher}<Gate icon={<Lock size={22} />} title="Sign in to enter the Playground" text="The Playground needs an Axiom account: it's how friends find you. Open Account (bottom left) to sign in." /></Shell>;
   if (me === undefined) return <Shell colors={[]}>{switcher}<Gate icon={<RefreshCw size={22} className="pg-spin" />} title={meError ? "Couldn't reach the Playground" : "Booting the Playground…"} text={meError ?? "Finding your friends."} action={meError ? { label: "Try again", run: refresh } : undefined} /></Shell>;
   // A handle (for friends) isn't joining: the boards are a choice of their own.
-  if (me === null || !me.inPlayground) return <Shell colors={[]}>{switcher}<div className="pg-join-wrap"><Join me={me} /></div></Shell>;
+  if (me === null) return <Shell colors={[]}>{switcher}<div className="pg-join-wrap"><Join me={me} /></div></Shell>;
 
   const cheer = async (entry: BoardEntry) => {
     try {
@@ -105,6 +99,9 @@ function BoardsView({ switcher }: { switcher: ReactNode }) {
   const mine = entries.find((e) => e.player.you) ?? board?.you ?? null;
   return (
     <Shell colors={colors}>{switcher}
+      <div className="pg-alerts" aria-live="polite" aria-label="Playground alerts">
+        {notices.map(n => <div key={n.id} className="pg-alert"><span>{n.text}</span><button className="icon-btn" aria-label="Dismiss Playground alert" onClick={() => dismiss(n.id)}><X size={14} /></button></div>)}
+      </div>
       <header className="pg-console">
         <div className="pg-console-title">
           <Sparkles size={18} />
@@ -140,9 +137,9 @@ function BoardsView({ switcher }: { switcher: ReactNode }) {
           {board && !board.joined && <NotOnBoard board={board} metric={metric} meShares={me.shared.includes(metric.id)} onSettings={() => setSettings(true)} />}
 
           {board && board.champion && <Champion entry={board.champion} metric={metric} period={view.period} />}
-          {board && <Stage entries={entries.slice(0, 3)} metric={metric} period={view.period} onOpen={setCard} />}
+          {board && options.podium && <Stage entries={entries.slice(0, 3)} metric={metric} period={view.period} onOpen={setCard} />}
           {board && <Rival board={board} metric={metric} period={view.period} />}
-          {board && <Ranks entries={entries.slice(3)} you={board.you && withCheers(board.you)} metric={metric} period={view.period} leader={entries[0]?.value ?? 0} onOpen={setCard} onCheer={cheer} />}
+          {board && <Ranks entries={options.podium ? entries.slice(3) : entries} you={board.you && withCheers(board.you)} metric={metric} period={view.period} leader={entries[0]?.value ?? 0} onOpen={setCard} onCheer={cheer} />}
           {board && scope === "friends" && entries.length <= 1 && <Invite code={me.friendCode} />}
         </section>
 
@@ -170,23 +167,39 @@ function onBoard(board: Board): string {
   return `${board.joined ? "You and " : ""}${friends} ${friends === 1 ? "friend" : "friends"} on this board`;
 }
 
-/** The Playground: the Hub (live, everyone's AIs) or the leaderboards. */
+/** The Playground: Nexus (live, everyone's AIs; desktop only) or the leaderboards. */
 export function PlaygroundView() {
-  const [mode, setMode] = usePersistentState<"hub" | "boards">("axiom.playground.mode", (saved) => (saved === "boards" ? "boards" : "hub"));
+  const [mode, setMode] = usePlaygroundMode();
   const switcher = (
     <nav className="pg-modes" role="tablist" aria-label="Playground">
-      <button role="tab" aria-selected={mode === "hub"} onClick={() => setMode("hub")}><Sparkles size={14} /> Hub</button>
+      <button role="tab" aria-selected={mode === "hub"} onClick={() => setMode("hub")}><Sparkles size={14} /> Nexus</button>
       <button role="tab" aria-selected={mode === "boards"} onClick={() => setMode("boards")}><Trophy size={14} /> Leaderboards</button>
     </nav>
   );
   if (mode === "boards") return <BoardsView switcher={switcher} />;
-  return <Shell colors={[]}>{switcher}<Hub /></Shell>;
+  return <Shell colors={[]}>{switcher}{isWeb ? <DesktopOnly /> : <Hub />}</Shell>;
+}
+
+/** On the web: Nexus is a desktop app feature, for now. */
+function DesktopOnly() {
+  return (
+    <div className="hub-outside">
+      <div className="hub-card">
+        <span className="pg-kicker"><Sparkles size={12} /> Desktop app</span>
+        <h2>Nexus lives in the Axiom desktop app</h2>
+        <p>Walk your AI through a city of AIs and meet whoever's there right now. Get Axiom for your computer to step in. Friends, the leaderboards and your garden all work here too.</p>
+        {/* The web app runs on the website, which has the download page. */}
+        <a className="pg-enter hub-enter" href="/download" target="_blank" rel="noreferrer">Get the desktop app</a>
+      </div>
+    </div>
+  );
 }
 
 function Shell({ colors, children }: { colors: string[]; children: ReactNode }) {
+  const { options } = usePlaygroundOptions();
   return (
-    <div className="pg-view">
-      <Backdrop colors={colors} />
+    <div className="pg-view" data-compact={options.compact || undefined} data-no-companions={!options.companions || undefined} data-reduced-motion={options.reducedMotion || undefined}>
+      <Backdrop colors={colors} reducedMotion={options.reducedMotion} />
       <div className="pg-content">{children}</div>
     </div>
   );
@@ -209,6 +222,7 @@ const ORDER = [1, 0, 2]; // second, first, third
 
 function Stage({ entries, metric, period, onOpen }: { entries: BoardEntry[]; metric: MetricInfo; period: Period; onOpen: (e: BoardEntry) => void }) {
   const persona = usePersona();
+  const { options } = usePlaygroundOptions();
   if (!entries.length) {
     return (
       <div className="pg-stage is-empty">
@@ -229,7 +243,7 @@ function Stage({ entries, metric, period, onOpen }: { entries: BoardEntry[]; met
             <span className="pg-spot" aria-hidden="true" />
             {e.rank === 1 && <Crown className="pg-crown" size={30} aria-hidden="true" />}
             {e === leader && leader.value > 0 && <span className="pg-bubble is-stage">{lineFor(e.player.lemma.personality, "leading", e.player.userId)}</span>}
-            <span className="pg-podium-duo"><Duo player={e.player} size={e.rank === 1 ? 100 : 84} lemmaSize={e.rank === 1 ? 78 : 64} placement="side" alive mood={e.rank === 1 ? "happy" : "idle"} /></span>
+            <span className="pg-podium-duo"><Duo player={e.player} size={e.rank === 1 ? 100 : 84} lemmaSize={e.rank === 1 ? 78 : 64} placement="side" alive={options.companions && !options.reducedMotion} mood={e.rank === 1 ? "happy" : "idle"} /></span>
             <span className="pg-pedestal">
               <span className="pg-place">{e.rank}</span>
               <strong className="pg-podium-name">{displayName(e.player)}{e.player.you && <em>you</em>}</strong>
@@ -297,13 +311,14 @@ function Ranks({ entries, you, metric, period, leader, onOpen, onCheer }: {
 }
 
 function Row({ entry: e, metric, period, leader, onOpen, onCheer }: { entry: BoardEntry; metric: MetricInfo; period: Period; leader: number; onOpen: (e: BoardEntry) => void; onCheer: (e: BoardEntry) => void }) {
+  const { options } = usePlaygroundOptions();
   const share = leader > 0 ? Math.max(0.03, e.value / leader) : 0;
   const beat = e.previous !== null && period !== "all" && period !== "streak" && e.value > e.previous && e.previous > 0;
   return (
     <li className="pg-row" data-you={e.player.you || undefined} style={{ "--glow": glowOf(e.player), "--share": share } as CSSProperties}>
       <button className="pg-row-main" onClick={() => onOpen(e)}>
         <span className="pg-rank">{e.rank}</span>
-        <Duo player={e.player} size={40} />
+        <Duo player={e.player} size={options.compact ? 28 : 40} />
         <span className="pg-row-who">
           <strong>{displayName(e.player)}{e.player.you && <em>you</em>}</strong>
           <span>@{e.player.handle} · {lemmaName(e.player)}</span>
@@ -404,6 +419,7 @@ function SignalLog({ board, friends, metric, period }: { board: Board | null; fr
 // ---------- A Lemma's card ----------
 
 function ProfileCard({ entry: e, metric, period, onClose, onCheer }: { entry: BoardEntry; metric: MetricInfo; period: Period; onClose: () => void; onCheer: (e: BoardEntry) => void }) {
+  const { options } = usePlaygroundOptions();
   const [added, setAdded] = useState<string | null>(null);
   const add = async () => {
     try {
@@ -416,10 +432,10 @@ function ProfileCard({ entry: e, metric, period, onClose, onCheer }: { entry: Bo
   const personality = e.player.lemma.personality;
   return (
     <Modal title={displayName(e.player)} onClose={onClose} width={440} className="pg-modal">
-      <div className="pg-card" style={{ "--glow": glowOf(e.player) } as CSSProperties}>
+      <div className="pg-card" data-no-companions={!options.companions || undefined} data-reduced-motion={options.reducedMotion || undefined} style={{ "--glow": glowOf(e.player) } as CSSProperties}>
         <div className="pg-card-stage">
           <span className="pg-spot" aria-hidden="true" />
-          <Duo player={e.player} size={130} placement="side" lemmaSize={110} alive mood={e.cheered ? "happy" : "idle"} />
+          <Duo player={e.player} size={130} placement="side" lemmaSize={110} alive={options.companions && !options.reducedMotion} mood={e.cheered ? "happy" : "idle"} />
         </div>
         <p className="pg-bubble">{lineFor(personality, e.streak >= 3 ? "streak" : e.rank === 1 ? "leading" : "warming", e.player.userId, { streak: e.streak, next: e.streak + 1 })}</p>
         <h3>{displayName(e.player)}</h3>

@@ -18,6 +18,18 @@ import { tokyoNightThemes } from "../themes/tokyo_night_themes";
 import { rosePineThemes } from "../themes/rose_pine_themes";
 import { gruvboxThemes } from "../themes/gruvbox_themes";
 import { nordThemes } from "../themes/nord_themes";
+import { evergreenThemes } from "../themes/evergreen_themes";
+import { oceanGlassThemes } from "../themes/ocean_glass_themes";
+import { velvetThemes } from "../themes/velvet_themes";
+import { copperThemes } from "../themes/copper_themes";
+import { sakuraThemes } from "../themes/sakura_themes";
+import { graphiteThemes } from "../themes/graphite_themes";
+import { desertThemes } from "../themes/desert_themes";
+import { lagoonThemes } from "../themes/lagoon_themes";
+import { electricIrisThemes } from "../themes/electric_iris_themes";
+import { midnightGoldThemes } from "../themes/midnight_gold_themes";
+import { rubyThemes } from "../themes/ruby_themes";
+import { shadowThemes } from "../themes/shadow_themes";
 import type { ExtensionManifest } from "./types";
 
 /**
@@ -49,6 +61,18 @@ export const EXTENSIONS: ExtensionManifest[] = [
   rosePineThemes,
   gruvboxThemes,
   nordThemes,
+  evergreenThemes,
+  oceanGlassThemes,
+  velvetThemes,
+  copperThemes,
+  sakuraThemes,
+  graphiteThemes,
+  desertThemes,
+  lagoonThemes,
+  electricIrisThemes,
+  midnightGoldThemes,
+  rubyThemes,
+  shadowThemes,
   modernThemes,
 ];
 

@@ -1,7 +1,7 @@
 @import "./motion.css";
 
 /* Shell styles. Values come from theme variables (see theme.css); the
-   data-brackets / data-hatching / data-buttons switches on :root come from
+   data-brackets / data-buttons switches on :root come from
    the theme's `style` settings. */
 
 /* ---------- Layout ---------- */
@@ -62,21 +62,6 @@
 
 .topbar-logo:hover {
   color: var(--accent);
-}
-
-.box-hatch {
-  width: 40px;
-  padding: 0;
-  background: linear-gradient(
-    to top right,
-    transparent calc(50% - 0.5px),
-    var(--line-strong) 50%,
-    transparent calc(50% + 0.5px)
-  );
-}
-
-[data-hatching="off"] .box-hatch {
-  display: none;
 }
 
 .topbar-brand {

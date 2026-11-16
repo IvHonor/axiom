@@ -112,7 +112,7 @@ const STYLES: Partial<Record<Personality, Partial<Record<Line, string[]>>>> = {
     away: ["Oh, you're back. I counted **{n} min**. Shall we pretend you were working?"],
     drift: ["It's been {n} min. Are you still on **{title}** or just thinking very hard?"],
     upNext: ["Almost there. Next up, the thrilling sequel: **{title}**."],
-    stretch: ["*stretches* Right. Coffee. Then the world.", "Morning. I've already had a big day of being a sphere."],
+    stretch: ["*stretches* Right. Coffee. Then the world.", "Morning. I've already had a big day of being geometric."],
     bye: ["Off you go. I'll guard the desktop.", "Night! Don't let the bugs bite. The code ones."],
     pushed: ["**{title}** has been moved three times. It's practically on tour.", "Third move for **{title}**. It deserves frequent flyer miles."],
     inboxZero: ["Inbox zero. Frame it.", "An empty inbox. Rarer than a unicorn."],

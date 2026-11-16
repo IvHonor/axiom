@@ -19,7 +19,7 @@ import { refresh, setFriends, setMe, usePlayground } from "./store";
 const CODE_SHAPE = /^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$/;
 
 /** `garden`: the garden's height above the list (0 leaves it out). */
-export function FriendsPanel({ garden = 200 }: { garden?: number }) {
+export function FriendsPanel({ garden = 200, expandGarden = true }: { garden?: number; expandGarden?: boolean }) {
   const { me, friends, signedIn, error } = usePlayground();
   const [big, setBig] = useState(false);
   const [who, setWho] = useState("");
@@ -66,7 +66,7 @@ export function FriendsPanel({ garden = 200 }: { garden?: number }) {
 
   return (
     <div className="pg-friends">
-      {garden > 0 && <Garden height={garden} onExpand={() => setBig(true)} />}
+      {garden > 0 && <Garden height={garden} onExpand={expandGarden ? () => setBig(true) : undefined} />}
       {big && (
         <Modal title="Your garden" onClose={() => setBig(false)} width={980} className="pg-modal gd-modal" bare>
           <div className="gd-modal-body">

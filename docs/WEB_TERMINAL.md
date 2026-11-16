@@ -3,10 +3,26 @@
 Axiom on the web is **the desktop app's own frontend**, not a copy of it. The
 same `src/` is built a second time with `vite --mode web`. Every
 `@tauri-apps/*` import is swapped for a small browser stand-in, so the shell,
-tabs, sidebars, overview tiles, Analytics, dialogs, all 20 themes, extensions,
+tabs, sidebars, overview tiles, Analytics, dialogs, all built-in themes, extensions,
 settings and Lemma's 3D look are the desktop components themselves. A feature
 added to the desktop UI appears on the web without extra work, as long as its
 commands have web handlers (see below).
+
+The overview and AI tab also share the companion's short idle animations.
+Their routines pause for typing, AI activity, focus, timers and reduced motion.
+The native floating desktop mini and its desktop-specific routines remain
+desktop-only; the website does not create that window.
+
+Lemma also shares local character dialogue across the overview, AI tab,
+wardrobe and expanded in-app companion. Its 300 lines cover 25 situations
+in all six personalities, including completed animations, appearance changes,
+permissions, returning to an unfinished focus task and finishing today's list.
+These remarks make no AI requests. Task remarks require Daily Plan access,
+revalidate current data and clear when access or accounts change. They pause
+for typing, focus and AI activity, with spontaneous remarks spaced 3–5 minutes
+apart. **Occasional comments** in the wardrobe's Presence tab switches them
+off; this preference syncs through the existing profile settings. The desktop
+mini uses its own speech bubble and gives real reminders priority.
 
 ## How it fits together
 
@@ -86,7 +102,7 @@ web app.
 | Area / part | On the web |
 | --- | --- |
 | Shell, tabs, sidebars, Overview (move/resize), Ctrl+P, shortcuts | Same as desktop |
-| Themes (8 packs, 20 variants), extensions, layouts, Lemma's look | Same as desktop, synced through the profile |
+| Themes (20 packs, 43 variants), theme search, extensions, layouts, Lemma's look | Same as desktop, synced through the profile |
 | Account panel: profile, devices, notifications, sign out, delete account, support | Working (website session; delete uses the same login key as the website) |
 | Daily Plan | Working: tasks, blocks, routines, rituals, timers, week/month/year, insights, `.ics` files and calendar links. Not yet: Google/Outlook/CalDAV sign-in, editing provider events, publishing |
 | Project Board | Working for personal boards: columns, cards, sub-tasks, checklists, labels, templates, recurrence, archive, activity, insights. Not yet: shared boards |

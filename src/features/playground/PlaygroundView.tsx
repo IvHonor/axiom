@@ -4,7 +4,7 @@
 // below with their Lemma, streak flames and a way to cheer them on; and a
 // signal log on the side narrates what's going on.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Crown, Globe2, Lock, RefreshCw, Settings2, Sparkles, Swords, Trophy, Users, X, Zap } from "lucide-react";
+import { ArrowLeft, Crown, Globe2, Lock, RefreshCw, Settings2, Sparkles, Swords, Trophy, Users, X, Zap } from "lucide-react";
 import { useBoardFilters, usePlaygroundMode, usePlaygroundOptions, type BoardFilters } from "./preferences";
 import { useBoardAlerts } from "./useBoardAlerts";
 import "./preferences.css";
@@ -25,6 +25,7 @@ import { FriendCode } from "./parts";
 import { BoardPicker } from "./BoardPicker";
 import { Hub } from "./hub/Hub";
 import { isWeb } from "../../lib/platform";
+import { markFound } from "../lemma/achievements/secrets";
 
 function useBoard(prefs: BoardFilters, enabled: boolean, revision: string) {
   const [board, setBoard] = useState<Board | null>(null);
@@ -54,7 +55,7 @@ function useBoard(prefs: BoardFilters, enabled: boolean, revision: string) {
 }
 
 /** The leaderboards: friends or everyone, by period and board. */
-function BoardsView({ switcher }: { switcher: ReactNode }) {
+function BoardsView({ onNexus }: { onNexus: () => void }) {
   const { me, friends, signedIn, error: meError, refresh } = usePlayground();
   const [prefs, setPrefs] = useBoardFilters();
   const { options } = usePlaygroundOptions();
@@ -77,10 +78,10 @@ function BoardsView({ switcher }: { switcher: ReactNode }) {
 
   const colors = useMemo(() => (board?.entries ?? []).slice(0, 8).map((e) => glowOf(e.player)), [board]);
 
-  if (!signedIn) return <Shell colors={[]}>{switcher}<Gate icon={<Lock size={22} />} title="Sign in to enter the Playground" text="The Playground needs an Axiom account: it's how friends find you. Open Account (bottom left) to sign in." /></Shell>;
-  if (me === undefined) return <Shell colors={[]}>{switcher}<Gate icon={<RefreshCw size={22} className="pg-spin" />} title={meError ? "Couldn't reach the Playground" : "Booting the Playground…"} text={meError ?? "Finding your friends."} action={meError ? { label: "Try again", run: refresh } : undefined} /></Shell>;
+  if (!signedIn) return <Shell colors={[]}><Gate icon={<Lock size={22} />} title="Sign in to enter the Playground" text="The Playground needs an Axiom account: it's how friends find you. Open Account (bottom left) to sign in." /></Shell>;
+  if (me === undefined) return <Shell colors={[]}><Gate icon={<RefreshCw size={22} className="pg-spin" />} title={meError ? "Couldn't reach the Playground" : "Booting the Playground…"} text={meError ?? "Finding your friends."} action={meError ? { label: "Try again", run: refresh } : undefined} /></Shell>;
   // A handle (for friends) isn't joining: the boards are a choice of their own.
-  if (me === null) return <Shell colors={[]}>{switcher}<div className="pg-join-wrap"><Join me={me} /></div></Shell>;
+  if (me === null) return <Shell colors={[]}><div className="pg-join-wrap"><Join me={me} /></div></Shell>;
 
   const cheer = async (entry: BoardEntry) => {
     try {
@@ -98,7 +99,7 @@ function BoardsView({ switcher }: { switcher: ReactNode }) {
   const entries = (board?.entries ?? []).map(withCheers);
   const mine = entries.find((e) => e.player.you) ?? board?.you ?? null;
   return (
-    <Shell colors={colors}>{switcher}
+    <Shell colors={colors}>
       <div className="pg-alerts" aria-live="polite" aria-label="Playground alerts">
         {notices.map(n => <div key={n.id} className="pg-alert"><span>{n.text}</span><button className="icon-btn" aria-label="Dismiss Playground alert" onClick={() => dismiss(n.id)}><X size={14} /></button></div>)}
       </div>
@@ -106,7 +107,7 @@ function BoardsView({ switcher }: { switcher: ReactNode }) {
         <div className="pg-console-title">
           <Sparkles size={18} />
           <h1>Playground</h1>
-          <code className="pg-address" aria-label="Board">playground://{scope}/{metric.id}?{view.period}<span className="pg-caret" aria-hidden="true" /></code>
+          <code className="pg-address" aria-label="Board">playground://{scope}/{metric.id}?{view.period}<span className="pg-caret" aria-hidden="true" onClick={onNexus} /></code>
         </div>
         <div className="pg-console-controls">
           <div className="pg-segment" role="tablist" aria-label="Who">
@@ -167,17 +168,36 @@ function onBoard(board: Board): string {
   return `${board.joined ? "You and " : ""}${friends} ${friends === 1 ? "friend" : "friends"} on this board`;
 }
 
-/** The Playground: Nexus (live, everyone's AIs; desktop only) or the leaderboards. */
+/** The Playground is the leaderboards. Nexus (the live city of AIs) is an
+ *  easter egg: type "nexus" anywhere on the boards, or click the address bar's
+ *  blinking caret. */
 export function PlaygroundView() {
   const [mode, setMode] = usePlaygroundMode();
-  const switcher = (
-    <nav className="pg-modes" role="tablist" aria-label="Playground">
-      <button role="tab" aria-selected={mode === "hub"} onClick={() => setMode("hub")}><Sparkles size={14} /> Nexus</button>
-      <button role="tab" aria-selected={mode === "boards"} onClick={() => setMode("boards")}><Trophy size={14} /> Leaderboards</button>
-    </nav>
+  const found = useCallback(() => { markFound("nexus"); setMode("nexus"); }, [setMode]);
+  useSecretWord("nexus", found, mode === "boards");
+  if (mode === "boards") return <BoardsView onNexus={found} />;
+  return (
+    <Shell colors={[]}>
+      <button className="pg-back" onClick={() => setMode("boards")}><ArrowLeft size={14} /> Leaderboards</button>
+      {isWeb ? <DesktopOnly /> : <Hub />}
+    </Shell>
   );
-  if (mode === "boards") return <BoardsView switcher={switcher} />;
-  return <Shell colors={[]}>{switcher}{isWeb ? <DesktopOnly /> : <Hub />}</Shell>;
+}
+
+/** Calls `onFound` when `word` is typed, outside any text field. */
+function useSecretWord(word: string, onFound: () => void, enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    let typed = "";
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1 || t?.closest("input, textarea, select, [contenteditable]")) return;
+      typed = (typed + e.key.toLowerCase()).slice(-word.length);
+      if (typed === word) onFound();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [word, onFound, enabled]);
 }
 
 /** On the web: Nexus is a desktop app feature, for now. */

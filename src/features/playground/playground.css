@@ -18,11 +18,10 @@
 .pg-content { position: absolute; inset: 0; overflow: auto; padding: 18px 22px 40px; display: flex; flex-direction: column; gap: 14px; }
 .pg-content > * { flex: none; }
 
-/* The Playground's two halves: Nexus and the leaderboards. */
-.pg-modes { display: inline-flex; align-self: flex-start; padding: 3px; gap: 2px; background: var(--pg-glass); border: 1px solid var(--pg-edge); border-radius: 999px; backdrop-filter: blur(8px); }
-.pg-modes button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; font: 600 13px var(--font-ui); color: var(--text-dim); background: none; border: 0; border-radius: 999px; cursor: pointer; }
-.pg-modes button:hover { color: var(--text); }
-.pg-modes button[aria-selected="true"] { color: var(--on-accent); background: var(--accent); box-shadow: 0 0 16px -4px var(--accent); }
+/* The way back out of Nexus, the Playground's hidden half. */
+.pg-back { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; padding: 6px 14px; font: 600 13px var(--font-ui); color: var(--text-dim); background: var(--pg-glass); border: 1px solid var(--pg-edge); border-radius: 999px; backdrop-filter: blur(8px); cursor: pointer; }
+.pg-back:hover { color: var(--text); }
+.pg-caret { cursor: pointer; }
 
 /* ---------- The sky and the floor ---------- */
 

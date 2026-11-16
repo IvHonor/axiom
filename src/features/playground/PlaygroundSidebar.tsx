@@ -54,12 +54,6 @@ export function PlaygroundSidebar(_props: AreaSidebarProps) {
         </select></label>
       </div><p>Viewing Global rankings does not publish your scores.</p>
     </section>
-    <section className="pg-pref-section" aria-label="Starting page">
-      <h3>Starting page</h3>
-      <label className="pg-pref-field">Open Playground on<select aria-label="Starting page" value={options.start} onChange={e => update({ start: e.target.value as "boards" | "hub" })}>
-        <option value="boards">Leaderboards</option><option value="hub">Nexus</option>
-      </select></label><p>Used the next time you open Playground. Nexus requires the desktop app.</p>
-    </section>
     <section className="pg-pref-section" aria-label="In-app alerts">
       <h3>In-app alerts</h3><p>Notices while the leaderboards are open.</p>
       {([ ["cheers", "Cheers from friends"], ["overtaken", "When your rank drops"], ["results", "Weekly and monthly results"] ] as const).map(([id, label]) =>

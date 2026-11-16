@@ -6,7 +6,6 @@ import type { Period, Scope } from "./api";
 export interface BoardFilters { metric: string; period: Period; scope: Scope }
 export interface PlaygroundOptions {
   defaultBoard: BoardFilters;
-  start: "boards" | "hub";
   compact: boolean;
   companions: boolean;
   podium: boolean;
@@ -28,7 +27,7 @@ export function parseBoardFilters(raw: unknown, fallback = DEFAULT_BOARD): Board
 function parse(raw: unknown): PlaygroundOptions {
   const p = raw && typeof raw === "object" ? raw as Partial<PlaygroundOptions> : {};
   return {
-    defaultBoard: parseBoardFilters(p.defaultBoard), start: p.start === "hub" ? "hub" : "boards",
+    defaultBoard: parseBoardFilters(p.defaultBoard),
     compact: p.compact === true, companions: p.companions !== false, podium: p.podium !== false,
     reducedMotion: p.reducedMotion === true,
     alerts: { cheers: p.alerts?.cheers !== false, overtaken: p.alerts?.overtaken !== false, results: p.alerts?.results !== false },
@@ -60,24 +59,25 @@ export function useBoardFilters(): [BoardFilters, typeof setBoardFilters] {
   return [value, setBoardFilters];
 }
 
-let requestedMode: "boards" | "hub" | null = null;
-const modeListeners = new Set<(mode: "boards" | "hub") => void>();
-/** An overview click opens the matching board, overriding the starting-page preference once. */
+let requestedOpen = false;
+const openListeners = new Set<() => void>();
+/** An overview click opens the matching board. */
 export function openLeaderboards(next: BoardFilters) {
   setBoardFilters(next);
-  saveSetting("axiom.playground.mode", "boards");
-  if (modeListeners.size) modeListeners.forEach(l => l("boards"));
-  else requestedMode = "boards";
+  if (openListeners.size) openListeners.forEach(l => l());
+  else requestedOpen = true;
 }
+/** The Playground opens on the leaderboards; Nexus is a hidden door (`nexus` = it's been found). */
 export function usePlaygroundMode() {
   const { options } = usePlaygroundOptions();
-  const opening = useRef({ mode: requestedMode ?? options.start, filters: requestedMode ? filters : options.defaultBoard });
-  const [mode, setMode] = useState<"boards" | "hub">(opening.current.mode);
+  const opening = useRef({ filters: requestedOpen ? filters : options.defaultBoard });
+  const [mode, setMode] = useState<"boards" | "nexus">("boards");
   useLayoutEffect(() => {
     if (filters !== opening.current.filters) setBoardFilters(opening.current.filters);
-    requestedMode = null;
-    modeListeners.add(setMode);
-    return () => { modeListeners.delete(setMode); };
+    requestedOpen = false;
+    const back = () => setMode("boards");
+    openListeners.add(back);
+    return () => { openListeners.delete(back); };
   }, []);
   return [mode, setMode] as const;
 }

@@ -1,0 +1,182 @@
+/* Achievements, on Lemma's page in place of the chat. */
+
+.ach {
+  --tier-bronze: #c98552;
+  --tier-silver: #a7b1bd;
+  --tier-gold: #e8b630;
+  --tier-platinum: #5fd0c2;
+  --tier-diamond: #8fa8ff;
+}
+
+.ach-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 16px 18px 28px;
+  overflow-y: auto;
+}
+
+/* ---------- Summary ---------- */
+
+.ach-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 28px;
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.ach-total {
+  flex: 1 1 220px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.ach-total strong { font: 700 30px/1 var(--font-mono); color: var(--accent); }
+.ach-total span { color: var(--text-dim); font-size: 13px; }
+.ach-total .ach-bar { grid-column: 1 / -1; height: 6px; }
+
+.ach-tiers { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ach-tiers li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px 4px 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--hover);
+  border-radius: 999px;
+}
+.ach-tiers li span { text-transform: capitalize; }
+.ach-tiers li b { color: var(--text); font-family: var(--font-mono); }
+.ach-tiers svg { color: var(--tier); }
+
+.ach-note { margin: 0; font-size: 13px; color: var(--text-dim); }
+
+/* ---------- Jump to an area ---------- */
+
+.ach-jump {
+  position: sticky;
+  top: -16px;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 -18px;
+  padding: 8px 18px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.ach-jump a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-decoration: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.ach-jump a:hover { color: var(--text); background: var(--hover); }
+.ach-jump a svg { color: var(--area); }
+
+/* ---------- An area ---------- */
+
+.ach-area { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 48px; }
+.ach-area h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ach-area h3 svg { color: var(--area, var(--accent)); }
+.ach-area h3 small { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--text-faint); }
+
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---------- A card ---------- */
+
+.ach-card {
+  --tier: var(--line-strong);
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 12px 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.ach-card[data-tier="bronze"], .ach-tiers [data-tier="bronze"] { --tier: var(--tier-bronze); }
+.ach-card[data-tier="silver"], .ach-tiers [data-tier="silver"] { --tier: var(--tier-silver); }
+.ach-card[data-tier="gold"], .ach-tiers [data-tier="gold"] { --tier: var(--tier-gold); }
+.ach-card[data-tier="platinum"], .ach-tiers [data-tier="platinum"] { --tier: var(--tier-platinum); }
+.ach-card[data-tier="diamond"], .ach-tiers [data-tier="diamond"] { --tier: var(--tier-diamond); }
+.ach-card[data-tier] { border-color: color-mix(in srgb, var(--tier) 45%, var(--line)); }
+.ach-card[data-complete] { box-shadow: 0 0 18px -8px var(--tier); }
+.ach-card[data-state="soon"] { opacity: 0.6; }
+
+.ach-medal {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  color: var(--text-faint);
+  background: var(--hover);
+  border-radius: 50%;
+}
+.ach-card[data-tier] .ach-medal {
+  color: var(--tier);
+  background: color-mix(in srgb, var(--tier) 16%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tier) 60%, transparent);
+}
+
+.ach-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ach-body strong { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; font-size: 13px; color: var(--text); }
+.ach-body strong em { white-space: nowrap; font-style: normal; font-size: 11px; font-weight: 500; color: var(--area, var(--text-faint)); }
+.ach-goal { font-size: 12px; line-height: 1.35; color: var(--text-dim); }
+.ach-body small { font-size: 11px; color: var(--text-faint); font-family: var(--font-mono); }
+.ach-body .ach-done { color: var(--tier); font-family: inherit; font-weight: 600; }
+.ach-body .ach-tag { align-self: flex-start; padding: 1px 7px; font-family: inherit; background: var(--hover); border-radius: 999px; }
+.ach-body .ach-bar { margin-top: 5px; }
+
+.ach-bar {
+  height: 4px;
+  overflow: hidden;
+  background: var(--hover);
+  border-radius: 999px;
+}
+.ach-bar i { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width 0.4s ease; }
+.ach-card .ach-bar i { background: var(--area, var(--accent)); }
+
+.ach-pips { position: absolute; top: 12px; right: 12px; display: flex; gap: 3px; }
+.ach-pips i { width: 6px; height: 6px; border-radius: 50%; background: var(--hover); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.ach-pips i[data-on][data-tier="bronze"] { background: var(--tier-bronze); box-shadow: none; }
+.ach-pips i[data-on][data-tier="silver"] { background: var(--tier-silver); box-shadow: none; }
+.ach-pips i[data-on][data-tier="gold"] { background: var(--tier-gold); box-shadow: none; }
+.ach-pips i[data-on][data-tier="platinum"] { background: var(--tier-platinum); box-shadow: none; }
+.ach-pips i[data-on][data-tier="diamond"] { background: var(--tier-diamond); box-shadow: none; }
+.ach-card:has(.ach-pips) .ach-body strong { padding-right: 52px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ach-bar i { transition: none; }
+}

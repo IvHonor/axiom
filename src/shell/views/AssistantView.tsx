@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowUp, Check, CheckCheck, ChevronUp, CornerLeftUp, Eye, Loader2, MessageSquarePlus, Mic, Palette, RotateCcw, Settings2, Square, Trash2, Undo2, Volume2, VolumeX } from "lucide-react";
+import { ArrowUp, Award, Check, CheckCheck, ChevronUp, CornerLeftUp, Eye, Loader2, MessageSquarePlus, Mic, Palette, RotateCcw, Settings2, Square, Trash2, Undo2, Volume2, VolumeX } from "lucide-react";
 import {
   chats as listChats,
   confirmAll,
@@ -35,6 +35,7 @@ import { askToTalk, useTalkRequests } from "../../features/lemma/talk";
 import { feel, setLemma, useLemma } from "../../features/lemma/state";
 import { doing, toolOf } from "../../features/lemma/parts";
 import { Customise } from "../../features/lemma/Customise";
+import { Achievements } from "../../features/lemma/achievements/Achievements";
 import { useDialogue } from "../../features/lemma/useDialogue";
 import { dialogueStatus } from "../../features/lemma/dialogue";
 import { nameOf, useAssistantName, usePersona } from "../../features/lemma/persona";
@@ -77,6 +78,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
   const [customising, setCustomising] = useState(false);
+  const [achievements, setAchievements] = useState(false);
   const [aloud, setAloud] = usePersistentState<boolean>("axiom.assistant.aloud", (saved) => saved === true);
   const [stopped, setStopped] = useState(false);
   const [reading, setReading] = useState(false);
@@ -236,6 +238,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
 
   const areaOf = (id: string) => areas.find((a) => a.id === id) ?? findExtension(id);
   const startNew = () => {
+    setAchievements(false);
     setChatId(null);
     setChat(null);
     setError(null);
@@ -249,7 +252,10 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
           <Face mood={faceMood} size={200} level={lemma.level} tool={toolOf(lemma)} idleContext="chat" interactive onTalk={askToTalk}
             onIdleComplete={dialogue.completed} dialogueRef={dialogue.attach} />
           <p aria-live="polite" aria-atomic="true" data-lemma-dialogue={dialogue.message?.kind}>{caption}</p>
-          <button className="btn btn-sm btn-ghost" onClick={() => setCustomising(true)}><Palette size={12} /> Customise {nameOf(persona)}</button>
+          <div className="lemma-companion-actions">
+            <button className="btn btn-sm btn-ghost" onClick={() => setCustomising(true)}><Palette size={12} /> Customise {nameOf(persona)}</button>
+            <button className="btn btn-sm btn-ghost" onClick={() => setAchievements(true)} aria-pressed={achievements}><Award size={12} /> Achievements</button>
+          </div>
         </div>
         <button className="btn btn-sm lemma-new" onClick={startNew} disabled={busy}>
           <MessageSquarePlus size={14} strokeWidth={1.75} /> New chat
@@ -260,6 +266,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
               <button className="lemma-chat-link" onClick={() => {
                   setError(null);
                   setChatId(c.id);
+                  setAchievements(false);
                 }} disabled={busy}>
                 <span className="lemma-chat-title">{c.title}</span>
                 <span className="lemma-chat-when">{ago(c.updatedAt)}</span>
@@ -280,7 +287,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
         </ul>
       </aside>
 
-      <section className="lemma-main">
+      {achievements ? <Achievements onClose={() => setAchievements(false)} /> : <section className="lemma-main">
         <header className="lemma-head">
           <Face mood={faceMood} size={34} level={lemma.level} alive={false} />
           <h2>{chat?.title ?? nameOf(persona)}</h2>
@@ -324,7 +331,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
         />
 
         <Composer busy={busy} onSend={(text) => void ask(text)} onStop={stop} onListening={stopReading} />
-      </section>
+      </section>}
 
       {settings && (
         <Modal title={`${nameOf(persona)}'s settings`} icon={<Settings2 size={16} strokeWidth={1.75} />} onClose={() => setSettings(false)} width={520}>

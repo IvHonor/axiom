@@ -12,6 +12,7 @@
     "core:window:allow-show",
     "core:window:allow-set-focus",
     "core:window:allow-start-dragging",
+    "notification:allow-is-permission-granted",
     {
       "identifier": "opener:allow-open-url",
       "allow": [{ "url": "https://*" }]

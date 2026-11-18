@@ -1,7 +1,8 @@
 // Someone's profile card in Nexus: who they are and their AI, and the ways to
-// reach them (say hi, wave, a set phrase, cheer them on or add them).
+// reach them (say hi, wave, a set phrase, cheer them on or add them), or block them.
 import { useState, type CSSProperties } from "react";
-import { MessageCircle, UserPlus, Zap } from "lucide-react";
+import { Ban, MessageCircle, UserPlus, Zap } from "lucide-react";
+import { ConfirmButton } from "../../../shell/ui/ConfirmButton";
 import { Modal } from "../../../shell/ui/Modal";
 import * as api from "../api";
 import { displayName, type Player } from "../api";
@@ -27,6 +28,16 @@ export function HubProfile({ player, friend, requested, onClose, onSay, onWave }
       const added = await api.addFriend({ handle: player.handle });
       setNote(added.outcome === "friends" ? "You're friends now!" : "Friend request sent.");
       void refresh();
+    } catch (e) {
+      setNote(String(e));
+    }
+  };
+  // Blocked, they vanish from Nexus for you (and you for them) at the next check-in.
+  const block = async () => {
+    try {
+      await api.block(player.userId);
+      void refresh();
+      onClose();
     } catch (e) {
       setNote(String(e));
     }
@@ -71,6 +82,9 @@ export function HubProfile({ player, friend, requested, onClose, onSay, onWave }
           ))}
         </div>
         {note && <p className="pg-note" role="status">{note}</p>}
+        <ConfirmButton className="link hub-profile-block" onConfirm={() => void block()} confirmText={`Click again to block @${player.handle}`}>
+          <Ban size={12} /> Block
+        </ConfirmButton>
       </div>
     </Modal>
   );

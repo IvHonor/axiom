@@ -119,6 +119,17 @@ pub async fn playground_cheer(account: State<'_, Account>, user_id: String) -> R
     account.playground(Method::POST, &user_path(routes::PLAYGROUND_FRIEND_CHEER, &user_id)?, None).await.map(drop)
 }
 
+/// Blocks someone: unfriends them, drops requests either way, and hides you from each other in Nexus.
+#[tauri::command]
+pub async fn playground_block(account: State<'_, Account>, user_id: String) -> Result<()> {
+    account.playground(Method::PUT, &user_path(routes::PLAYGROUND_BLOCK, &user_id)?, None).await.map(drop)
+}
+
+#[tauri::command]
+pub async fn playground_unblock(account: State<'_, Account>, user_id: String) -> Result<()> {
+    account.playground(Method::DELETE, &user_path(routes::PLAYGROUND_BLOCK, &user_id)?, None).await.map(drop)
+}
+
 // ---------- Nexus, live (see `axiom_protocol::hub`) ----------
 
 /// Where you are, in metres on the city map (or from the middle of the building you're `inside`).

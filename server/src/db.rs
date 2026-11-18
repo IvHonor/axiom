@@ -19,6 +19,7 @@ mod m016_ai_usage;
 mod m017_ai_usage_detail;
 mod m018_playground;
 mod m019_social;
+mod m020_blocks;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection, DbErr};
 use sea_orm_migration::prelude::*;
@@ -48,6 +49,7 @@ impl MigratorTrait for Migrator {
             Box::new(m017_ai_usage_detail::Migration),
             Box::new(m018_playground::Migration),
             Box::new(m019_social::Migration),
+            Box::new(m020_blocks::Migration),
         ]
     }
 

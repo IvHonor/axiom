@@ -28,6 +28,8 @@ export interface Achievement {
   goal: (target: number) => string;
   /** The count each level needs, lowest first. One level for a one-off. */
   levels: number[];
+  /** A cosmetic awarded at the first level. */
+  reward?: { id: "tie" | "fedora"; name: string };
   /** Shown as ??? until earned. */
   secret?: boolean;
   /** The count so far, or undefined when it can't be counted here. Left
@@ -55,8 +57,8 @@ const DESKTOP = "Counted in the desktop app, where it can read this area.";
 
 export const ACHIEVEMENTS: Achievement[] = [
   // ---------- Axiom ----------
-  { id: "axiom.showing_up", area: "axiom", name: "Showing Up", levels: [3, 7, 30, 100, 365], goal: (t) => `Use Axiom ${s(t, "day")} in a row`, count: streak("active"), unknown: DESKTOP },
-  { id: "axiom.regular", area: "axiom", name: "Regular", levels: [10, 50, 200, 500], goal: (t) => `Use Axiom on ${s(t, "day")}`, count: sum("active"), unknown: DESKTOP },
+  { id: "axiom.showing_up", area: "axiom", name: "Showing Up", levels: [3, 7, 30, 100, 365], reward: { id: "tie", name: "Tie" }, goal: (t) => `Use Axiom ${s(t, "day")} in a row`, count: streak("active"), unknown: DESKTOP },
+  { id: "axiom.regular", area: "axiom", name: "Regular", levels: [10, 50, 200, 500], reward: { id: "fedora", name: "Fedora" }, goal: (t) => `Use Axiom on ${s(t, "day")}`, count: sum("active"), unknown: DESKTOP },
   { id: "axiom.explorer", area: "axiom", name: "Explorer", levels: [3, 6, 10], goal: (t) => (t >= 10 ? "Use every area" : `Use ${t} different areas`) },
   { id: "axiom.off_the_map", area: "axiom", name: "Off the Map", secret: true, levels: [1], goal: () => "Find the hidden city", count: (k) => (k.secrets.includes("nexus") ? 1 : 0) },
 

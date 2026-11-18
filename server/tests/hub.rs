@@ -61,7 +61,7 @@ async fn people_see_who_is_near_them_and_nobody_else() {
     hub(&app, &ada, routes::HUB_ENTER, at(0.0, 30.0)).await;
     hub(&app, &bob, routes::HUB_ENTER, at(10.0, 20.0)).await;
     // Memory and Computation are 290 m apart: too far to see each other.
-    hub(&app, &cyd, routes::HUB_ENTER, at(-145.0, -78.0)).await;
+    hub(&app, &cyd, routes::HUB_ENTER, at(-200.0, -60.0)).await;
     let (status, state) = hub(&app, &cyd, routes::HUB_SYNC, at(-200.0, -60.0)).await;
     assert_eq!(status, StatusCode::OK, "{state}");
     assert_eq!(state["online"], 3);
@@ -74,14 +74,16 @@ async fn people_see_who_is_near_them_and_nobody_else() {
     assert!((state["people"][0]["z"].as_f64().unwrap() - 20.0).abs() < 1e-4, "where he is");
     assert!(state["people"][0]["player"].get("email").is_none(), "never emails");
 
-    // Bob walks up to the Memory District: Cyd sees him; Ada, at the Nexus, still does (it's next door).
-    hub(&app, &bob, routes::HUB_SYNC, at(-120.0, -60.0)).await;
+    // Bob goes up to the Memory District (entering again there: walking
+    // takes a while, see `nobody_moves_faster_than_running_in_nexus`): Cyd
+    // sees him; Ada, at the Nexus, still does (it's next door).
+    hub(&app, &bob, routes::HUB_ENTER, at(-120.0, -60.0)).await;
     let (_, state) = hub(&app, &cyd, routes::HUB_SYNC, at(-200.0, -60.0)).await;
     assert_eq!(handles(&state), ["bob"]);
     let (_, state) = hub(&app, &ada, routes::HUB_SYNC, at(0.0, 31.0)).await;
     assert_eq!(handles(&state), ["bob"]);
     // On to the far side of Computation from Memory: Cyd loses him.
-    hub(&app, &bob, routes::HUB_SYNC, at(170.0, -78.0)).await;
+    hub(&app, &bob, routes::HUB_ENTER, at(170.0, -78.0)).await;
     let (_, state) = hub(&app, &cyd, routes::HUB_SYNC, at(-200.0, -60.0)).await;
     assert!(handles(&state).is_empty());
 

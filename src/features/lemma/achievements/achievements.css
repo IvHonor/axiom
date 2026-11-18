@@ -157,6 +157,9 @@
 .ach-body small { font-size: 11px; color: var(--text-faint); font-family: var(--font-mono); }
 .ach-body .ach-done { color: var(--tier); font-family: inherit; font-weight: 600; }
 .ach-body .ach-tag { align-self: flex-start; padding: 1px 7px; font-family: inherit; background: var(--hover); border-radius: 999px; }
+.ach-body .ach-reward { display: flex; align-items: center; gap: 5px; margin-top: 5px; font-family: inherit; }
+.ach-body .ach-reward svg { flex: none; }
+.ach-body .ach-reward[data-unlocked] { color: var(--text-dim); }
 .ach-body .ach-bar { margin-top: 5px; }
 
 .ach-bar {

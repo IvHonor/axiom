@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
-import { HOLDINGS, hasFirstLight, lookColors, lookForRole, useLook, type Look } from "./look";
+import { HOLDINGS, hasFirstLight, lookColors, lookForRewards, lookForRole, useLook, type Look } from "./look";
+import { useAchievementRewards } from "./achievements/useAchievementRewards";
 import { useAccount } from "../../shell/useAccount";
 import { useLemma, type LemmaState } from "./state";
 import type { createCompanionScene, SceneState } from "./scene";
@@ -62,7 +63,11 @@ export function Face({ mood, size = 120, level = 0, tool, alive = true, look: gi
   const [account] = useAccount();
   const admin = peer ? peer.admin : account?.state === "signed_in" && account.admin;
   const firstLight = peer ? peer.firstLight : hasFirstLight(account);
-  const look = useMemo(() => lookForRole(given ?? chosen, admin, firstLight), [given, chosen, admin, firstLight]);
+  const rewards = useAchievementRewards(!peer);
+  const look = useMemo(() => {
+    const permitted = lookForRole(given ?? chosen, admin, firstLight);
+    return peer ? permitted : lookForRewards(permitted, rewards);
+  }, [given, chosen, admin, firstLight, peer, rewards]);
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<ReturnType<typeof createCompanionScene> | null>(null);
   const latest = useRef<SceneState>({ look, mood, level, working: !!tool, facing, gaze, display, brightness, movement, personality: persona.personality, focused, compact, admin, firstLight, idleContext, onIdleComplete });
@@ -145,6 +150,8 @@ export function Face({ mood, size = 120, level = 0, tool, alive = true, look: gi
       data-display={display?.text}
       data-shape={look.shape}
       data-holding={look.holding}
+      data-headwear={look.accessory}
+      data-neckwear={look.neckwear}
       data-renderer={ready ? "3d" : "illustration"}
       role={interactive ? "button" : "img"}
       tabIndex={interactive ? 0 : undefined}
@@ -212,12 +219,14 @@ function Illustration({ look, mood, personality, compact }: { look: Look; mood: 
       <path d={expression.mouth === "smile" ? "M-7 13Q0 19 7 13" : expression.mouth === "frown" ? "M-6 17Q0 11 6 17" : "M-5 15H5"} fill="none" stroke="var(--lemma-glow)" strokeWidth={compact ? 3 : 2} strokeLinecap="round" />}
     {look.accessory === "crown" && <g stroke={paint(look.headwearColor, "#ffd078")} strokeWidth="2" strokeLinejoin="round"><path d="M-30 -52L-36 -77L-18 -65L0 -85L18 -65L36 -77L30 -52Z" fill={paint(look.headwearColor, "#e9b84e")} /><path d="M-30 -55H30" /><path d="M0 -66L4 -62L0 -58L-4 -62Z" fill={paint(look.jewelColor, "#c52e58")} stroke="none" /></g>}
     {look.neckwear === "bow" && <path d="M0 50L-17 41V59ZM0 50L17 41V59Z" fill={paint(look.neckwearColor, "#b83f55")} />}
+    {look.neckwear === "tie" && <g fill={paint(look.neckwearColor, "#7a2e3a")} stroke="#491c25" strokeWidth="1" strokeLinejoin="round"><path d="M-5 36H5L7 44L0 49L-7 44ZM-4 48H4L9 68L0 77L-9 68Z" /></g>}
+    {look.accessory === "fedora" && <g fill={paint(look.headwearColor, "#35343a")} stroke="#242329" strokeWidth="1.5"><ellipse cy="-52" rx="48" ry="9" /><path d="M-31 -53L-26 -83Q-16 -90 0 -81Q16 -90 26 -83L31 -53Z" /><path d="M-29 -62Q0 -56 29 -62L31 -53Q0 -47 -31 -53Z" fill="#19191d" /></g>}
     {look.facewear === "glasses" && <g fill="none" stroke={paint(look.facewearColor, "#d7e1e5")} strokeWidth="2"><circle cx="-15" cy="2" r="11" /><circle cx="15" cy="2" r="11" /><path d="M-4 1Q0 -2 4 1" /></g>}
     {look.facewear === "sunglasses" && <g stroke={paint(look.facewearColor, "#161b20")} strokeWidth="3" strokeLinejoin="round">
       <path d="M-29 -7H-4L-7 10H-25ZM4 -7H29L25 10H7Z" fill="#10241f" /><path d="M-4 -4H4M-29 -5L-34 -7M29 -5L34 -7" fill="none" />
       <path d="M-27 -4H-25M25 -4H27" stroke="#edf8f5" strokeWidth="1.5" />
     </g>}
-    {look.accessory !== "none" && look.accessory !== "crown" && <g fill={paint(look.headwearColor, look.accessory === "halo" ? "#ffd078" : "#466b85")} stroke={paint(look.headwearColor, look.accessory === "halo" ? "#ffd078" : "#466b85")} strokeWidth="4">
+    {look.accessory !== "none" && look.accessory !== "crown" && look.accessory !== "fedora" && <g fill={paint(look.headwearColor, look.accessory === "halo" ? "#ffd078" : "#466b85")} stroke={paint(look.headwearColor, look.accessory === "halo" ? "#ffd078" : "#466b85")} strokeWidth="4">
       {look.accessory === "halo" ? <ellipse cy="-74" rx="30" ry="7" fill="none" /> : look.accessory === "headphones" ? <path d="M-63 4V-12A63 63 0 0 1 63 -12V4" fill="none" strokeWidth="9" /> : <path d="M-42 -45Q-44 -81 0 -81Q44 -81 42 -45Z" />}
     </g>}
   </svg>;

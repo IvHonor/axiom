@@ -30,7 +30,16 @@ struct Computer {
 impl Computer {
     /// A fresh install: empty database, signed out.
     async fn new(server: &str) -> Self {
-        let mut options = ConnectOptions::new("sqlite::memory:");
+        Self::with_database(server, "sqlite::memory:").await
+    }
+
+    /// Like `new`, with the database in a file, as in the app.
+    async fn on_disk(server: &str, file: &std::path::Path) -> Self {
+        Self::with_database(server, &format!("sqlite://{}?mode=rwc", file.display())).await
+    }
+
+    async fn with_database(server: &str, url: &str) -> Self {
+        let mut options = ConnectOptions::new(url);
         options.max_connections(1).sqlx_logging(false);
         let db = Database::connect(options).await.unwrap();
         crate::db::prepare(&db).await.unwrap();
@@ -176,7 +185,8 @@ async fn data_made_before_signing_in_waits_for_a_choice_then_merges() {
     board::create_project(&newcomer.db, "Groceries").await.unwrap();
     newcomer.sign_in().await;
 
-    assert_eq!(newcomer.sync().await, Outcome::NeedsChoice { projects: 1, plan_tasks: 0, books: 0, modules: 0 });
+    let Outcome::NeedsChoice(choice) = newcomer.sync().await else { panic!("expected a choice") };
+    assert_eq!((choice.reason, choice.projects), (ChoiceReason::NewComputer, 1));
     local::link(&newcomer.db, &newcomer.account.user_id().await.unwrap(), Link::Merge).await.unwrap();
     newcomer.sync().await;
 
@@ -201,6 +211,138 @@ async fn replacing_local_data_keeps_only_the_accounts() {
     assert_eq!(newcomer.project_names().await, ["Thesis"]);
     laptop.sync().await;
     assert_eq!(laptop.project_names().await, ["Thesis"], "the replaced data never reached the account");
+}
+
+/// Lets the clock move on, so two edits get different times.
+async fn tick() {
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+}
+
+async fn rename(computer: &Computer, project_id: &str, title: &str) {
+    let task = computer.task(project_id).await;
+    board::update_task(&computer.db, &task.task.id, TaskFields { title: title.into(), ..fields_of(&task) }).await.unwrap();
+}
+
+/// The desktop signs out and back in, renaming the task in between.
+async fn desktop_edits_while_signed_out() -> (Computer, Computer, String) {
+    let (laptop, desktop, project_id) = two_computers_sharing_a_task().await;
+    desktop.account.sign_out().await;
+    assert_eq!(desktop.sync().await, Outcome::SignedOut);
+    rename(&desktop, &project_id, "Desktop, offline").await;
+    desktop.sign_in().await;
+    (laptop, desktop, project_id)
+}
+
+async fn choose(computer: &Computer, how: Link) {
+    local::resolve(&computer.db, &computer.account.user_id().await.unwrap(), how).await.unwrap();
+}
+
+#[tokio::test]
+async fn merging_a_computer_keeps_the_accounts_newer_edits_and_settings() {
+    let (laptop, desktop, project_id) = two_computers_sharing_a_task().await;
+    crate::profile::set(&laptop.db, "theme", &"light".into()).await.unwrap();
+    laptop.sync().await;
+    desktop.sync().await;
+    // The desktop drops out of the account, keeping its copy.
+    local::unlink(&desktop.db).await.unwrap();
+    tick().await;
+    rename(&laptop, &project_id, "Laptop, newer").await;
+    laptop.sync().await;
+    tick().await;
+    crate::profile::set(&desktop.db, "theme", &"dark".into()).await.unwrap();
+
+    let Outcome::NeedsChoice(choice) = desktop.sync().await else { panic!("expected a choice") };
+    assert_eq!(choice.reason, ChoiceReason::NewComputer);
+    choose(&desktop, Link::Merge).await;
+    desktop.sync().await;
+    laptop.sync().await;
+
+    for computer in [&laptop, &desktop] {
+        assert_eq!(computer.task(&project_id).await.task.title, "Laptop, newer", "the old copy didn't win");
+        assert_eq!(crate::profile::all(&computer.db).await.unwrap()["theme"], "light", "the account's settings stay");
+    }
+}
+
+#[tokio::test]
+async fn signing_back_in_asks_before_syncing_changes_made_while_signed_out() {
+    let (laptop, desktop, project_id) = desktop_edits_while_signed_out().await;
+    let Outcome::NeedsChoice(choice) = desktop.sync().await else { panic!("expected a choice") };
+    assert_eq!(choice.reason, ChoiceReason::OfflineChanges);
+    assert!(choice.changes >= 1);
+    assert!(choice.since.is_some());
+    laptop.sync().await;
+    assert_eq!(laptop.task(&project_id).await.task.title, "Write intro", "nothing went up before choosing");
+
+    choose(&desktop, Link::Merge).await;
+    desktop.sync().await;
+    laptop.sync().await;
+    assert_eq!(laptop.task(&project_id).await.task.title, "Desktop, offline");
+    assert_eq!(desktop.sync().await, Outcome::Synced { applied: 0 }, "and it doesn't ask again");
+}
+
+#[tokio::test]
+async fn signing_back_in_without_changes_doesnt_ask() {
+    let (_laptop, desktop, _) = two_computers_sharing_a_task().await;
+    desktop.account.sign_out().await;
+    desktop.sync().await;
+    desktop.sign_in().await;
+    assert!(matches!(desktop.sync().await, Outcome::Synced { .. }));
+}
+
+#[tokio::test]
+async fn choosing_the_accounts_data_drops_changes_made_while_signed_out() {
+    let (laptop, desktop, project_id) = desktop_edits_while_signed_out().await;
+    desktop.sync().await;
+    choose(&desktop, Link::Replace).await;
+    desktop.sync().await;
+    laptop.sync().await;
+    for computer in [&laptop, &desktop] {
+        assert_eq!(computer.task(&project_id).await.task.title, "Write intro");
+    }
+}
+
+#[tokio::test]
+async fn choosing_this_computers_data_wins_over_newer_edits() {
+    let (laptop, desktop, project_id) = desktop_edits_while_signed_out().await;
+    tick().await;
+    rename(&laptop, &project_id, "Laptop, newer").await;
+    laptop.sync().await;
+
+    desktop.sync().await;
+    choose(&desktop, Link::KeepLocal).await;
+    desktop.sync().await;
+    laptop.sync().await;
+    for computer in [&laptop, &desktop] {
+        assert_eq!(computer.task(&project_id).await.task.title, "Desktop, offline");
+    }
+}
+
+#[tokio::test]
+async fn a_backup_brings_back_data_a_choice_removed() {
+    let (laptop, _, project_id) = two_computers_sharing_a_task().await;
+    // A backup needs a database file (an in-memory one copies into memory).
+    let folder = std::env::temp_dir().join(format!("axiom-backup-test-{}", crate::db::new_id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let desktop = Computer::on_disk(&laptop.server, &folder.join("axiom.db")).await;
+    desktop.sign_in().await;
+    desktop.sync().await;
+    desktop.account.sign_out().await;
+    desktop.sync().await;
+    rename(&desktop, &project_id, "Desktop, offline").await;
+    desktop.sign_in().await;
+    desktop.sync().await;
+    backup::take(&desktop.db, &folder.join("backups")).await.unwrap();
+    choose(&desktop, Link::Replace).await;
+    desktop.sync().await;
+    assert_eq!(desktop.task(&project_id).await.task.title, "Write intro");
+
+    let copy = backup::latest(&folder.join("backups")).expect("the copy is kept");
+    assert!(backup::restore(&desktop.db, &copy).await.unwrap() > 0);
+    assert_eq!(desktop.task(&project_id).await.task.title, "Desktop, offline");
+    desktop.sync().await;
+    laptop.sync().await;
+    assert_eq!(laptop.task(&project_id).await.task.title, "Desktop, offline", "and it reached the account");
+    let _ = std::fs::remove_dir_all(folder);
 }
 
 #[tokio::test]

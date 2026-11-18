@@ -48,6 +48,8 @@ const OPS: Record<string, (args: Record<string, unknown>) => Request_> = {
   playground_remove: (a) => ({ method: "DELETE", path: `/v1/playground/friends/${segment(a.userId)}` }),
   playground_avatar: (a) => ({ method: "GET", path: `/v1/playground/avatar/${segment(a.userId)}` }),
   playground_cheer: (a) => ({ method: "POST", path: `/v1/playground/friends/${segment(a.userId)}/cheer` }),
+  playground_block: (a) => ({ method: "PUT", path: `/v1/playground/blocks/${segment(a.userId)}` }),
+  playground_unblock: (a) => ({ method: "DELETE", path: `/v1/playground/blocks/${segment(a.userId)}` }),
   admin_ticket_solved: (a) => ({ method: "PATCH", path: `/v1/admin/tickets/${segment(a.id)}`, body: { solved: !!a.solved } }),
 };
 

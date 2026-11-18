@@ -48,6 +48,7 @@ async fn main() {
     shared.ai = axiom_ai::Ai::new(config.ai_models);
     shared.ai_keys = config.ai_keys;
     shared.ai_daily_limit = config.ai_daily_limit;
+    shared.ai_account_daily_limit = config.ai_account_daily_limit;
     if shared.waitlist && shared.admins.is_empty() {
         tracing::warn!("The waiting list is on but ADMIN_EMAILS isn't set: nobody can approve new accounts");
     }

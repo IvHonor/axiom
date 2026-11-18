@@ -38,6 +38,14 @@ pub(crate) fn check_record_size(data: &str, field_times: &str) -> Result<(), Api
     Ok(())
 }
 
+/// Counts a push or pull against `Limits::sync_calls`.
+pub(crate) fn slow_down(s: &AppState, user_id: &str) -> Result<(), ApiError> {
+    if s.limits.sync_calls.hit(user_id) {
+        return Ok(());
+    }
+    Err(ApiError::too_many("Syncing is taking a short break after a lot of changes at once. It carries on by itself in a minute."))
+}
+
 pub(crate) fn check_timestamp(changed_at: i64) -> Result<(), ApiError> {
     if changed_at < 0 || changed_at > chrono::Utc::now().timestamp_millis() + 300_000 {
         return Err(ApiError::bad_request("Check your device's clock and try again."));
@@ -47,6 +55,7 @@ pub(crate) fn check_timestamp(changed_at: i64) -> Result<(), ApiError> {
 
 pub async fn push(State(s): State<AppState>, auth: AuthUser, Json(body): Json<PushRequest>) -> Result<Json<PushResponse>, ApiError> {
     crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
+    slow_down(&s, &auth.user_id)?;
     if body.changes.len() > SYNC_BATCH {
         return Err(ApiError::bad_request(format!("Send at most {SYNC_BATCH} changes at a time.")));
     }
@@ -145,6 +154,7 @@ pub struct PullQuery {
 
 pub async fn pull(State(s): State<AppState>, auth: AuthUser, Query(query): Query<PullQuery>) -> Result<Json<PullResponse>, ApiError> {
     let account = crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
+    slow_down(&s, &auth.user_id)?;
     // Nothing pushed since this device last pulled: the usual answer to an
     // app checking in, given without reading the database.
     if query.since >= account.sync_seq {

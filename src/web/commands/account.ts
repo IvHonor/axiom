@@ -89,6 +89,9 @@ export const accountHandlers: Handlers = {
   },
   // The browser already holds only the account's data: there's nothing to link.
   sync_link: () => sync(),
+  // Nothing is linked in the browser, so no copies are taken.
+  sync_backup: () => null,
+  sync_restore_backup: () => 0,
   sync_auto: () => true,
   sync_set_auto: () => undefined,
 };

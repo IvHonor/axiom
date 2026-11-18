@@ -99,6 +99,8 @@ export interface Friends {
   friends: Friend[];
   incoming: FriendRequest[];
   outgoing: FriendRequest[];
+  /** People you've blocked (missing from older servers). */
+  blocked?: Player[];
 }
 
 export interface Added {
@@ -134,6 +136,9 @@ export const addFriend = (by: { handle?: string; code?: string }) =>
 export const acceptFriend = (userId: string) => invoke<void>("playground_accept", { userId });
 export const removeFriend = (userId: string) => invoke<void>("playground_remove", { userId });
 export const cheer = (userId: string) => invoke<void>("playground_cheer", { userId });
+/** Unfriends them, drops requests either way, and hides you from each other in Nexus. They aren't told. */
+export const block = (userId: string) => invoke<void>("playground_block", { userId });
+export const unblock = (userId: string) => invoke<void>("playground_unblock", { userId });
 export const getAvatar = (userId: string) => invoke<{ avatar: string | null }>("playground_avatar", { userId }).then((r) => r.avatar);
 
 /** The name to show: their display name, or @handle. */

@@ -3,7 +3,7 @@
 // both ways, and your friends with their Lemmas, flames and a cheer each.
 // Shown in the top bar's friends pop-out and the Playground's sidebar.
 import { useState, type CSSProperties } from "react";
-import { Check, RefreshCw, UserPlus, X, Zap } from "lucide-react";
+import { Ban, Check, RefreshCw, UserPlus, X, Zap } from "lucide-react";
 import { ConfirmButton } from "../../shell/ui/ConfirmButton";
 import { Flame, atRisk } from "./Flame";
 import { glowOf, lemmaName } from "./PeerLemma";
@@ -99,6 +99,7 @@ export function FriendsPanel({ garden = 200, expandGarden = true }: { garden?: n
                 <span className="pg-people-who"><strong>{displayName(r.player)}</strong><span>@{r.player.handle}</span></span>
                 <button className="pg-icon is-yes" disabled={busy} onClick={() => void act(() => api.acceptFriend(r.player.userId))} aria-label={`Accept ${displayName(r.player)}`} title="Accept"><Check size={14} /></button>
                 <button className="pg-icon" disabled={busy} onClick={() => void act(() => api.removeFriend(r.player.userId))} aria-label={`Decline ${displayName(r.player)}`} title="Decline"><X size={14} /></button>
+                <BlockButton player={r.player} onBlock={(id) => void act(() => api.block(id))} />
               </li>
             ))}
           </ul>
@@ -119,6 +120,7 @@ export function FriendsPanel({ garden = 200, expandGarden = true }: { garden?: n
                 {!!f.streak && <Flame streak={f.streak} risk={atRisk(f.streakThrough, f.asOf)} size={14} />}
                 <button className="pg-cheer" data-done={f.cheered || undefined} disabled={f.cheered} onClick={() => cheer(f)} aria-label={f.cheered ? "Cheered today" : `Cheer ${displayName(f.player)} on`} title={f.cheered ? "Cheered today" : "Cheer them on"}><Zap size={13} /></button>
                 <ConfirmButton className="pg-icon pg-unfriend" onConfirm={() => void act(() => api.removeFriend(f.player.userId))} confirmText="Unfriend?"><X size={13} /></ConfirmButton>
+                <BlockButton player={f.player} onBlock={(id) => void act(() => api.block(id))} />
               </li>
             ))}
           </ul>
@@ -139,6 +141,29 @@ export function FriendsPanel({ garden = 200, expandGarden = true }: { garden?: n
           </ul>
         </section>
       )}
+
+      {!!friends?.blocked?.length && (
+        <section>
+          <h3 className="pg-side-head">Blocked <b>{friends.blocked.length}</b></h3>
+          <ul className="pg-people">
+            {friends.blocked.map((p) => (
+              <li key={p.userId} className="is-waiting">
+                <span className="pg-people-who"><strong>@{p.handle}</strong><span>Can&apos;t add you or see you in Nexus</span></span>
+                <button className="pg-icon" disabled={busy} onClick={() => void act(() => api.unblock(p.userId))} aria-label={`Unblock ${p.handle}`} title="Unblock"><X size={13} /></button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
+  );
+}
+
+/** Blocks someone after a second click: they can't add you or reach you, and aren't told. */
+function BlockButton({ player, onBlock }: { player: api.Player; onBlock: (userId: string) => void }) {
+  return (
+    <ConfirmButton className="pg-icon pg-block" onConfirm={() => onBlock(player.userId)} confirmText="Block?">
+      <Ban size={13} aria-label={`Block ${displayName(player)}`} />
+    </ConfirmButton>
   );
 }

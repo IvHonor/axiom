@@ -31,7 +31,7 @@ export default function PrivacyPage() {
           picture you choose (if any), and when you signed up and confirmed your email.
         </li>
         <li>
-          <b>Your devices:</b> each computer&apos;s name (for example &ldquo;DESKTOP-4F2 (Windows)&rdquo; or &ldquo;Ada&apos;s MacBook (macOS)&rdquo;) and when it was last active, so you can sign devices out.
+          <b>Your devices:</b> each computer&apos;s name (for example &ldquo;DESKTOP-4F2 (Windows)&rdquo; or &ldquo;Ada&apos;s MacBook (macOS)&rdquo;) and when it was last active, so you can sign devices out. Up to 20 stay signed in at once: signing in on another signs out the one used least recently.
         </li>
         <li>
           <b>Synced data:</b> a copy of what you sync, so your other computers can catch up.
@@ -49,6 +49,8 @@ export default function PrivacyPage() {
         <li>
           <b>Shared boards:</b> boards you share are visible to the people on them. Invitations keep the invited email address until they&apos;re accepted, declined or withdrawn.
         </li>
+        <li><b>The Playground and friends</b> (only if you pick a handle): your handle, friend code and how your Lemma looks; who your friends are, the friend requests you&apos;ve sent and received, cheers, and anyone you&apos;ve blocked (they aren&apos;t told). If you join the leaderboards, also the totals and streaks your computer works out for the activities you choose to share, such as tasks finished or pages read, never the tasks or pages themselves. Friends see your handle, name, picture, Lemma and streak; if you choose Global, anyone on the global boards sees you there too. Stop sharing an activity, or leave the leaderboards, and its numbers are deleted.</li>
+        <li><b>Nexus:</b> while you&apos;re in it, where you are in the city and the emote or phrase you&apos;ve just used are held in memory, so people near you can see you and your picture. None of it is saved: it&apos;s gone about 15 seconds after you leave.</li>
         <li>
           <b>Notification emails:</b> if you switch on emails, the server keeps each planned email&apos;s contents until it&apos;s sent. Emails aren&apos;t end-to-end encrypted. Finance
           amounts are never emailed.
@@ -66,14 +68,14 @@ export default function PrivacyPage() {
         </li>
       </ul>
       <p>
-        Your IP address is used briefly, in memory, to limit repeated sign-in attempts. It isn&apos;t saved with your account, though our hosting provider may keep standard request logs.
+        Your IP address is used briefly, in memory, to limit repeated sign-in attempts. It isn&apos;t saved with your account, though our hosting provider may keep standard request logs. How often each account syncs, adds friends and so on is counted the same way, in memory, to stop overuse.
       </p>
       <p>Axiom has no ads and no analytics or tracking, and your data is never sold. This website only uses cookies when you sign in: two essential cookies that keep you signed in on this browser, which signing out removes.</p>
 
       <h2>Why we use it (our lawful bases)</h2>
       <ul>
         <li>
-          <b>To provide the service you asked for</b> (performance of a contract): your account, syncing, shared boards, and the codes for confirming your email or resetting your password.
+          <b>To provide the service you asked for</b> (performance of a contract): your account, syncing, shared boards, the Playground and friends, and the codes for confirming your email or resetting your password.
         </li>
         <li>
           <b>Because you chose it</b> (consent): notification emails, the Axiom on the web list, and what Lemma sends to Google or Groq when you ask it something (explicit consent, for anything sensitive in an area you switch on). Switch emails off at any time, in the app or with the link in each email; switch Lemma&apos;s areas off in its settings.
@@ -153,6 +155,7 @@ export default function PrivacyPage() {
         <li>What you send Lemma: the Axiom server doesn&apos;t keep it. Groq may keep troubleshooting logs for up to 30 days, and Google keeps it for a limited time to detect misuse.</li>
         <li>How much you used Lemma each day (questions, tokens, recordings, and what went wrong): {RETENTION.aiUsageDays} days.</li>
         <li>Your account and everything synced to it: until you delete your account. Copies in backups are gone within 30 days after that.</li>
+        <li>The Playground: your leaderboard numbers until you stop sharing them or leave the leaderboards; your handle, friends, cheers and blocks until you remove them or delete your account. Nothing from Nexus is kept.</li>
         <li>Sign-ups that never confirmed their email: {RETENTION.unconfirmedDays} days.</li>
         <li>A device&apos;s record: {RETENTION.endedSessionDays} days after it&apos;s signed out.</li>
         <li>Codes: a day after they expire.</li>
@@ -169,7 +172,7 @@ export default function PrivacyPage() {
           <b>Account → Your data → Export my data</b> saves everything on your computer as a file.
         </li>
         <li>
-          <b>Account → Danger zone → Delete account</b> deletes your account and everything synced to it, including boards you own. The copy on your computer stays.
+          <b>Account → Danger zone → Delete account</b> deletes your account and everything synced to it, including boards you own and your Playground profile. The copy on your computer stays.
         </li>
         <li>For anything else, email {contact}. We&apos;ll answer within a month.</li>
       </ul>

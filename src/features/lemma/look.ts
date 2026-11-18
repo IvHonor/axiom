@@ -7,7 +7,7 @@ import { useSyncExternalStore } from "react";
 import { onSettingSynced, readSetting, saveSetting } from "../../lib/settings";
 
 export type Shell = "orb" | "prism" | "pyramid" | "drop";
-export type Accessory = "none" | "headphones" | "halo" | "cap" | "beanie" | "crown";
+export type Accessory = "none" | "headphones" | "halo" | "cap" | "beanie" | "crown" | "fedora";
 export type Finish = "hologram" | "glass" | "metal" | "matte";
 export type Holding = "none" | "coffee" | "book" | "plant" | "star" | "heart" | "rocket" | "music" | "game" | "glitch" | "first-light";
 
@@ -19,7 +19,7 @@ export interface Look {
   shape: Shell;
   accessory: Accessory;
   facewear: "none" | "glasses" | "sunglasses";
-  neckwear: "none" | "bow";
+  neckwear: "none" | "bow" | "tie";
   finish: Finish;
   /** Wearable colours are editable while equipped. Held items retain their own palette. */
   headwearColor: string;
@@ -69,6 +69,7 @@ export const ACCESSORIES: { id: Accessory; name: string }[] = [
   { id: "cap", name: "Cap" },
   { id: "beanie", name: "Beanie" },
   { id: "crown", name: "Crown" },
+  { id: "fedora", name: "Fedora" },
 ];
 
 export const HOLDINGS: { id: Holding; name: string; source: string; icon: LucideIcon | null; adminOnly?: boolean; earlyOnly?: boolean; future?: boolean }[] = [
@@ -94,6 +95,13 @@ export function hasFirstLight(account: AccountStatus | null): boolean {
 export function lookForRole(look: Look, admin: boolean, firstLight = false): Look {
   const item = HOLDINGS.find(h => h.id === look.holding);
   return item && !item.future && (!item.adminOnly || admin) && (!item.earlyOnly || firstLight) ? look : { ...look, holding: "none" };
+}
+
+/** Saved and synced outfits keep their choices, but only earned rewards are worn. */
+export function lookForRewards(look: Look, rewards: readonly string[]): Look {
+  const accessory = look.accessory === "fedora" && !rewards.includes("fedora") ? "none" : look.accessory;
+  const neckwear = look.neckwear === "tie" && !rewards.includes("tie") ? "none" : look.neckwear;
+  return accessory === look.accessory && neckwear === look.neckwear ? look : { ...look, accessory, neckwear };
 }
 
 const KEY = "axiom.lemma.look";
@@ -125,7 +133,7 @@ export function normaliseLook(saved: unknown): Look {
     shape: SHAPES.find((s) => s.id === shape)?.id ?? STANDARD.shape,
     accessory: ACCESSORIES.find((a) => a.id === value.accessory)?.id ?? STANDARD.accessory,
     facewear: value.facewear === "glasses" || value.facewear === "sunglasses" ? value.facewear : "none",
-    neckwear: value.neckwear === "bow" || value.accessory === "bow" ? "bow" : "none",
+    neckwear: value.neckwear === "tie" ? "tie" : value.neckwear === "bow" || value.accessory === "bow" ? "bow" : "none",
     finish: FINISHES.find((f) => f.id === value.finish)?.id ?? "hologram",
     ...Object.fromEntries((["headwearColor", "facewearColor", "neckwearColor", "jewelColor"] as const).map((key) => [key, color(value[key], "auto")])) as Pick<Look, "headwearColor" | "facewearColor" | "neckwearColor" | "jewelColor">,
     holdingColor: "auto",

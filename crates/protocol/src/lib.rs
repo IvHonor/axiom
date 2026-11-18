@@ -126,6 +126,9 @@ pub mod routes {
     pub const PLAYGROUND_FRIEND_ACCEPT: &str = "/v1/playground/friends/{user_id}/accept";
     /// POST: cheer a friend on (once a day).
     pub const PLAYGROUND_FRIEND_CHEER: &str = "/v1/playground/friends/{user_id}/cheer";
+    /// PUT: block someone (unfriends them, drops requests either way, and hides
+    /// you from each other in Nexus); DELETE: unblock. `GET PLAYGROUND_FRIENDS` lists them.
+    pub const PLAYGROUND_BLOCK: &str = "/v1/playground/blocks/{user_id}";
     /// GET: someone's profile picture (`PeerAvatar`), if you can see them: a friend,
     /// someone you've a request with, or someone on the global boards.
     pub const PLAYGROUND_AVATAR: &str = "/v1/playground/avatar/{user_id}";

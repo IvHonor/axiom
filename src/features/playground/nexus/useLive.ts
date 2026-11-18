@@ -40,7 +40,7 @@ const round = (v: number) => Math.round(v * 100) / 100;
  * `where` says where you are now; null until the city's ready. `onGone` hears
  * why you're out (it couldn't let you in, or you were away too long).
  */
-export function useLive(where: (() => Where) | null, onGone: (why: string) => void) {
+export function useLive(where: (() => Where) | null, onGone: (why: string) => void, onFull: () => void = () => {}) {
   const [status, setStatus] = useState<Status>("entering");
   const [people, setPeople] = useState<Map<string, Near>>(new Map());
   /** Which place `people` are in: the building, or null for the city. */
@@ -52,6 +52,8 @@ export function useLive(where: (() => Where) | null, onGone: (why: string) => vo
   const inside = useRef(false);
   const gone = useRef(onGone);
   gone.current = onGone;
+  const full = useRef(onFull);
+  full.current = onFull;
 
   const take = useCallback((state: hub.HubState, inside: string | null) => {
     const now = performance.now();
@@ -82,6 +84,8 @@ export function useLive(where: (() => Where) | null, onGone: (why: string) => vo
 
   const fail = useCallback((e: unknown) => {
     const message = String(e);
+    // A building at capacity: the server kept you outside, so step back out.
+    if (/building is full/i.test(message)) return full.current();
     if (/left (Nexus|the Hub)/i.test(message)) {
       inside.current = false;
       setStatus("gone");

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Bell, Download, HardDriveDownload, KeyRound, Lock, LockKeyhole, LogOut, MonitorSmartphone, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
 import { signOut, type AccountStatus } from "../lib/account";
-import { getAutoSync, linkData, setAutoSync, syncNow, type LinkChoice, type SyncStatus } from "../lib/sync";
+import { getAutoSync, setAutoSync, syncNow, type SyncStatus } from "../lib/sync";
 import { AppLockSettings } from "./account/AppLockSettings";
 import { ChangePassword } from "./account/ChangePassword";
 import { DeleteAccount } from "./account/DeleteAccount";
@@ -21,6 +21,7 @@ import { Logo } from "./ui/Logo";
 import { Switch } from "./ui/Switch";
 import { useNow } from "./useSync";
 import { InstallCard } from "./InstallApp";
+import { RestoreBackup, SyncChoicePanel } from "./SyncChoice";
 import { isWeb } from "../lib/platform";
 
 interface AccountPanelProps {
@@ -82,7 +83,6 @@ function SignedIn({ email, admin, sync, onChange, extensions, features }: { emai
   const [signingOut, setSigningOut] = useState(false);
   const [managing, setManaging] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const link = (how: LinkChoice) => linkData(how).catch((e) => setError(String(e)));
   const leave = (keepData: boolean) => signOut(keepData).then(onChange);
 
   return (
@@ -92,20 +92,7 @@ function SignedIn({ email, admin, sync, onChange, extensions, features }: { emai
 
       <Card icon={RefreshCw} title="Sync">
         {sync.state === "needs_choice" ? (
-          <div className="account-choice">
-            <p>This computer has {localItems(sync)} that {isOne(sync) ? "isn't" : "aren't"} in your account yet.</p>
-            <button className="btn btn-sm" onClick={() => link("merge")}>
-              Upload to my account
-            </button>
-            <ConfirmButton
-              className="btn btn-sm btn-ghost is-danger"
-              onConfirm={() => link("replace")}
-              confirmText="Click again to delete them"
-            >
-              Replace with my account's data
-            </ConfirmButton>
-            <p className="ext-meta account-note">Replacing deletes them from this computer.</p>
-          </div>
+          <SyncChoicePanel choice={sync} />
         ) : (
           <div className="account-sync-row">
             <p className={`account-sync is-${sync.state}`}>
@@ -126,6 +113,7 @@ function SignedIn({ email, admin, sync, onChange, extensions, features }: { emai
             )}
           </div>
         )}
+        {sync.state !== "needs_choice" && <RestoreBackup sync={sync} now={now} />}
         <ErrorNote error={error} />
       </Card>
 
@@ -193,21 +181,3 @@ function SignedIn({ email, admin, sync, onChange, extensions, features }: { emai
     </div>
   );
 }
-
-type LocalCounts = { projects: number; planTasks: number; books: number; modules: number };
-
-const COUNTED: [keyof LocalCounts, string, string][] = [
-  ["projects", "project", "projects"],
-  ["planTasks", "planner task", "planner tasks"],
-  ["books", "book", "books"],
-  ["modules", "University module", "University modules"],
-];
-
-/** "2 projects, 5 planner tasks and 1 book", leaving out whatever is zero. */
-function localItems(counts: LocalCounts): string {
-  const parts = COUNTED.filter(([key]) => counts[key] > 0).map(([key, one, many]) => (counts[key] === 1 ? `1 ${one}` : `${counts[key]} ${many}`));
-  if (parts.length === 0) return "data";
-  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
-}
-
-const isOne = (counts: LocalCounts) => COUNTED.reduce((n, [key]) => n + counts[key], 0) === 1;

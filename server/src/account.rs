@@ -120,6 +120,9 @@ pub async fn profile(State(s): State<AppState>, auth: AuthUser) -> Result<Json<P
 
 /// Replaces the name and picture. An empty name (or none) shows the email instead.
 pub async fn update_profile(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Profile>) -> Result<Json<Profile>, ApiError> {
+    if !s.limits.profile_saves.hit(&auth.user_id) {
+        return Err(ApiError::too_many(crate::playground::PROFILE_SAVES));
+    }
     let name = body.display_name.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty());
     if name.as_ref().is_some_and(|n| n.chars().count() > MAX_DISPLAY_NAME_LEN) {
         return Err(ApiError::bad_request(format!("Keep your name to {MAX_DISPLAY_NAME_LEN} characters.")));

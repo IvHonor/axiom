@@ -14,6 +14,7 @@
 //! Shared boards (see `spaces`) sync the same way, with the board instead
 //! of the account: their rows are pushed to and pulled from the board.
 
+pub mod backup;
 mod commands;
 pub mod local;
 pub mod migrations;
@@ -87,13 +88,37 @@ pub const ACCOUNT_EVENT: &str = "account-changed";
 pub enum SyncStatus {
     /// Signed out.
     Off,
-    /// This computer has data that isn't in the account yet; the user decides
-    /// whether to upload it or replace it (see `Link`).
-    NeedsChoice { projects: i64, plan_tasks: i64, books: i64, modules: i64 },
+    /// This computer and the account disagree; the user decides what to keep
+    /// (see `Link`) before anything syncs.
+    NeedsChoice(Choice),
     Syncing { last_synced: Option<DateTime<Utc>> },
     Synced { at: DateTime<Utc> },
     Offline { last_synced: Option<DateTime<Utc>> },
     Error { message: String },
+}
+
+/// Why sync is waiting for a choice, and what's at stake.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Choice {
+    pub reason: ChoiceReason,
+    /// Rows here, for a computer new to the account.
+    pub projects: i64,
+    pub plan_tasks: i64,
+    pub books: i64,
+    pub modules: i64,
+    /// Changes made while signed out, and when the first was made.
+    pub changes: i64,
+    pub since: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChoiceReason {
+    /// This computer has data and isn't linked to this account yet.
+    NewComputer,
+    /// Linked to this account, with changes made while signed out.
+    OfflineChanges,
 }
 
 /// Kept in Tauri's managed state.
@@ -180,12 +205,11 @@ async fn run(app: AppHandle) {
                     let _ = app.emit(DATA_CHANGED_EVENT, ());
                 }
             }
-            Ok(Outcome::NeedsChoice { projects, plan_tasks, books, modules }) => {
-                engine.set(&app, SyncStatus::NeedsChoice { projects, plan_tasks, books, modules })
-            },
+            Ok(Outcome::NeedsChoice(choice)) => engine.set(&app, SyncStatus::NeedsChoice(choice)),
             Ok(Outcome::SignedOut) => engine.set(&app, SyncStatus::Off),
             Err(ServerError::SignedOut) => {
                 // The server ended the session, so the account signed out.
+                let _ = local::set_review(&conn, true).await;
                 engine.set(&app, SyncStatus::Off);
                 let _ = app.emit(ACCOUNT_EVENT, account.status().await);
             }
@@ -207,7 +231,7 @@ async fn run(app: AppHandle) {
 pub enum Outcome {
     /// `applied` rows changed here.
     Synced { applied: usize },
-    NeedsChoice { projects: i64, plan_tasks: i64, books: i64, modules: i64 },
+    NeedsChoice(Choice),
     SignedOut,
 }
 
@@ -226,22 +250,45 @@ pub async fn sync_once(
     key: Option<&DataKey>,
     on_network: impl FnOnce(),
 ) -> Result<Outcome, ServerError> {
+    let state = local::state(db).await?;
     let Some(user_id) = account.user_id().await else {
+        // Edits made from now on wait for a choice when signing back in.
+        if state.user_id.is_some() && !state.review {
+            local::set_review(db, true).await?;
+        }
         return Ok(Outcome::SignedOut);
     };
 
     // This computer's data belongs to another account, or to none yet.
-    if local::state(db).await?.user_id.as_deref() != Some(user_id.as_str()) {
+    if state.user_id.as_deref() != Some(user_id.as_str()) {
         if local::live_rows(db).await? > 0 {
-            return Ok(Outcome::NeedsChoice {
+            return Ok(Outcome::NeedsChoice(Choice {
+                reason: ChoiceReason::NewComputer,
                 projects: local::count_live(db, "project_board_projects").await?,
                 plan_tasks: local::count_live(db, "daily_plan_tasks").await?,
                 books: local::count_live(db, "reading_books").await?,
                 modules: local::count_live(db, "uni_modules").await?,
-            });
+                changes: 0,
+                since: None,
+            }));
         }
         // Nothing here to lose: link straight away and download.
         local::link(db, &user_id, Link::Replace).await?;
+    } else if state.review {
+        // Signed back in: changes made while signed out wait for a choice.
+        let (changes, since) = local::pending(db).await?;
+        if changes > 0 {
+            return Ok(Outcome::NeedsChoice(Choice {
+                reason: ChoiceReason::OfflineChanges,
+                projects: 0,
+                plan_tasks: 0,
+                books: 0,
+                modules: 0,
+                changes,
+                since,
+            }));
+        }
+        local::set_review(db, false).await?;
     }
     on_network();
 

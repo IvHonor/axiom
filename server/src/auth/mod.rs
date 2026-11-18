@@ -15,7 +15,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 use sea_orm::sea_query::{Condition, Expr};
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect, Set, SqlErr, TransactionTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set, SqlErr, TransactionTrait};
 
 use crate::AppState;
 use crate::codes::{self, Purpose};
@@ -584,7 +584,37 @@ async fn start_session(s: &AppState, user: user::Model, device_name: &str) -> Re
     }
     .insert(&s.db)
     .await?;
+    sign_out_extra_devices(s, &user.id).await?;
     Ok(Json(issue(s, user, &session.id, refresh_token)))
+}
+
+/// Most devices signed in to one account at once.
+pub const MAX_DEVICES: usize = 20;
+
+/// Past `MAX_DEVICES`, the ones used least recently are signed out.
+async fn sign_out_extra_devices(s: &AppState, user_id: &str) -> Result<(), ApiError> {
+    let now = Utc::now();
+    let extra: Vec<String> = session::Entity::find()
+        .filter(session::Column::UserId.eq(user_id))
+        .filter(session::Column::RevokedAt.is_null())
+        .filter(session::Column::ExpiresAt.gt(now))
+        .order_by_desc(session::Column::LastUsedAt)
+        .all(&s.db)
+        .await?
+        .into_iter()
+        .skip(MAX_DEVICES)
+        .map(|old| old.id)
+        .collect();
+    if extra.is_empty() {
+        return Ok(());
+    }
+    session::Entity::update_many()
+        .col_expr(session::Column::RevokedAt, Expr::value(now))
+        .filter(session::Column::Id.is_in(extra))
+        .exec(&s.db)
+        .await?;
+    s.cache.forget_user(user_id);
+    Ok(())
 }
 
 fn issue(s: &AppState, user: user::Model, session_id: &str, refresh_token: String) -> Session {

@@ -3077,6 +3077,97 @@
   gap: 2px;
 }
 
+/* The sidebar's list of Lemma's views. */
+.lemma-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.lemma-nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.lemma-nav button:hover {
+  color: var(--text);
+  background: var(--panel);
+}
+
+.lemma-nav button.is-active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.lemma-nav-more {
+  align-self: flex-start;
+  font-size: 12px;
+}
+
+.assistant-sidebar .pb-segmented {
+  flex-wrap: wrap;
+}
+
+/* Lemma's Settings view: tabs over one scrolling panel. */
+.lemma-settings-tabs {
+  align-self: flex-start;
+  margin: 12px 18px 0;
+}
+
+.lemma-settings-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 640px;
+  padding: 16px 18px 28px;
+  overflow-y: auto;
+}
+
+.lemma-settings-body .assistant-heading {
+  margin: 0;
+}
+
+/* The desktop settings, in groups, with the long "how it works" folded away. */
+.desk-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.desk-group h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.desk-how summary {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.desk-how p {
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+
 /* A view that crashed, kept inside its tab (see ErrorBoundary). */
 .view-crash {
   display: flex;

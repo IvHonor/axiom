@@ -102,14 +102,21 @@ try {
   await page.getByLabel("Playground alerts", { exact: true }).getByText(/won last week/).waitFor();
   console.log("PASS: rank, cheer and new-period alerts; individual alert switches work");
 
-  assert.equal(await page.getByRole("tab", { name: "Nexus", exact: true }).count(), 0, "Nexus isn't a tab: it's hidden");
+  const views = page.getByRole("tablist", { name: "View", exact: true });
+  const nexusTab = views.getByRole("tab", { name: "Nexus", exact: true });
+  assert.equal(await views.getByRole("tab", { name: "Leaderboards", exact: true }).getAttribute("aria-selected"), "true", "the leaderboards come first");
+  await nexusTab.click();
+  assert.equal(await page.locator(".pg-arena").count(), 0, "Nexus is one click away");
+  assert.equal(await page.evaluate(() => localStorage.getItem("axiom.achievements.secrets")?.includes("nexus") ?? false), false, "the switch doesn't count as finding the secret");
+  await views.getByRole("tab", { name: "Leaderboards", exact: true }).click();
+  await page.locator(".pg-arena").waitFor();
   assert.equal(await page.getByRole("combobox", { name: "Starting page", exact: true }).count(), 0);
   await page.getByRole("combobox", { name: "Default activity" }).focus();
   await page.keyboard.type("nexus");
   assert.equal(await page.locator(".pg-arena").count(), 1, "typing in a field doesn't open Nexus");
   await page.locator(".pg-arena").click({ position: { x: 4, y: 4 } });
   await page.keyboard.type("nexus");
-  const back = page.getByRole("button", { name: "Leaderboards", exact: true });
+  const back = page.getByRole("tablist", { name: "View", exact: true }).getByRole("tab", { name: "Leaderboards", exact: true });
   await back.waitFor();
   assert.equal(await page.locator(".pg-arena").count(), 0);
   await back.click();
@@ -119,7 +126,7 @@ try {
   await page.reload();
   await page.locator(".pg-arena").waitFor();
   await page.screenshot({ path: ".qa.local/playground-preferences/sidebar.png", fullPage: true });
-  console.log("PASS: the Playground opens on the leaderboards; Nexus is an easter egg (type \"nexus\" or click the caret)");
+  console.log("PASS: the Playground opens on the leaderboards; Nexus is the second view, and the secret doors still open it");
   await open("slowpublish");
   await page.waitForFunction(() => window.calls.some(c => c.command === "playground_publish"));
   await participation.selectOption("off");

@@ -18,9 +18,8 @@
 .pg-content { position: absolute; inset: 0; overflow: auto; padding: 18px 22px 40px; display: flex; flex-direction: column; gap: 14px; }
 .pg-content > * { flex: none; }
 
-/* The way back out of Nexus, the Playground's hidden half. */
-.pg-back { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; padding: 6px 14px; font: 600 13px var(--font-ui); color: var(--text-dim); background: var(--pg-glass); border: 1px solid var(--pg-edge); border-radius: 999px; backdrop-filter: blur(8px); cursor: pointer; }
-.pg-back:hover { color: var(--text); }
+/* Leaderboards | Nexus: in the console bar, and over Nexus to come back. */
+.pg-content > .pg-views { align-self: flex-start; }
 .pg-caret { cursor: pointer; }
 
 /* ---------- The sky and the floor ---------- */
@@ -494,8 +493,8 @@
 .pg-people-who span { display: inline-flex; align-items: center; gap: 3px; overflow: hidden; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; color: var(--text-dim); }
 .pg-people .pg-cheer { width: 26px; height: 26px; }
 .pg-people .pg-icon { width: 26px; height: 26px; }
-.pg-unfriend { opacity: 0; }
-.pg-people li:hover .pg-unfriend, .pg-unfriend:focus-visible { opacity: 1; }
+.pg-unfriend, .pg-block { opacity: 0; }
+.pg-people li:hover .pg-unfriend, .pg-unfriend:focus-visible, .pg-people li:hover .pg-block, .pg-block:focus-visible, .pg-block.is-armed { opacity: 1; }
 .pg-sidebar, .pg-friends { --pg-glass: color-mix(in srgb, var(--panel) 72%, transparent); --pg-gold: #ffcb52; }
 .pg-friends { display: flex; flex-direction: column; gap: 14px; }
 .pg-side-cta { display: flex; align-items: center; gap: 10px; padding: 10px 12px; color: var(--text); text-align: left; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, var(--panel)), var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: var(--radius-sm); cursor: pointer; }

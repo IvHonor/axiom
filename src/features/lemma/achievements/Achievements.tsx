@@ -1,12 +1,13 @@
 // The achievements, on Lemma's page in place of the chat: a summary of what's
 // earned, what's closest, then every area's achievements with their levels.
-// Later, levels unlock Lemma's customisation (see TIER_POINTS).
+// Some first levels unlock a cosmetic in Lemma's wardrobe.
 import { useMemo, type CSSProperties } from "react";
 import { Award, Compass, Lock, Medal, Sparkles, X } from "lucide-react";
 import { findExtension } from "../../../extensions";
 import type { Achievement } from "./catalog";
 import { TIERS, tierOf } from "./progress";
 import { useAchievements, type Standing } from "./useAchievements";
+import { useAchievementRewards } from "./useAchievementRewards";
 import "./achievements.css";
 
 const areaName = (area: string) => (area === "axiom" ? "Axiom" : findExtension(area)?.name ?? area);
@@ -17,6 +18,7 @@ const fmt = (a: Achievement, n: number) => (a.format ? a.format(n) : Math.round(
 
 export function Achievements({ onClose }: { onClose: () => void }) {
   const { areas, loading, error } = useAchievements();
+  const rewards = useAchievementRewards();
   const all = useMemo(() => areas.flatMap((a) => a.standings), [areas]);
   const levels = all.reduce((n, s) => n + s.achievement.levels.length, 0);
   const earned = all.reduce((n, s) => n + reachedOf(s), 0);
@@ -51,7 +53,7 @@ export function Achievements({ onClose }: { onClose: () => void }) {
         {next.length > 0 && (
           <section className="ach-area" aria-label="Next up">
             <h3><Sparkles size={15} /> Next up</h3>
-            <ul className="ach-grid">{next.map((s) => <Card key={s.achievement.id} standing={s} showArea />)}</ul>
+            <ul className="ach-grid">{next.map((s) => <Card key={s.achievement.id} standing={s} unlocked={!!s.achievement.reward && rewards.includes(s.achievement.reward.id)} showArea />)}</ul>
           </section>
         )}
 
@@ -66,7 +68,7 @@ export function Achievements({ onClose }: { onClose: () => void }) {
           return (
             <section key={area} id={`ach-${area}`} className="ach-area" aria-label={areaName(area)} style={{ "--area": areaColor(area) } as CSSProperties}>
               <h3><Icon size={15} /> {areaName(area)} <small>{got} of {of} levels</small></h3>
-              <ul className="ach-grid">{standings.map((s) => <Card key={s.achievement.id} standing={s} />)}</ul>
+              <ul className="ach-grid">{standings.map((s) => <Card key={s.achievement.id} standing={s} unlocked={!!s.achievement.reward && rewards.includes(s.achievement.reward.id)} />)}</ul>
             </section>
           );
         })}
@@ -75,7 +77,7 @@ export function Achievements({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Card({ standing: { achievement: a, state }, showArea }: { standing: Standing; showArea?: boolean }) {
+function Card({ standing: { achievement: a, state }, showArea, unlocked }: { standing: Standing; showArea?: boolean; unlocked: boolean }) {
   const reached = state.kind === "counted" ? state.reached : 0;
   const tier = tierOf(reached, a.levels.length);
   const hidden = a.secret && !reached;
@@ -97,6 +99,7 @@ function Card({ standing: { achievement: a, state }, showArea }: { standing: Sta
         {complete && <small className="ach-done">{a.levels.length > 1 ? "Every level earned" : "Earned"}</small>}
         {state.kind === "soon" && <small className="ach-tag">Coming soon</small>}
         {state.kind === "unknown" && <small>{state.why}</small>}
+        {a.reward && <small className="ach-reward" data-unlocked={unlocked || undefined}>{unlocked ? <Award size={12} aria-hidden="true" /> : <Lock size={12} aria-hidden="true" />}{a.reward.name} {unlocked ? "unlocked" : `· ${a.goal(a.levels[0])}`}</small>}
       </div>
       {a.levels.length > 1 && (
         <span className="ach-pips" role="img" aria-label={`Level ${reached} of ${a.levels.length}`}>

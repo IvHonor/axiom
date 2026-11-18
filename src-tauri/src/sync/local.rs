@@ -45,9 +45,10 @@ pub async fn backfill(db: &impl ConnectionTrait) -> Result<(), DbErr> {
         return Ok(());
     }
     for table in TABLES.iter() {
+        let at = edited_at(db, table).await?;
         db.execute_unprepared(&format!(
             r#"INSERT INTO sync_outbox (table_name, row_id, changed_at, version)
-               SELECT '{table}', id, {NOW_MS}, 1 FROM "{table}"
+               SELECT '{table}', id, {at}, 1 FROM "{table}"
                WHERE id NOT IN (SELECT row_id FROM sync_base WHERE table_name = '{table}')
                ON CONFLICT (table_name, row_id) DO NOTHING"#
         ))
@@ -60,11 +61,13 @@ pub struct State {
     pub user_id: Option<String>,
     pub cursor: i64,
     pub last_synced_at: Option<DateTime<Utc>>,
+    /// Signed out since the last sync: ask before pushing what changed meanwhile.
+    pub review: bool,
 }
 
 pub async fn state(db: &impl ConnectionTrait) -> Result<State, DbErr> {
     let row = db
-        .query_one_raw(sql("SELECT user_id, cursor, last_synced_at FROM sync_state WHERE id = 1", []))
+        .query_one_raw(sql("SELECT user_id, cursor, last_synced_at, review FROM sync_state WHERE id = 1", []))
         .await?
         .ok_or_else(|| DbErr::RecordNotFound("sync_state".into()))?;
     let last: Option<String> = row.try_get("", "last_synced_at")?;
@@ -72,12 +75,28 @@ pub async fn state(db: &impl ConnectionTrait) -> Result<State, DbErr> {
         user_id: row.try_get("", "user_id")?,
         cursor: row.try_get("", "cursor")?,
         last_synced_at: last.and_then(|t| t.parse().ok()),
+        review: row.try_get::<i32>("", "review")? != 0,
     })
 }
 
 pub async fn mark_synced(db: &impl ConnectionTrait, at: DateTime<Utc>) -> Result<(), DbErr> {
     db.execute_raw(sql("UPDATE sync_state SET last_synced_at = ? WHERE id = 1", [at.to_rfc3339().into()])).await?;
     Ok(())
+}
+
+/// Marks (or clears) "ask before the next sync": set while signed out, so
+/// edits made then aren't pushed over the account's without a choice.
+pub async fn set_review(db: &impl ConnectionTrait, on: bool) -> Result<(), DbErr> {
+    db.execute_raw(sql("UPDATE sync_state SET review = ? WHERE id = 1", [i32::from(on).into()])).await?;
+    Ok(())
+}
+
+/// How many rows have changes waiting to be pushed, and when the oldest was made.
+pub async fn pending(db: &impl ConnectionTrait) -> Result<(i64, Option<DateTime<Utc>>), DbErr> {
+    let row = db.query_one_raw(sql("SELECT COUNT(*) AS n, MIN(changed_at) AS oldest FROM sync_outbox", [])).await?;
+    let Some(row) = row else { return Ok((0, None)) };
+    let oldest: Option<i64> = row.try_get("", "oldest")?;
+    Ok((row.try_get("", "n")?, oldest.and_then(DateTime::from_timestamp_millis)))
 }
 
 pub async fn has_pending(db: &impl ConnectionTrait) -> Result<bool, DbErr> {
@@ -103,14 +122,33 @@ pub async fn count_live(db: &impl ConnectionTrait, table: &str) -> Result<i64, D
     count(db, &format!(r#"SELECT COUNT(*) AS n FROM "{table}" WHERE deleted_at IS NULL"#)).await
 }
 
-/// How to join this computer's data to an account it isn't linked to yet.
+/// What to do with this computer's data when it and the account disagree:
+/// on first linking it to an account, or on signing back in with changes made
+/// while signed out (see `resolve`).
 #[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Link {
-    /// Upload everything here and keep it, alongside the account's data.
+    /// Keep both. Where both changed the same field, the newer edit wins.
     Merge,
     /// Delete everything here and download the account's data instead.
     Replace,
+    /// Keep both, and where both have a field, this computer's value wins.
+    KeepLocal,
+}
+
+/// Applies the user's choice about this computer's data (see `Link`).
+pub async fn resolve(db: &DatabaseConnection, user_id: &str, how: Link) -> Result<(), DbErr> {
+    if state(db).await?.user_id.as_deref() != Some(user_id) {
+        return link(db, user_id, how).await;
+    }
+    // Already linked, with changes made while signed out.
+    match how {
+        // The queued edits keep the times they were made, so newer wins.
+        Link::Merge => {}
+        Link::Replace => return link(db, user_id, Link::Replace).await,
+        Link::KeepLocal => requeue(db, &TABLES).await?,
+    }
+    set_review(db, false).await
 }
 
 pub async fn link(db: &DatabaseConnection, user_id: &str, how: Link) -> Result<(), DbErr> {
@@ -124,18 +162,27 @@ pub async fn link(db: &DatabaseConnection, user_id: &str, how: Link) -> Result<(
         clear_tables(&txn).await?;
     }
     txn.execute_unprepared("DELETE FROM sync_base; DELETE FROM sync_outbox; DELETE FROM sync_locked;").await?;
-    if how == Link::Merge {
+    if how != Link::Replace {
         for table in TABLES.iter() {
+            // Merging, each row goes up with the time it was last edited, so
+            // the account's newer edits win; settings aren't sent, so this
+            // computer's don't replace the ones used everywhere else. Keeping
+            // this computer's, everything goes up as edited just now.
+            let at = match how {
+                Link::Merge if table.ends_with("_settings") => continue,
+                Link::Merge => edited_at(&txn, table).await?,
+                _ => NOW_MS.to_owned(),
+            };
             txn.execute_unprepared(&format!(
                 r#"INSERT INTO sync_outbox (table_name, row_id, changed_at, version)
-                   SELECT '{table}', id, {NOW_MS}, 1 FROM "{table}" WHERE true
+                   SELECT '{table}', id, {at}, 1 FROM "{table}" WHERE true
                    ON CONFLICT (table_name, row_id) DO UPDATE SET version = sync_outbox.version + 1"#
             ))
             .await?;
         }
     }
     txn.execute_raw(sql(
-        "UPDATE sync_state SET user_id = ?, cursor = 0, last_synced_at = NULL WHERE id = 1",
+        "UPDATE sync_state SET user_id = ?, cursor = 0, last_synced_at = NULL, review = 0 WHERE id = 1",
         [user_id.into()],
     ))
     .await?;
@@ -181,6 +228,20 @@ pub async fn export(db: &impl ConnectionTrait) -> Result<Map<String, Value>, DbE
         tables.insert((*table).to_owned(), Value::Array(rows));
     }
     Ok(tables)
+}
+
+/// SQL for when a row of `table` was last edited, in Unix milliseconds: its
+/// `updated_at`, never later than now (the server refuses times from the
+/// future). Without one, the start of time, so any edit the account has wins.
+async fn edited_at(db: &impl ConnectionTrait, table: &str) -> Result<String, DbErr> {
+    let has = db
+        .query_one_raw(sql("SELECT 1 AS x FROM pragma_table_info(?) WHERE name = 'updated_at'", [table.into()]))
+        .await?
+        .is_some();
+    Ok(match has {
+        true => format!("MIN(COALESCE(CAST((julianday(updated_at) - 2440587.5) * 86400000 AS INTEGER), 0), {NOW_MS})"),
+        false => "0".into(),
+    })
 }
 
 async fn clear_tables(db: &impl ConnectionTrait) -> Result<(), DbErr> {
@@ -384,7 +445,7 @@ async fn count(db: &impl ConnectionTrait, query: &str) -> Result<i64, DbErr> {
 }
 
 /// JSON values go back into SQLite as the same types `json_object` read them as.
-fn to_sql(value: &Value) -> SqlValue {
+pub(super) fn to_sql(value: &Value) -> SqlValue {
     match value {
         Value::Null => SqlValue::String(None),
         Value::Bool(b) => (*b).into(),
@@ -464,14 +525,14 @@ pub async fn forget_stash(db: &impl ConnectionTrait) -> Result<(), DbErr> {
 }
 
 /// Sends every row of these tables again, as if new: after starting over
-/// with a new key, the account's copy is replaced with this computer's.
+/// with a new key, the account's copy is replaced with this computer's. (Also "keep this computer's data", see `resolve`.)
 pub async fn requeue(db: &impl ConnectionTrait, tables: &[&str]) -> Result<(), DbErr> {
     for table in tables {
         db.execute_raw(sql("DELETE FROM sync_base WHERE table_name = ?", [(*table).into()])).await?;
         db.execute_unprepared(&format!(
             r#"INSERT INTO sync_outbox (table_name, row_id, changed_at, version)
                SELECT '{table}', id, {NOW_MS}, 1 FROM "{table}" WHERE true
-               ON CONFLICT (table_name, row_id) DO UPDATE SET version = sync_outbox.version + 1"#
+               ON CONFLICT (table_name, row_id) DO UPDATE SET changed_at = excluded.changed_at, version = sync_outbox.version + 1"#
         ))
         .await?;
     }

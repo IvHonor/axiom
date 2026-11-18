@@ -3,7 +3,26 @@
 use sea_orm_migration::prelude::*;
 
 pub fn all() -> Vec<Box<dyn MigrationTrait>> {
-    vec![Box::new(Migration), Box::new(SharedBoards), Box::new(AutoSync), Box::new(Locked)]
+    vec![Box::new(Migration), Box::new(SharedBoards), Box::new(AutoSync), Box::new(Locked), Box::new(Review)]
+}
+
+/// Set while this computer is signed out (see `local::set_review`): the first
+/// sync after signing back in asks what to do with changes made meanwhile.
+/// Computers signed out before this existed get it at their next launch.
+pub struct Review;
+
+impl MigrationName for Review {
+    fn name(&self) -> &str {
+        "m005_sync_review"
+    }
+}
+
+#[async_trait::async_trait]
+impl MigrationTrait for Review {
+    async fn up(&self, m: &SchemaManager) -> Result<(), DbErr> {
+        m.get_connection().execute_unprepared("ALTER TABLE sync_state ADD COLUMN review INTEGER NOT NULL DEFAULT 0").await?;
+        Ok(())
+    }
 }
 
 /// Rows of encrypted tables pulled while this computer couldn't open them

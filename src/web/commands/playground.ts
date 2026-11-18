@@ -63,5 +63,7 @@ export const playground: Handlers = {
   playground_accept: ({ userId }) => call("playground_accept", { userId }),
   playground_remove: ({ userId }) => call("playground_remove", { userId }),
   playground_cheer: ({ userId }) => call("playground_cheer", { userId }),
+  playground_block: ({ userId }) => call("playground_block", { userId }),
+  playground_unblock: ({ userId }) => call("playground_unblock", { userId }),
   playground_avatar: ({ userId }) => call("playground_avatar", { userId }),
 };

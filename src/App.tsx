@@ -9,6 +9,7 @@ import { ActivityBar, type SidePanel } from "./shell/ActivityBar";
 import { AreasPanel } from "./shell/AreasPanel";
 import { ExtensionsPanel } from "./shell/ExtensionsPanel";
 import { StatusBar } from "./shell/StatusBar";
+import { SyncChoicePrompt } from "./shell/SyncChoice";
 import { ThemeProvider } from "./shell/theme/ThemeProvider";
 import { ThemesPanel } from "./shell/ThemesPanel";
 import { TopBar } from "./shell/TopBar";
@@ -413,6 +414,7 @@ export default function App() {
         {updater.offered && <UpdatePrompt status={updater.status} onInstall={updater.install} onLater={updater.later} />}
         <WhatsNew version={status.version} onOpenLemma={() => open({ kind: "extension", id: "lemma" })} />
         {touring && <Tour areas={areas} panel={panel} onShowOverview={() => open(OVERVIEW)} />}
+        <SyncChoicePrompt sync={sync} />
         <AppLockScreen accountState={account?.state} />
         <StatusBar
           status={status}

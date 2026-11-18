@@ -4,7 +4,7 @@
 // below with their Lemma, streak flames and a way to cheer them on; and a
 // signal log on the side narrates what's going on.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowLeft, Crown, Globe2, Lock, RefreshCw, Settings2, Sparkles, Swords, Trophy, Users, X, Zap } from "lucide-react";
+import { Crown, Globe2, Lock, RefreshCw, Settings2, Sparkles, Swords, Trophy, Users, X, Zap } from "lucide-react";
 import { useBoardFilters, usePlaygroundMode, usePlaygroundOptions, type BoardFilters } from "./preferences";
 import { useBoardAlerts } from "./useBoardAlerts";
 import "./preferences.css";
@@ -54,8 +54,20 @@ function useBoard(prefs: BoardFilters, enabled: boolean, revision: string) {
   return { board, setBoard, error, loading, reload: load };
 }
 
+type View = "boards" | "nexus";
+
+/** The Playground's two views: the leaderboards first, Nexus beside them. */
+function ViewSwitch({ view, onView }: { view: View; onView: (view: View) => void }) {
+  return (
+    <div className="pg-segment pg-views" role="tablist" aria-label="View">
+      <button role="tab" aria-selected={view === "boards"} onClick={() => onView("boards")}><Trophy size={14} /> Leaderboards</button>
+      <button role="tab" aria-selected={view === "nexus"} onClick={() => onView("nexus")}><Sparkles size={14} /> Nexus</button>
+    </div>
+  );
+}
+
 /** The leaderboards: friends or everyone, by period and board. */
-function BoardsView({ onNexus }: { onNexus: () => void }) {
+function BoardsView({ onNexus, onView }: { onNexus: () => void; onView: (view: View) => void }) {
   const { me, friends, signedIn, error: meError, refresh } = usePlayground();
   const [prefs, setPrefs] = useBoardFilters();
   const { options } = usePlaygroundOptions();
@@ -119,6 +131,7 @@ function BoardsView({ onNexus }: { onNexus: () => void }) {
           </div>
           <button className="pg-icon" onClick={() => void reload()} aria-label="Refresh" title="Refresh"><RefreshCw size={15} className={loading ? "pg-spin" : undefined} /></button>
           <button className="pg-icon" onClick={() => setSettings(true)} aria-label="Your Playground settings" title="How you appear"><Settings2 size={15} /></button>
+          <ViewSwitch view="boards" onView={onView} />
         </div>
       </header>
 
@@ -168,17 +181,18 @@ function onBoard(board: Board): string {
   return `${board.joined ? "You and " : ""}${friends} ${friends === 1 ? "friend" : "friends"} on this board`;
 }
 
-/** The Playground is the leaderboards. Nexus (the live city of AIs) is an
- *  easter egg: type "nexus" anywhere on the boards, or click the address bar's
- *  blinking caret. */
+/** The Playground opens on the leaderboards; Nexus (the live city of AIs) is
+ *  the second view, switched to from the console bar. The old secret doors
+ *  still work and still count for the achievement: type "nexus" anywhere on
+ *  the boards, or click the address bar's blinking caret. */
 export function PlaygroundView() {
   const [mode, setMode] = usePlaygroundMode();
   const found = useCallback(() => { markFound("nexus"); setMode("nexus"); }, [setMode]);
   useSecretWord("nexus", found, mode === "boards");
-  if (mode === "boards") return <BoardsView onNexus={found} />;
+  if (mode === "boards") return <BoardsView onNexus={found} onView={setMode} />;
   return (
     <Shell colors={[]}>
-      <button className="pg-back" onClick={() => setMode("boards")}><ArrowLeft size={14} /> Leaderboards</button>
+      <ViewSwitch view="nexus" onView={setMode} />
       {isWeb ? <DesktopOnly /> : <Hub />}
     </Shell>
   );

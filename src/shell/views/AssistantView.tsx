@@ -23,7 +23,6 @@ import { findExtension } from "../../extensions";
 import { nudgeCalendars } from "../../features/daily_plan/api";
 import { today } from "../../features/daily_plan/time";
 import type { ExtensionManifest } from "../../extensions/types";
-import { AssistantSettings } from "../AssistantSettings";
 import { takeHandoff, useHandoff } from "../desk/handoff";
 import { ago } from "../format";
 import { useAssistantAreas } from "../useAssistantAreas";
@@ -36,13 +35,14 @@ import { feel, setLemma, useLemma } from "../../features/lemma/state";
 import { doing, toolOf } from "../../features/lemma/parts";
 import { Customise } from "../../features/lemma/Customise";
 import { Achievements } from "../../features/lemma/achievements/Achievements";
+import { LemmaSettings } from "../../features/lemma/LemmaSettings";
+import { showLemma, useLemmaPage } from "../../features/lemma/lemmaPage";
 import { useDialogue } from "../../features/lemma/useDialogue";
 import { dialogueStatus } from "../../features/lemma/dialogue";
 import { nameOf, useAssistantName, usePersona } from "../../features/lemma/persona";
 import { ConfirmButton } from "../ui/ConfirmButton";
 import { Dropdown } from "../ui/Dropdown";
 import { ExtensionIcon } from "../ui/ExtensionIcon";
-import { Modal } from "../ui/Modal";
 import "./assistant.css";
 
 /** Ideas to start with, for the areas Lemma may use. */
@@ -76,9 +76,9 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
   /** What each of this turn's answers has written so far, by step. */
   const [drafts, setDrafts] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState(false);
   const [customising, setCustomising] = useState(false);
-  const [achievements, setAchievements] = useState(false);
+  // Chats, achievements or settings: the sidebar can switch it too.
+  const { page } = useLemmaPage();
   const [aloud, setAloud] = usePersistentState<boolean>("axiom.assistant.aloud", (saved) => saved === true);
   const [stopped, setStopped] = useState(false);
   const [reading, setReading] = useState(false);
@@ -238,7 +238,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
 
   const areaOf = (id: string) => areas.find((a) => a.id === id) ?? findExtension(id);
   const startNew = () => {
-    setAchievements(false);
+    showLemma("chat");
     setChatId(null);
     setChat(null);
     setError(null);
@@ -254,7 +254,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
           <p aria-live="polite" aria-atomic="true" data-lemma-dialogue={dialogue.message?.kind}>{caption}</p>
           <div className="lemma-companion-actions">
             <button className="btn btn-sm btn-ghost" onClick={() => setCustomising(true)}><Palette size={12} /> Customise {nameOf(persona)}</button>
-            <button className="btn btn-sm btn-ghost" onClick={() => setAchievements(true)} aria-pressed={achievements}><Award size={12} /> Achievements</button>
+            <button className="btn btn-sm btn-ghost" onClick={() => showLemma("achievements")} aria-pressed={page === "achievements"}><Award size={12} /> Achievements</button>
           </div>
         </div>
         <button className="btn btn-sm lemma-new" onClick={startNew} disabled={busy}>
@@ -266,7 +266,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
               <button className="lemma-chat-link" onClick={() => {
                   setError(null);
                   setChatId(c.id);
-                  setAchievements(false);
+                  showLemma("chat");
                 }} disabled={busy}>
                 <span className="lemma-chat-title">{c.title}</span>
                 <span className="lemma-chat-when">{ago(c.updatedAt)}</span>
@@ -287,7 +287,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
         </ul>
       </aside>
 
-      {achievements ? <Achievements onClose={() => setAchievements(false)} /> : <section className="lemma-main">
+      {page === "achievements" ? <Achievements onClose={() => showLemma("chat")} /> : page === "settings" ? <LemmaSettings areas={areas} /> : <section className="lemma-main">
         <header className="lemma-head">
           <Face mood={faceMood} size={34} level={lemma.level} alive={false} />
           <h2>{chat?.title ?? nameOf(persona)}</h2>
@@ -303,7 +303,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
           >
             {aloud ? <Volume2 size={15} strokeWidth={1.75} /> : <VolumeX size={15} strokeWidth={1.75} />}
           </button>
-          <button className="icon-btn" onClick={() => setSettings(true)} title={`${nameOf(persona)}'s settings`} aria-label={`${nameOf(persona)}'s settings`}>
+          <button className="icon-btn" onClick={() => showLemma("settings")} title={`${nameOf(persona)}'s settings`} aria-label={`${nameOf(persona)}'s settings`}>
             <Settings2 size={15} strokeWidth={1.75} />
           </button>
         </header>
@@ -320,7 +320,7 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
           areaOf={areaOf}
           onSuggest={(text) => void ask(text)}
           onRetry={() => void ask(null)}
-          onOpenSettings={() => setSettings(true)}
+          onOpenSettings={() => showLemma("settings", "privacy")}
           onChanged={setChat}
           stopped={stopped && !busy}
           held={held}
@@ -333,11 +333,6 @@ export function AssistantView({ areas, name }: { areas: ExtensionManifest[]; nam
         <Composer busy={busy} onSend={(text) => void ask(text)} onStop={stop} onListening={stopReading} />
       </section>}
 
-      {settings && (
-        <Modal title={`${nameOf(persona)}'s settings`} icon={<Settings2 size={16} strokeWidth={1.75} />} onClose={() => setSettings(false)} width={520}>
-          <AssistantSettings areas={areas} />
-        </Modal>
-      )}
       {customising && <Customise onClose={() => setCustomising(false)} />}
     </div>
   );

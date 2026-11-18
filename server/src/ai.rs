@@ -76,7 +76,7 @@ pub async fn chat_stream(State(s): State<AppState>, auth: AuthUser, headers: Hea
 
 /// Whether this account may ask the assistant this now. Counts the call.
 async fn may_chat(s: &AppState, auth: &AuthUser, body: &ChatRequest) -> Result<(), ApiError> {
-    crate::admin::require(s, &auth.user_id, permissions::AI).await?;
+    let account = crate::admin::require(s, &auth.user_id, permissions::AI).await?;
     if !s.ai_keys.any() {
         return Err(ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "The assistant isn't set up on this server yet."));
     }
@@ -85,14 +85,22 @@ async fn may_chat(s: &AppState, auth: &AuthUser, body: &ChatRequest) -> Result<(
     }
     // The person's own words last: a new question, not a step of one.
     let prompt = matches!(body.messages.last(), Some(Message::User { .. }));
-    spend(s, &auth.user_id, Usage { calls: 1, prompts: prompt.into(), ..Usage::default() }).await
+    spend(s, &account, Usage { calls: 1, prompts: prompt.into(), ..Usage::default() }).await
 }
 
 /// Counts a call (or a recording) for the account and for everyone, once
-/// the brake, if there is one, allows it. Counted in the database, so a
-/// restart doesn't reset it.
-async fn spend(s: &AppState, user_id: &str, used: Usage) -> Result<(), ApiError> {
+/// the brakes, if there are any, allow it: the account's own daily allowance
+/// (admins have none), then everyone's. Counted in the database, so a restart
+/// doesn't reset them.
+async fn spend(s: &AppState, account: &user::Model, used: Usage) -> Result<(), ApiError> {
+    let user_id = account.id.as_str();
     let today = Utc::now().date_naive();
+    if let Some(limit) = s.ai_account_daily_limit.filter(|_| !s.is_admin(account)) {
+        let mine = ai_usage::Entity::find_by_id((user_id.to_owned(), today)).one(&s.db).await?;
+        if mine.is_some_and(|m| i64::from(m.count) + i64::from(m.transcriptions) >= i64::from(limit)) {
+            return Err(ApiError::too_many("You've used the assistant a lot today, so it's taking a break until tomorrow (midnight UTC)."));
+        }
+    }
     if let Some(limit) = s.ai_daily_limit {
         let everyone = add(s, EVERYONE, today, Usage { calls: 1, ..Usage::default() }).await?;
         if everyone.count > i32::try_from(limit).unwrap_or(i32::MAX) {
@@ -257,7 +265,7 @@ fn add_totals(sum: &mut AiUsageTotals, more: &AiUsageTotals) {
 
 /// Speech to text for the assistant's microphone, on Axiom's keys.
 pub async fn transcribe(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Transcribe>) -> Result<Json<Transcript>, ApiError> {
-    crate::admin::require(&s, &auth.user_id, permissions::AI).await?;
+    let account = crate::admin::require(&s, &auth.user_id, permissions::AI).await?;
     if !s.ai_keys.any() {
         return Err(ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "The assistant isn't set up on this server yet."));
     }
@@ -268,7 +276,7 @@ pub async fn transcribe(State(s): State<AppState>, auth: AuthUser, Json(body): J
     if !body.mime.starts_with("audio/") {
         return Err(ApiError::bad_request("That isn't a recording."));
     }
-    spend(&s, &auth.user_id, Usage { transcriptions: 1, ..Usage::default() }).await?;
+    spend(&s, &account, Usage { transcriptions: 1, ..Usage::default() }).await?;
     match s.ai.transcribe(&s.ai_keys, &audio, &body.mime).await {
         Ok(heard) => Ok(Json(heard)),
         Err(err) => {

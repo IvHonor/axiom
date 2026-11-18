@@ -7,7 +7,7 @@ import { mkdir } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright");
-const accounts = new Map(["early", "late"].map(id => [id, { seq: 0, rows: new Map(), times: new Map() }]));
+const accounts = new Map(["early", "late", "member", "new-member"].map(id => [id, { seq: 0, rows: new Map(), times: new Map() }]));
 function apply(account, change) {
   const key = `${change.table}/${change.id}`;
   const row = account.rows.get(key) ?? { table: change.table, id: change.id, data: { id: change.id }, seq: 0 };
@@ -15,17 +15,18 @@ function apply(account, change) {
   for (const [field, value] of Object.entries(change.fields)) if ((times[field] ?? -1) <= change.changed_at) { row.data[field] = value; times[field] = change.changed_at; }
   row.seq = ++account.seq; account.rows.set(key, row); account.times.set(key, times);
 }
-for (const account of accounts.values()) for (const [id, value] of Object.entries({
+for (const [accountId, account] of accounts) for (const [id, value] of Object.entries({
   "lemma.persona": { name: "117", personality: "calm" },
   "lemma.look": { holding: "first-light" },
   "lemma.preferences": { follow: true, outfits: [] },
+  "achievements.rewards": accountId === "member" ? ["tie", "fedora"] : [],
 })) apply(account, { table: "profile_settings", id, fields: { value: JSON.stringify(value) }, changed_at: 1 });
 const backend = createServer(async (request, response) => {
   const send = (status, body) => { response.writeHead(status, { "content-type": "application/json" }); response.end(JSON.stringify(body)); };
   const id = request.headers.authorization?.replace("Bearer fixture-access-", "");
   const account = accounts.get(id);
   if (!account) return send(401, { message: "Sign in." });
-  if (request.url === "/v1/me") return send(200, { id, email: `${id}@example.test`, admin: true, created_at: id === "early" ? "2027-03-20T23:59:59.999Z" : "2027-03-21T00:00:00Z" });
+  if (request.url === "/v1/me") return send(200, { id, email: `${id}@example.test`, admin: id === "early" || id === "late", created_at: id === "early" ? "2027-03-20T23:59:59.999Z" : "2027-03-21T00:00:00Z" });
   if (request.url === "/v1/account/profile") return send(200, { display_name: "Fictional tester", avatar: null });
   if (request.url?.startsWith("/v1/sync/pull")) {
     const since = Number(new URL(request.url, "http://localhost").searchParams.get("since") || 0);
@@ -95,11 +96,18 @@ try {
   assert.equal(await dialog(first).getByRole("status").innerText(), "Glitch core: Given to admins.");
   await choose(first, "First Light");
   assert.equal(await dialog(first).getByRole("status").innerText(), "First Light: Given to users who created an account before 21 March 2027.");
+  await choose(first, "Tie"); await choose(first, "Fedora");
+  assert.equal(await preview(first).getAttribute("data-neckwear"), "tie");
+  assert.equal(await preview(first).getAttribute("data-headwear"), "fedora");
+  assert.deepEqual(profile("achievements.rewards"), [], "Website admins can equip cosmetics without earning the achievements");
+  await preview(first).screenshot({ path: ".qa.local/lemma-web-sync/admin-rewards.png" });
   await tab(first, "Outfits");
   await dialog(first).getByRole("textbox", { name: "Outfit name" }).fill("Early light"); await choose(first, "Save outfit");
   await until(() => profile("lemma.preferences").outfits.some(outfit => outfit.name === "Early light" && outfit.look.holding === "first-light"), "The web outfit did not reach account sync");
   const second = await device("early");
   assert.equal(await preview(second).getAttribute("data-holding"), "first-light");
+  assert.equal(await preview(second).getAttribute("data-neckwear"), "tie");
+  assert.equal(await preview(second).getAttribute("data-headwear"), "fedora");
   await tab(second, "Outfits");
   await dialog(second).getByRole("button", { name: "Wear Early light", exact: true }).waitFor();
   await tab(second, "Personality"); await dialog(second).getByRole("textbox", { name: "Name", exact: true }).fill("Orbit");
@@ -122,8 +130,25 @@ try {
   const late = await device("late");
   assert.equal(await dialog(late).getByRole("button", { name: "First Light", exact: true }).count(), 0);
   assert.equal(await preview(late).getAttribute("data-holding"), "none", "A saved look cannot bypass the account cutoff on the website");
+  await first.context().close(); await second.context().close(); await late.context().close();
+  const member = await device("member");
+  await choose(member, "Tie"); await choose(member, "Fedora");
+  assert.equal(await preview(member).getAttribute("data-neckwear"), "tie", "Desktop-earned rewards are available to a regular website account");
+  assert.equal(await preview(member).getAttribute("data-headwear"), "fedora");
+  await tab(member, "Outfits");
+  await dialog(member).getByRole("textbox", { name: "Outfit name" }).fill("Daily uniform"); await choose(member, "Save outfit");
+  await until(() => profile("lemma.preferences", "member").outfits.some(outfit => outfit.name === "Daily uniform" && outfit.look.neckwear === "tie" && outfit.look.accessory === "fedora"), "The cosmetic outfit did not sync from the website");
+  const otherMember = await device("member");
+  await tab(otherMember, "Outfits"); await choose(otherMember, "Wear Daily uniform");
+  assert.equal(await preview(otherMember).getAttribute("data-neckwear"), "tie");
+  assert.equal(await preview(otherMember).getAttribute("data-headwear"), "fedora", "A second browser restores the earned outfit");
+  await member.context().close(); await otherMember.context().close();
+  const fresh = await device("new-member");
+  assert.equal(await dialog(fresh).getByRole("button", { name: "Tie", exact: true }).getAttribute("aria-disabled"), "true");
+  assert.equal(await dialog(fresh).getByRole("button", { name: "Fedora", exact: true }).getAttribute("aria-disabled"), "true", "New regular accounts still need to earn the cosmetics");
+  await preview(fresh).screenshot({ path: ".qa.local/lemma-web-sync/locked-rewards.png" });
   assert.deepEqual(errors, []);
-  console.log("PASS: production website includes holdable descriptions, custom names, First Light entitlement/animation, repaired book/plant animations, and bidirectional account sync for selected items and saved outfits across isolated devices");
+  console.log("PASS: production website includes tie/fedora cosmetics, admin access without achievements, synced member rewards and outfits, locked rewards for new accounts, holdable descriptions, custom names, First Light entitlement/animation, book/plant animations and bidirectional account sync across isolated devices");
 } finally {
   await browser?.close(); server.kill(); await new Promise(resolve => backend.close(resolve));
 }

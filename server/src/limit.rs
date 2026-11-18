@@ -39,6 +39,18 @@ pub struct Limits {
     pub hub_enters: Limiter,
     pub hub_syncs: Limiter,
     pub hub_acts: Limiter,
+    /// Sync pushes and pulls (your own data and shared boards) per account.
+    /// Far above what the app does, even downloading a big account; it stops
+    /// a client stuck in a loop from hammering the database.
+    pub sync_calls: Limiter,
+    /// Leaderboard reads per account. The app reads one every couple of minutes.
+    pub board_reads: Limiter,
+    /// Cheers per account (each friend once a day anyway).
+    pub cheers: Limiter,
+    /// Changes to how you appear (handle, name, picture, friend code) per account.
+    pub profile_saves: Limiter,
+    /// Blocks and unblocks per account.
+    pub blocks: Limiter,
 }
 
 impl Default for Limits {
@@ -55,6 +67,11 @@ impl Default for Limits {
             hub_enters: Limiter::new(30, Duration::from_secs(10 * 60)),
             hub_syncs: Limiter::new(240, Duration::from_secs(60)),
             hub_acts: Limiter::new(40, Duration::from_secs(60)),
+            sync_calls: Limiter::new(1200, Duration::from_secs(60)),
+            board_reads: Limiter::new(120, Duration::from_secs(60)),
+            cheers: Limiter::new(120, Duration::from_secs(60 * 60)),
+            profile_saves: Limiter::new(60, Duration::from_secs(60 * 60)),
+            blocks: Limiter::new(60, Duration::from_secs(60 * 60)),
         }
     }
 }

@@ -11,7 +11,7 @@ use crate::housekeeping::{AI_USAGE_DAYS, ENDED_SESSION_DAYS, SOLVED_TICKET_DAYS,
 
 /// When either page last changed. For a material change, update
 /// `axiom_protocol::TERMS_VERSION` too, so new sign-ups agree to the new version.
-const UPDATED: &str = "6 November 2026";
+const UPDATED: &str = "18 November 2026";
 /// The youngest anyone can have an account.
 const MIN_AGE: u32 = 13;
 
@@ -61,24 +61,26 @@ pub async fn page(State(s): State<AppState>) -> Html<String> {
 <h2>What the Axiom server keeps if you have an account</h2>
 <ul>
 <li><b>Your account:</b> your email address, and a one-way hash of a key your computer makes from your password. Your password itself never reaches the server. Also the name and picture you choose (if any), and when you signed up and confirmed your email.</li>
-<li><b>Your devices:</b> each computer's name (for example "DESKTOP-4F2 (Windows)") and when it was last active, so you can sign devices out.</li>
+<li><b>Your devices:</b> each computer's name (for example "DESKTOP-4F2 (Windows)") and when it was last active, so you can sign devices out. Up to 20 stay signed in at once: signing in on another signs out the one used least recently.</li>
 <li><b>Synced data:</b> a copy of what you sync, so your other computers can catch up.
   <ul>
   <li><b>End-to-end encrypted:</b> Finance, Journal, Notes, Birthdays and Goals are encrypted on your computer before they're sent. The server stores them but can't read them. It only sees which kind of record it is, its ID, and when it changed.</li>
   <li><b>Not end-to-end encrypted:</b> Project Board, Daily Plan, Reading, University, Learning and your settings are stored as they are. They're protected in transit and by access controls, and could be read by whoever runs the server.</li>
   </ul></li>
 <li><b>Shared boards:</b> boards you share are visible to the people on them. Invitations keep the invited email address until they're accepted, declined or withdrawn.</li>
+<li><b>The Playground and friends</b> (only if you pick a handle): your handle, friend code and how your Lemma looks; who your friends are, the friend requests you've sent and received, cheers, and anyone you've blocked (they aren't told). If you join the leaderboards, also the totals and streaks your computer works out for the activities you choose to share, such as tasks finished or pages read, never the tasks or pages themselves. Friends see your handle, name, picture, Lemma and streak; if you choose Global, anyone on the global boards sees you there too. Stop sharing an activity, or leave the leaderboards, and its numbers are deleted.</li>
+<li><b>Nexus:</b> while you're in it, where you are in the city and the emote or phrase you've just used are held in memory, so people near you can see you and your picture. None of it is saved: it's gone about 15 seconds after you leave.</li>
 <li><b>Notification emails:</b> if you switch on emails, the server keeps each planned email's contents until it's sent. Emails aren't end-to-end encrypted. Finance amounts are never emailed.</li>
 <li><b>Codes:</b> codes for confirming your email, resetting your password or turning off the PIN lock are stored only as hashes, and expire after 30 minutes.</li>
 <li><b>Support messages:</b> what you write to support, the email address to reply to, and your Axiom version. Each one is kept so we can follow it up, and emailed to our support inbox. You can send one without an account.</li>
 <li><b>Axiom on the web list:</b> if you ask to hear when Axiom on the web opens, your email address and when you asked. We'll use it for that one email, then delete the list. Write to us to be taken off it sooner; deleting your account does it too.</li>
 </ul>
-<p>Your IP address is used briefly, in memory, to limit repeated sign-in attempts. It isn't saved with your account, though our hosting provider may keep standard request logs.</p>
+<p>Your IP address is used briefly, in memory, to limit repeated sign-in attempts. It isn't saved with your account, though our hosting provider may keep standard request logs. How often each account syncs, adds friends and so on is counted the same way, in memory, to stop overuse.</p>
 <p>Axiom has no ads and no analytics or tracking, and your data is never sold.</p>
 
 <h2>Why we use it (our lawful bases)</h2>
 <ul>
-<li><b>To provide the service you asked for</b> (performance of a contract): your account, syncing, shared boards, and the codes for confirming your email or resetting your password.</li>
+<li><b>To provide the service you asked for</b> (performance of a contract): your account, syncing, shared boards, the Playground and friends, and the codes for confirming your email or resetting your password.</li>
 <li><b>Because you chose it</b> (consent): notification emails, the Axiom on the web list, and what Lemma sends to Google or Groq when you ask it something (explicit consent, for anything sensitive in an area you switch on). Switch emails off at any time, in the app or with the link in each email; switch Lemma's areas off in its settings.</li>
 <li><b>Legitimate interests</b>: keeping the service secure (rate limits and backups), keeping Lemma working and affordable (counting how much each account uses it), answering support messages, and keeping a short record of them.</li>
 </ul>
@@ -124,6 +126,7 @@ pub async fn page(State(s): State<AppState>) -> Html<String> {
 <li>What you send Lemma: the Axiom server doesn't keep it. Groq may keep troubleshooting logs for up to 30 days, and Google keeps it for a limited time to detect misuse.</li>
 <li>How much you used Lemma each day (questions, tokens, recordings, and what went wrong): {AI_USAGE_DAYS} days.</li>
 <li>Your account and everything synced to it: until you delete your account. Copies in backups are gone within 30 days after that.</li>
+<li>The Playground: your leaderboard numbers until you stop sharing them or leave the leaderboards; your handle, friends, cheers and blocks until you remove them or delete your account. Nothing from Nexus is kept.</li>
 <li>Sign-ups that never confirmed their email: {UNCONFIRMED_DAYS} days.</li>
 <li>A device's record: {ENDED_SESSION_DAYS} days after it's signed out.</li>
 <li>Codes: a day after they expire.</li>
@@ -135,7 +138,7 @@ pub async fn page(State(s): State<AppState>) -> Html<String> {
 <p>You can ask for a copy of your data, have it corrected or deleted, ask us to limit or stop using it, object to how we use it, and take it elsewhere.</p>
 <ul>
 <li><b>Account → Your data → Export my data</b> saves everything on your computer as a file.</li>
-<li><b>Account → Danger zone → Delete account</b> deletes your account and everything synced to it, including boards you own. The copy on your computer stays.</li>
+<li><b>Account → Danger zone → Delete account</b> deletes your account and everything synced to it, including boards you own and your Playground profile. The copy on your computer stays.</li>
 <li>For anything else, {contact}. We'll answer within a month.</li>
 </ul>
 <p>If you're unhappy with how your data is handled, you can complain to the Information Commissioner's Office (<a href="https://ico.org.uk/make-a-complaint/">ico.org.uk</a>), or your local data protection authority.</p>

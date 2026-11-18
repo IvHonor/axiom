@@ -399,6 +399,9 @@ pub struct Friends {
     pub incoming: Vec<FriendRequest>,
     /// Waiting for theirs.
     pub outgoing: Vec<FriendRequest>,
+    /// People you've blocked (see `PLAYGROUND_BLOCK`).
+    #[serde(default)]
+    pub blocked: Vec<Player>,
 }
 
 /// Body of `POST PLAYGROUND_FRIENDS`: a handle, or a friend code.
@@ -430,6 +433,10 @@ pub struct Added {
 /// Most friends one account can have, and most requests it can have waiting.
 pub const MAX_FRIENDS: usize = 200;
 pub const MAX_PENDING: usize = 50;
+/// Most requests waiting for one person's answer: past this, the oldest goes.
+pub const MAX_INCOMING: usize = 100;
+/// Most people one account can block.
+pub const MAX_BLOCKED: usize = 1000;
 
 #[cfg(test)]
 mod tests {

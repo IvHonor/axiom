@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 
 use axiom_protocol::playground::{
     AddFriend, AddOutcome, Added, BOARD_SIZE, Board, BoardEntry, BoardQuery, CODE_ALPHABET, CODE_LEN, Friend, FriendRequest, Friends,
-    MAX_FRIENDS, MAX_PENDING, METRICS, PeerAvatar, Perks, Period, Player, PlaygroundMe, PublishStats, Published, SavePlayground, Scope, check_handle,
+    MAX_BLOCKED, MAX_FRIENDS, MAX_INCOMING, MAX_PENDING, METRICS, PeerAvatar, Perks, Period, Player, PlaygroundMe, PublishStats, Published, SavePlayground, Scope, check_handle,
     check_lemma, check_stats, first_light, first_of_month, metric, monday_of, normalize_friend_code, normalize_handle,
 };
 use axum::Json;
@@ -25,7 +25,9 @@ use sea_orm::{
 
 use crate::AppState;
 use crate::auth::AuthUser;
-use crate::entities::{playground_cheer as cheer, playground_friendship as friendship, playground_player as player, playground_stat as stat, user};
+use crate::entities::{
+    playground_block as block, playground_cheer as cheer, playground_friendship as friendship, playground_player as player, playground_stat as stat, user,
+};
 use crate::error::ApiError;
 
 const NO_HANDLE: &str = "Pick a handle first, so friends can find you.";
@@ -33,6 +35,7 @@ const NOT_JOINED: &str = "Join the Playground first.";
 /// Streaks still count this many days after their last day: a friend a time
 /// zone ahead may already be on tomorrow, and today's not over for anyone yet.
 const STREAK_GRACE: u64 = 2;
+pub(crate) const PROFILE_SAVES: &str = "You've changed your profile a lot just now. Try again in a little while.";
 
 fn not_found(message: &str) -> ApiError {
     ApiError::new(StatusCode::NOT_FOUND, message)
@@ -146,6 +149,9 @@ pub async fn player_for(s: &AppState, user_id: &str) -> Result<Player, ApiError>
 pub async fn avatar(State(s): State<AppState>, auth: AuthUser, Path(user_id): Path<String>) -> Result<Json<PeerAvatar>, ApiError> {
     let hidden = || not_found("That picture isn't available.");
     let them = find_player(&s.db, &user_id).await?.ok_or_else(hidden)?;
+    if blocked_between(&s.db, &auth.user_id, &user_id).await? {
+        return Err(hidden());
+    }
     let (low, high) = pair(&auth.user_id, &user_id);
     let linked = user_id == auth.user_id || friendship::Entity::find_by_id((low.to_owned(), high.to_owned())).one(&s.db).await?.is_some();
     if !linked && !(them.global && them.in_playground) && !s.hub.is_present(&user_id) {
@@ -199,6 +205,9 @@ pub async fn me(State(s): State<AppState>, auth: AuthUser) -> Result<Json<Option
 /// Picks your handle, joins the boards, or changes your Lemma, what you share
 /// and whether you're on global boards. Off the boards, nothing is shared.
 pub async fn save(State(s): State<AppState>, auth: AuthUser, Json(mut body): Json<SavePlayground>) -> Result<Json<PlaygroundMe>, ApiError> {
+    if !s.limits.profile_saves.hit(&auth.user_id) {
+        return Err(ApiError::too_many(PROFILE_SAVES));
+    }
     if !body.playground {
         body.shared.clear();
         body.global = false;
@@ -304,12 +313,16 @@ pub async fn forget_user(db: &impl ConnectionTrait, user_id: &str) -> Result<(),
         .exec(db)
         .await?;
     cheer::Entity::delete_many().filter(Condition::any().add(cheer::Column::FromId.eq(user_id)).add(cheer::Column::ToId.eq(user_id))).exec(db).await?;
+    block::Entity::delete_many().filter(Condition::any().add(block::Column::BlockerId.eq(user_id)).add(block::Column::BlockedId.eq(user_id))).exec(db).await?;
     player::Entity::delete_by_id(user_id).exec(db).await?;
     Ok(())
 }
 
 /// A new friend code: the old one stops working.
 pub async fn new_code(State(s): State<AppState>, auth: AuthUser) -> Result<Json<PlaygroundMe>, ApiError> {
+    if !s.limits.profile_saves.hit(&auth.user_id) {
+        return Err(ApiError::too_many(PROFILE_SAVES));
+    }
     let me = with_handle(&s.db, &auth.user_id).await?;
     let mut code = new_friend_code();
     while player::Entity::find().filter(player::Column::FriendCode.eq(&code)).one(&s.db).await?.is_some() {
@@ -449,6 +462,9 @@ async fn cheered_today(db: &impl ConnectionTrait, me: &str) -> Result<HashSet<St
 
 /// A ranked board: your friends and you, or everyone who opted in.
 pub async fn board(State(s): State<AppState>, auth: AuthUser, Query(q): Query<BoardQuery>) -> Result<Json<Board>, ApiError> {
+    if !s.limits.board_reads.hit(&auth.user_id) {
+        return Err(ApiError::too_many("The boards were refreshed a lot just now. Try again in a minute."));
+    }
     check_today(q.today)?;
     let m = metric(&q.metric).ok_or_else(|| ApiError::bad_request("That isn't something the Playground ranks."))?;
     if q.scope == Scope::Global && !m.global {
@@ -585,7 +601,15 @@ pub async fn friends(State(s): State<AppState>, auth: AuthUser) -> Result<Json<F
     let me = &auth.user_id;
     let all = friendships(&s.db, me).await?;
     let others: Vec<String> = all.iter().map(|f| f.other(me).to_owned()).collect();
-    let people = People::load(&s, me, others.clone()).await?;
+    let blocked: Vec<String> = block::Entity::find()
+        .filter(block::Column::BlockerId.eq(me))
+        .order_by_desc(block::Column::CreatedAt)
+        .all(&s.db)
+        .await?
+        .into_iter()
+        .map(|b| b.blocked_id)
+        .collect();
+    let people = People::load(&s, me, others.iter().chain(&blocked).cloned()).await?;
     let streaks: HashMap<String, stat::Model> = stat::Entity::find()
         .filter(stat::Column::Metric.eq("active"))
         .filter(stat::Column::UserId.is_in(others.clone()))
@@ -604,7 +628,12 @@ pub async fn friends(State(s): State<AppState>, auth: AuthUser) -> Result<Json<F
         .map(|c| c.from_id)
         .collect();
 
-    let mut out = Friends { friends: Vec::new(), incoming: Vec::new(), outgoing: Vec::new() };
+    let mut out = Friends {
+        friends: Vec::new(),
+        incoming: Vec::new(),
+        outgoing: Vec::new(),
+        blocked: blocked.iter().filter_map(|id| people.player(&s, id)).collect(),
+    };
     for f in &all {
         let other = f.other(me);
         let Some(player) = people.player(&s, other) else { continue };
@@ -656,6 +685,10 @@ pub async fn add_friend(State(s): State<AppState>, auth: AuthUser, Json(body): J
     if them.user_id == me.user_id {
         return Err(ApiError::bad_request("That's you! Share your code with a friend instead."));
     }
+    // Blocked either way: as if they weren't there, so nobody learns they're blocked.
+    if blocked_between(&s.db, &me.user_id, &them.user_id).await? {
+        return Err(not_found(if by_code { "That friend code doesn't work. Ask them for their new one." } else { "Nobody has that handle." }));
+    }
 
     let txn = s.db.begin().await?;
     let (low, high) = pair(&me.user_id, &them.user_id);
@@ -681,6 +714,16 @@ pub async fn add_friend(State(s): State<AppState>, auth: AuthUser, Json(body): J
             }
             if !by_code && mine.iter().filter(|f| f.accepted_at.is_none() && f.requested_by == me.user_id).count() >= MAX_PENDING {
                 return Err(ApiError::bad_request("You have lots of requests waiting. Give people a chance to answer first."));
+            }
+            if !by_code {
+                // Their list of requests to answer stays short: the oldest go.
+                let mut waiting: Vec<friendship::Model> =
+                    friendships(&txn, &them.user_id).await?.into_iter().filter(|f| f.accepted_at.is_none() && f.requested_by != them.user_id).collect();
+                waiting.sort_by_key(|f| f.created_at);
+                let over = (waiting.len() + 1).saturating_sub(MAX_INCOMING);
+                for old in waiting.into_iter().take(over) {
+                    friendship::Entity::delete_by_id((old.low, old.high)).exec(&txn).await?;
+                }
             }
             let now = Utc::now();
             friendship::ActiveModel {
@@ -728,8 +771,71 @@ pub async fn remove(State(s): State<AppState>, auth: AuthUser, Path(user_id): Pa
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Whether either of two people has blocked the other.
+pub async fn blocked_between(db: &impl ConnectionTrait, a: &str, b: &str) -> Result<bool, ApiError> {
+    let found = block::Entity::find()
+        .filter(
+            Condition::any()
+                .add(Condition::all().add(block::Column::BlockerId.eq(a)).add(block::Column::BlockedId.eq(b)))
+                .add(Condition::all().add(block::Column::BlockerId.eq(b)).add(block::Column::BlockedId.eq(a))),
+        )
+        .one(db)
+        .await?;
+    Ok(found.is_some())
+}
+
+/// Everyone someone has blocked, or who's blocked them: hidden from each other in Nexus.
+pub async fn blocked_either_way(db: &impl ConnectionTrait, me: &str) -> Result<HashSet<String>, ApiError> {
+    let rows = block::Entity::find()
+        .filter(Condition::any().add(block::Column::BlockerId.eq(me)).add(block::Column::BlockedId.eq(me)))
+        .all(db)
+        .await?;
+    Ok(rows.into_iter().map(|b| if b.blocker_id == me { b.blocked_id } else { b.blocker_id }).collect())
+}
+
+/// Blocks someone: unfriends them, drops requests either way, and hides you
+/// from each other in Nexus. They aren't told.
+pub async fn block(State(s): State<AppState>, auth: AuthUser, Path(user_id): Path<String>) -> Result<StatusCode, ApiError> {
+    if !s.limits.blocks.hit(&auth.user_id) {
+        return Err(ApiError::too_many("You've blocked and unblocked a lot just now. Try again in a little while."));
+    }
+    if user_id == auth.user_id {
+        return Err(ApiError::bad_request("You can't block yourself."));
+    }
+    find_player(&s.db, &user_id).await?.ok_or_else(|| not_found("Nobody has that handle."))?;
+    let txn = s.db.begin().await?;
+    let mine = block::Entity::find().filter(block::Column::BlockerId.eq(&auth.user_id));
+    if mine.clone().filter(block::Column::BlockedId.eq(&user_id)).one(&txn).await?.is_none() {
+        if mine.count(&txn).await? as usize >= MAX_BLOCKED {
+            return Err(ApiError::bad_request(format!("You can block up to {MAX_BLOCKED} people. Unblock someone first.")));
+        }
+        block::ActiveModel { blocker_id: Set(auth.user_id.clone()), blocked_id: Set(user_id.clone()), created_at: Set(Utc::now()) }.insert(&txn).await?;
+    }
+    let (low, high) = pair(&auth.user_id, &user_id);
+    friendship::Entity::delete_by_id((low.to_owned(), high.to_owned())).exec(&txn).await?;
+    txn.commit().await?;
+    s.hub.set_blocked(&auth.user_id, &user_id, true);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Unblocks someone. You're not friends again: add them if you'd like.
+pub async fn unblock(State(s): State<AppState>, auth: AuthUser, Path(user_id): Path<String>) -> Result<StatusCode, ApiError> {
+    if !s.limits.blocks.hit(&auth.user_id) {
+        return Err(ApiError::too_many("You've blocked and unblocked a lot just now. Try again in a little while."));
+    }
+    block::Entity::delete_by_id((auth.user_id.clone(), user_id.clone())).exec(&s.db).await?;
+    // Still hidden in Nexus if they've blocked you too.
+    if !blocked_between(&s.db, &auth.user_id, &user_id).await? {
+        s.hub.set_blocked(&auth.user_id, &user_id, false);
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
 /// Cheers a friend on: once a day each.
 pub async fn cheer(State(s): State<AppState>, auth: AuthUser, Path(user_id): Path<String>) -> Result<StatusCode, ApiError> {
+    if !s.limits.cheers.hit(&auth.user_id) {
+        return Err(ApiError::too_many("That's a lot of cheering! Try again in a little while."));
+    }
     let (low, high) = pair(&auth.user_id, &user_id);
     let friends = friendship::Entity::find_by_id((low.to_owned(), high.to_owned())).one(&s.db).await?.is_some_and(|f| f.accepted_at.is_some());
     if !friends {

@@ -104,7 +104,10 @@ export function Nexus({ onLeave }: { onLeave: (why?: string) => void }) {
   leave.current = onLeave;
 
   const where = useMemo(() => (handle ? () => { const m = handle.me(); return { x: m.x, z: m.z, inside: m.inside }; } : null), [handle]);
-  const live = useLive(where, (why) => leave.current(why));
+  const live = useLive(where, (why) => leave.current(why), () => {
+    handle?.leaveBuilding();
+    setLine({ text: "It's full in there. Let's come back later!", emoji: "🚪", until: Date.now() + 4000 });
+  });
   const peopleRef = useRef(live.people);
   peopleRef.current = live.people;
 

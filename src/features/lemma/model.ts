@@ -132,13 +132,38 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
   }
 
   const hat = new THREE.Group();
+  const hatTrim = look.accessory === "fedora" ? new THREE.MeshStandardMaterial({ color: "#35343a", roughness: 1, emissiveIntensity: 0 }) : trim;
   hat.position.y = hatY;
-  if (look.shape === "pyramid" && ["cap", "beanie", "crown"].includes(look.accessory)) {
+  if (look.shape === "pyramid" && ["cap", "beanie", "crown", "fedora"].includes(look.accessory)) {
     hat.position.y = 0.72;
     hat.scale.setScalar(0.65);
   }
   body.add(hat);
   switch (look.accessory) {
+    case "fedora": {
+      const brim = mesh(hat, new THREE.LatheGeometry([
+        new THREE.Vector2(0, 0.01), new THREE.Vector2(0.59, 0.01),
+        new THREE.Vector2(0.88, -0.025), new THREE.Vector2(0.90, 0.005),
+        new THREE.Vector2(0.59, 0.05), new THREE.Vector2(0, 0.05),
+      ], 48), hatTrim);
+      brim.scale.z = 0.82;
+      // A recessed crown and two front pinches give the plain felt hat its fedora silhouette.
+      const crown = new THREE.LatheGeometry([
+        new THREE.Vector2(0.60, 0.03), new THREE.Vector2(0.57, 0.30),
+        new THREE.Vector2(0.49, 0.47), new THREE.Vector2(0.34, 0.46),
+        new THREE.Vector2(0.18, 0.36), new THREE.Vector2(0, 0.34),
+      ], 48);
+      const positions = crown.attributes.position;
+      for (let i = 0; i < positions.count; i++) {
+        const pinch = Math.max(0, positions.getZ(i) / 0.6) * Math.min(1, positions.getY(i) / 0.3);
+        positions.setX(i, positions.getX(i) * (1 - pinch * 0.23));
+      }
+      crown.computeVertexNormals();
+      mesh(hat, crown, hatTrim).scale.z = 0.82;
+      const ribbon = mesh(hat, new THREE.CylinderGeometry(0.585, 0.606, 0.105, 48, 1, true), new THREE.MeshStandardMaterial({ color: "#19191d", roughness: 1 }), 0, 0.105);
+      ribbon.scale.z = 0.82;
+      break;
+    }
     case "cap": {
       const dome = mesh(hat, new THREE.SphereGeometry(0.64, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), trim);
       dome.scale.y = 0.57;
@@ -219,7 +244,7 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
   }
 
   if (look.shape === "prism") {
-    if (look.accessory === "cap" || look.accessory === "beanie") { hat.scale.x = 1.15; hat.position.y = 0.82; }
+    if (look.accessory === "cap" || look.accessory === "beanie" || look.accessory === "fedora") { hat.scale.x = 1.15; hat.position.y = 0.82; }
   }
 
   const neckwear = new THREE.Group();
@@ -234,6 +259,16 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
       mesh(neckwear, new THREE.ExtrudeGeometry(wing, { depth: 0.07, bevelEnabled: true, bevelSize: 0.025, bevelThickness: 0.015, bevelSegments: 2, steps: 1 }), trim);
     }
     mesh(neckwear, box(0.1, 0.13, 0.11, 0.035), trim, 0, 0, 0.04);
+  }
+  const neckTrim = look.neckwear === "tie" ? new THREE.MeshStandardMaterial({ color: "#7a2e3a", roughness: 0.95, emissiveIntensity: 0 }) : trim;
+  if (look.neckwear === "tie") {
+    neckwear.position.y += 0.13;
+    const tie = new THREE.Shape();
+    tie.moveTo(-0.045, 0); tie.lineTo(0.045, 0); tie.lineTo(0.12, -0.34);
+    tie.lineTo(0, -0.47); tie.lineTo(-0.12, -0.34); tie.closePath();
+    mesh(neckwear, new THREE.ExtrudeGeometry(tie, { depth: 0.045, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.008, bevelSegments: 2, steps: 1 }), neckTrim);
+    const knot = mesh(neckwear, box(0.13, 0.14, 0.085, 0.025), neckTrim, 0, 0.06, 0.025);
+    knot.rotation.z = Math.PI / 12;
   }
   const facewear = new THREE.Group();
   facewear.position.z = 0.17;
@@ -406,8 +441,10 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
     update(look, glow);
     if (field) colourUpdates.push(update);
   }
-  itemTrim(hat, "#466b85", "headwearColor", [trim, ...(["crown", "halo"].includes(look.accessory) ? [gold] : []), ...(look.accessory === "headphones" ? [dark] : [])]);
-  itemTrim(neckwear, "#b83f55", "neckwearColor");
+  itemTrim(hat, look.accessory === "fedora" ? "#35343a" : "#466b85", "headwearColor", [hatTrim, ...(["crown", "halo"].includes(look.accessory) ? [gold] : []), ...(look.accessory === "headphones" ? [dark] : [])]);
+  itemTrim(neckwear, look.neckwear === "tie" ? "#7a2e3a" : "#b83f55", "neckwearColor", [neckTrim]);
+  if (hatTrim !== trim) hatTrim.dispose();
+  if (neckTrim !== trim) neckTrim.dispose();
   itemTrim(facewear, look.facewear === "sunglasses" ? "#161b20" : "#d7e1e5", "facewearColor");
   itemTrim(prop, "#3c78a6");
   const palm = mesh(held, new THREE.SphereGeometry(0.12, 16, 12), trim, -0.06, -0.23, 0.05);

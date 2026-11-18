@@ -43,6 +43,7 @@ export function DeviceList({ devices }: { devices: Device[] }) {
           </li>
         ))}
       </ul>
+      <p className={s.hint}>Up to 20 devices stay signed in. Signing in somewhere new signs out the one used least recently.</p>
       {error && <p className={s.error} role="alert">{error}</p>}
     </section>
   );

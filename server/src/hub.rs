@@ -4,13 +4,18 @@
 //! a city full of people checking in every second costs nothing but memory.
 //! Each check-in sends back only who's near you (within `VIEW`, the nearest
 //! `MAX_SEEN`). Someone quiet for `timeout` is gone.
+//!
+//! People who've blocked each other (see `playground::block`) don't see each
+//! other here, and can't reach each other. A building holds `ROOM_CAPACITY`,
+//! and nobody moves faster than `MAX_SPEED` between check-ins.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use axiom_protocol::hub::{
-    ActKind, CAPACITY, DISTRICTS, DistrictCount, EMOTES, HubAct, HubEvent, HubPeek, HubPerson, HubState, HubWhere, MAX_SEEN, PHRASES, Shown, VIEW,
+    ActKind, CAPACITY, DISTRICTS, DistrictCount, EMOTES, HubAct, HubEvent, HubPeek, HubPerson, HubState, HubWhere, MAX_SEEN, MAX_SPEED, PHRASES,
+    ROOM_CAPACITY, Shown, VIEW,
     district_at, district_of, somewhere,
 };
 use axiom_protocol::playground::Player;
@@ -37,7 +42,11 @@ struct Presence {
     inside: Option<String>,
     shown: Option<(ActKind, String, Instant, Option<String>)>,
     seen: Instant,
+    /// When `x` and `z` last changed, for `MAX_SPEED`.
+    moved: Instant,
     events: Vec<HubEvent>,
+    /// People blocked either way: neither sees nor reaches the other.
+    hidden: HashSet<String>,
 }
 
 pub struct Hub {
@@ -63,6 +72,20 @@ impl Hub {
         let mut people = self.people.lock().unwrap();
         self.prune(&mut people);
         people.contains_key(user_id)
+    }
+
+    /// Hides two people from each other (or shows them again), if they're here.
+    pub fn set_blocked(&self, a: &str, b: &str, on: bool) {
+        let mut people = self.people.lock().unwrap();
+        for (me, them) in [(a, b), (b, a)] {
+            if let Some(p) = people.get_mut(me) {
+                if on {
+                    p.hidden.insert(them.to_owned());
+                } else {
+                    p.hidden.remove(them);
+                }
+            }
+        }
     }
 
     fn prune(&self, people: &mut HashMap<String, Presence>) {
@@ -95,12 +118,12 @@ impl Hub {
     }
 
     fn state(people: &mut HashMap<String, Presence>, me: &str) -> HubState {
-        let (x, z, inside, events) = match people.get_mut(me) {
-            Some(p) => (p.x, p.z, p.inside.clone(), std::mem::take(&mut p.events)),
-            None => (0.0, 0.0, None, Vec::new()),
+        let (x, z, inside, events, hidden) = match people.get_mut(me) {
+            Some(p) => (p.x, p.z, p.inside.clone(), std::mem::take(&mut p.events), p.hidden.clone()),
+            None => (0.0, 0.0, None, Vec::new(), HashSet::new()),
         };
         HubState {
-            people: Self::near(people, me, x, z, inside.as_deref()).into_iter().map(Self::person).collect(),
+            people: Self::near(people, me, &hidden, x, z, inside.as_deref()).into_iter().map(Self::person).collect(),
             districts: Self::counts(people),
             online: people.len() as u32,
             events,
@@ -108,11 +131,11 @@ impl Hub {
     }
 
     /// Everyone but `me` in the same place (the city, or the same building) and
-    /// within `VIEW` of a spot, nearest first, at most `MAX_SEEN`.
-    fn near<'a>(people: &'a HashMap<String, Presence>, me: &str, x: f32, z: f32, inside: Option<&str>) -> Vec<&'a Presence> {
+    /// within `VIEW` of a spot, nearest first, at most `MAX_SEEN`. Leaves out `hidden`.
+    fn near<'a>(people: &'a HashMap<String, Presence>, me: &str, hidden: &HashSet<String>, x: f32, z: f32, inside: Option<&str>) -> Vec<&'a Presence> {
         let mut near: Vec<(f32, &Presence)> = people
             .iter()
-            .filter(|(id, p)| *id != me && p.inside.as_deref() == inside)
+            .filter(|(id, p)| *id != me && !hidden.contains(*id) && p.inside.as_deref() == inside)
             .map(|(_, p)| ((p.x - x).hypot(p.z - z), p))
             .filter(|(d, _)| *d <= VIEW)
             .collect();
@@ -128,6 +151,25 @@ fn check_where(w: &HubWhere) -> Result<(), ApiError> {
     Ok(())
 }
 
+/// Whether `room` already holds `ROOM_CAPACITY` people (not counting `me`).
+fn room_full(people: &HashMap<String, Presence>, me: &str, room: Option<&str>) -> bool {
+    let Some(room) = room else { return false };
+    people.iter().filter(|(id, p)| *id != me && p.inside.as_deref() == Some(room)).count() >= ROOM_CAPACITY
+}
+
+fn room_is_full() -> ApiError {
+    ApiError::new(StatusCode::CONFLICT, "That building is full right now. Try again in a little while.")
+}
+
+/// Where someone can have got to from `(x, z)` in `secs`: `to`, or as far
+/// towards it as `MAX_SPEED` allows (with a few metres for rounding and lag).
+fn reachable(x: f32, z: f32, to: (f32, f32), secs: f32) -> (f32, f32) {
+    let (dx, dz) = (to.0 - x, to.1 - z);
+    let far = dx.hypot(dz);
+    let most = MAX_SPEED * secs + 5.0;
+    if far <= most { to } else { (x + dx / far * most, z + dz / far * most) }
+}
+
 fn gone() -> ApiError {
     ApiError::new(StatusCode::CONFLICT, "You've left Nexus. Enter again to come back.")
 }
@@ -138,15 +180,23 @@ pub async fn enter(State(s): State<AppState>, auth: AuthUser, Json(body): Json<H
     if !s.limits.hub_enters.hit(&auth.user_id) {
         return Err(ApiError::too_many("You've come and gone a lot just now. Try again in a minute."));
     }
-    // The only database work: who you are, once.
+    // The only database work: who you are, and who you've blocked, once.
     let player = crate::playground::player_for(&s, &auth.user_id).await?;
+    let hidden = crate::playground::blocked_either_way(&s.db, &auth.user_id).await?;
     let mut people = s.hub.people.lock().unwrap();
     s.hub.prune(&mut people);
     if !people.contains_key(&auth.user_id) && people.len() >= CAPACITY {
         return Err(ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "Nexus is full right now. Try again in a little while."));
     }
+    if room_full(&people, &auth.user_id, body.inside.as_deref()) {
+        return Err(room_is_full());
+    }
     let events = people.remove(&auth.user_id).map(|p| p.events).unwrap_or_default();
-    people.insert(auth.user_id.clone(), Presence { player, x: body.x, z: body.z, inside: body.inside, shown: None, seen: Instant::now(), events });
+    let now = Instant::now();
+    people.insert(
+        auth.user_id.clone(),
+        Presence { player, x: body.x, z: body.z, inside: body.inside, shown: None, seen: now, moved: now, events, hidden },
+    );
     Ok(Json(Hub::state(&mut people, &auth.user_id)))
 }
 
@@ -158,15 +208,23 @@ pub async fn sync(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Hu
     }
     let mut people = s.hub.people.lock().unwrap();
     s.hub.prune(&mut people);
+    let full = room_full(&people, &auth.user_id, body.inside.as_deref());
     let me = people.get_mut(&auth.user_id).ok_or_else(gone)?;
+    let now = Instant::now();
+    me.seen = now;
     if me.inside != body.inside {
+        // A full building: you stay where you were (and still here).
+        if full {
+            return Err(room_is_full());
+        }
         // Through a door: what you were showing stays where you were.
         me.shown = None;
+        (me.x, me.z) = (body.x, body.z);
+    } else {
+        (me.x, me.z) = reachable(me.x, me.z, (body.x, body.z), (now - me.moved).as_secs_f32());
     }
-    me.x = body.x;
-    me.z = body.z;
     me.inside = body.inside;
-    me.seen = Instant::now();
+    me.moved = now;
     Ok(Json(Hub::state(&mut people, &auth.user_id)))
 }
 
@@ -189,7 +247,9 @@ pub async fn act(State(s): State<AppState>, auth: AuthUser, Json(body): Json<Hub
     let to = body.to.filter(|to| *to != auth.user_id);
     me.shown = Some((body.kind, body.id.clone(), Instant::now(), to.clone()));
     let (x, z, inside, from) = (me.x, me.z, me.inside.clone(), me.player.clone());
-    if let Some(target) = to.and_then(|to| people.get_mut(&to)).filter(|t| t.inside == inside && (t.x - x).hypot(t.z - z) <= VIEW) {
+    let blocked = me.hidden.clone();
+    let in_reach = |t: &&mut Presence| t.inside == inside && (t.x - x).hypot(t.z - z) <= VIEW && !blocked.contains(&t.player.user_id);
+    if let Some(target) = to.and_then(|to| people.get_mut(&to)).filter(in_reach) {
         let mut next = s.hub.next_event.lock().unwrap();
         *next += 1;
         target.events.push(HubEvent { id: *next, from: Player { you: false, friend: false, ..from }, kind: body.kind, item: body.id });
@@ -222,4 +282,42 @@ pub async fn peek(State(s): State<AppState>, _auth: AuthUser) -> Json<HubPeek> {
 /// Forgets someone (their account was deleted).
 pub fn forget_user(s: &AppState, user_id: &str) {
     s.hub.people.lock().unwrap().remove(user_id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn someone(id: &str, inside: Option<&str>) -> (String, Presence) {
+        let player = Player {
+            user_id: id.into(),
+            handle: id.into(),
+            name: None,
+            lemma: Default::default(),
+            perks: Default::default(),
+            avatar: None,
+            you: false,
+            friend: false,
+        };
+        let now = Instant::now();
+        let p = Presence { player, x: 0.0, z: 0.0, inside: inside.map(Into::into), shown: None, seen: now, moved: now, events: Vec::new(), hidden: HashSet::new() };
+        (id.to_owned(), p)
+    }
+
+    #[test]
+    fn a_building_holds_so_many() {
+        let mut people: HashMap<String, Presence> = (0..ROOM_CAPACITY).map(|n| someone(&format!("p{n}"), Some("library"))).collect();
+        people.extend([someone("outside", None)]);
+        assert!(room_full(&people, "newcomer", Some("library")));
+        assert!(!room_full(&people, "p0", Some("library")), "someone already in it stays");
+        assert!(!room_full(&people, "newcomer", Some("cafe")));
+        assert!(!room_full(&people, "newcomer", None), "the city's big enough");
+    }
+
+    #[test]
+    fn jumps_are_slowed_to_the_fastest_pace() {
+        assert_eq!(reachable(0.0, 0.0, (10.0, 0.0), 1.0), (10.0, 0.0), "walking");
+        let (x, z) = reachable(0.0, 0.0, (300.0, 0.0), 1.0);
+        assert_eq!((x, z), (MAX_SPEED + 5.0, 0.0));
+    }
 }

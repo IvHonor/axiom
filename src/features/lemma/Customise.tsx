@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Palette, RotateCcw, Circle, Box, Pyramid, Droplet, Headphones, CircleSlash, Crown, CircleEllipsis, GraduationCap, Ribbon, HatGlasses, Glasses, Trash2, Volume2, Square } from "lucide-react";
+import { Check, Lock, Palette, RotateCcw, Circle, Box, Pyramid, Droplet, Headphones, CircleSlash, Crown, CircleEllipsis, Glasses, Trash2, Volume2, Square } from "lucide-react";
+import { BeanieIcon, BowTieIcon, CapIcon, FedoraIcon, SunglassesIcon, TieIcon } from "./wearIcons";
 import { Modal } from "../../shell/ui/Modal";
 import { Face, type Mood } from "./Face";
-import { ACCESSORIES, FINISHES, GLOWS, HOLDINGS, SHAPES, SHELLS, STANDARD, hasFirstLight, lookForRole, setLook, useLook, type Look } from "./look";
+import { ACCESSORIES, FINISHES, GLOWS, HOLDINGS, SHAPES, SHELLS, STANDARD, hasFirstLight, lookForRewards, lookForRole, setLook, useLook, type Look } from "./look";
+import { ACHIEVEMENTS } from "./achievements/catalog";
+import { useAchievementRewards } from "./achievements/useAchievementRewards";
 import { DEFAULT_NAME, MAX_NAME, PERSONALITIES, nameOf, setPersona, usePersona } from "./persona";
 import { MAX_OUTFITS, setCompanionPrefs, useCompanionPrefs } from "./preferences";
 import { speak, stopSpeaking } from "../../lib/voice";
@@ -27,7 +30,12 @@ export function Customise({ onClose }: { onClose: () => void }) {
   const [account] = useAccount();
   const admin = account?.state === "signed_in" && account.admin;
   const firstLight = hasFirstLight(account);
-  const look = useMemo(() => lookForRole(chosen, admin, firstLight), [chosen, admin, firstLight]);
+  const rewards = useAchievementRewards();
+  const look = useMemo(() => lookForRewards(lookForRole(chosen, admin, firstLight), rewards), [chosen, admin, firstLight, rewards]);
+  const rewardHint = (id: string) => {
+    const achievement = ACHIEVEMENTS.find(a => a.reward?.id === id);
+    return achievement ? admin ? "Available to admins" : `${achievement.name}: ${achievement.goal(achievement.levels[0])}${rewards.includes(id) ? " · Unlocked" : " to unlock"}` : undefined;
+  };
   const context = useLemma();
   const [idlePreview, setIdlePreview] = useState(0);
   const [reduced, setReduced] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -63,7 +71,9 @@ export function Customise({ onClose }: { onClose: () => void }) {
   const shape = SHAPES.find((s) => s.id === look.shape)!;
   const holding = HOLDINGS.find((h) => h.id === look.holding)!;
   const shapeIcons = { orb: Circle, prism: Box, pyramid: Pyramid, drop: Droplet };
-  const accessoryIcons = { none: CircleSlash, headphones: Headphones, halo: CircleEllipsis, cap: GraduationCap, beanie: HatGlasses, crown: Crown, bow: Ribbon };
+  const accessoryIcons = { none: CircleSlash, headphones: Headphones, halo: CircleEllipsis, cap: CapIcon, beanie: BeanieIcon, crown: Crown, fedora: FedoraIcon };
+  const facewearIcons = { none: CircleSlash, glasses: Glasses, sunglasses: SunglassesIcon };
+  const neckwearIcons = { none: CircleSlash, bow: BowTieIcon, tie: TieIcon };
 
   return (
     <Modal title={`Customise ${name}`} icon={<Palette size={16} strokeWidth={1.75} />} onClose={onClose} width={840} className="lemma-customise">
@@ -147,15 +157,16 @@ export function Customise({ onClose }: { onClose: () => void }) {
           <Row title="Headwear">
             {ACCESSORIES.map((a) => {
               const Icon = accessoryIcons[a.id];
-              return <Choice key={a.id} on={look.accessory === a.id} onPick={() => change({ accessory: a.id })} label={a.name}><Icon size={20} strokeWidth={1.5} /></Choice>;
+              return <Choice key={a.id} on={look.accessory === a.id} onPick={() => change({ accessory: a.id })} label={a.name} locked={a.id === "fedora" && !rewards.includes(a.id)} hint={rewardHint(a.id)}><Icon size={20} strokeWidth={1.5} /></Choice>;
             })}
           </Row>
-          {look.accessory !== "none" && <ColourControl label="Headwear colour" value={look.headwearColor} fallback={look.accessory === "crown" || look.accessory === "halo" ? "#ffd078" : "#466b85"} onChange={headwearColor => change({ headwearColor })} />}
+          {look.accessory !== "none" && <ColourControl label="Headwear colour" value={look.headwearColor} fallback={look.accessory === "crown" || look.accessory === "halo" ? "#ffd078" : look.accessory === "fedora" ? "#35343a" : "#466b85"} onChange={headwearColor => change({ headwearColor })} />}
           {look.accessory === "crown" && <ColourControl label="Crown jewel colour" value={look.jewelColor} fallback="#c52e58" onChange={jewelColor => change({ jewelColor })} />}
-          <Row title="Facewear">{(["none", "glasses", "sunglasses"] as const).map((id) => <Choice key={id} label={id === "none" ? "No facewear" : id === "glasses" ? "Glasses" : "Sunglasses"} on={look.facewear === id} onPick={() => change({ facewear: id })}><Glasses size={20} /></Choice>)}</Row>
+          <Row title="Facewear">{(["none", "glasses", "sunglasses"] as const).map((id) => <Choice key={id} label={id === "none" ? "No facewear" : id === "glasses" ? "Glasses" : "Sunglasses"} on={look.facewear === id} onPick={() => change({ facewear: id })}>{(() => { const Icon = facewearIcons[id]; return <Icon size={20} strokeWidth={1.5} />; })()}</Choice>)}</Row>
           {look.facewear !== "none" && <ColourControl label="Facewear colour" value={look.facewearColor} fallback={look.facewear === "sunglasses" ? "#161b20" : "#d7e1e5"} onChange={facewearColor => change({ facewearColor })} />}
-          <Row title="Neckwear">{(["none", "bow"] as const).map(id => <Choice key={id} label={id === "none" ? "No neckwear" : "Bow tie"} on={look.neckwear === id} onPick={() => change({ neckwear: id })}><Ribbon size={20} /></Choice>)}</Row>
-          {look.neckwear === "bow" && <ColourControl label="Bow tie colour" value={look.neckwearColor} fallback="#b83f55" onChange={neckwearColor => change({ neckwearColor })} />}
+          <Row title="Neckwear">{(["none", "bow", "tie"] as const).map(id => <Choice key={id} label={id === "none" ? "No neckwear" : id === "bow" ? "Bow tie" : "Tie"} on={look.neckwear === id} onPick={() => change({ neckwear: id })} locked={id === "tie" && !rewards.includes(id)} hint={rewardHint(id)}>{(() => { const Icon = neckwearIcons[id]; return <Icon size={20} strokeWidth={1.5} />; })()}</Choice>)}</Row>
+          {look.neckwear !== "none" && <ColourControl label={look.neckwear === "tie" ? "Tie colour" : "Bow tie colour"} value={look.neckwearColor} fallback={look.neckwear === "tie" ? "#7a2e3a" : "#b83f55"} onChange={neckwearColor => change({ neckwearColor })} />}
+          <p className="field-hint">Tie: Showing Up · 3 days in a row. Fedora: Regular · 10 days of use.</p>
           <Row title="Holding">
             {HOLDINGS.filter(h => !h.future && (!h.adminOnly || admin) && (!h.earlyOnly || firstLight)).map(({ id, name, icon: Icon }) => (
               <Choice key={id} on={look.holding === id} onPick={() => change({ holding: id })} label={name}>
@@ -225,11 +236,11 @@ function Swatch({ name, color, on, onPick }: { name: string; color: string; on: 
   );
 }
 
-function Choice({ label, on, onPick, children }: { label: string; on: boolean; onPick: () => void; children: React.ReactNode }) {
+function Choice({ label, on, onPick, children, locked = false, hint }: { label: string; on: boolean; onPick: () => void; children: React.ReactNode; locked?: boolean; hint?: string }) {
   return (
-    <button className={`lemma-choice${on ? " is-on" : ""}`} onClick={onPick} title={label} aria-label={label} aria-pressed={on}>
+    <button className={`lemma-choice${on ? " is-on" : ""}`} onClick={locked ? undefined : onPick} title={hint ?? label} aria-label={label} aria-pressed={on} aria-disabled={locked || undefined}>
       {children}
-      <span>{label}</span>
+      <span>{locked && <Lock size={10} aria-hidden="true" />} {label}</span>
     </button>
   );
 }

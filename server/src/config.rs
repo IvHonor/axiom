@@ -51,7 +51,15 @@ pub struct Config {
     /// `AI_DAILY_LIMIT`: an emergency brake on the assistant's model calls per
     /// day across every account. Unset, there's no limit.
     pub ai_daily_limit: Option<u32>,
+    /// `AI_ACCOUNT_DAILY_LIMIT`: model calls one account may use a day.
+    /// Unset, `AI_ACCOUNT_DAILY_LIMIT` below; 0 for no limit.
+    pub ai_account_daily_limit: Option<u32>,
 }
+
+/// Model calls one account may use a day, unless `AI_ACCOUNT_DAILY_LIMIT`
+/// says otherwise. A question takes one, plus one per step, so this is a few
+/// hundred questions: only a script (or something stuck) reaches it.
+pub const AI_ACCOUNT_DAILY_LIMIT: u32 = 2000;
 
 impl Config {
     pub fn from_env() -> Result<Self, String> {
@@ -110,6 +118,14 @@ impl Config {
             groq: var("GROQ_MODEL").unwrap_or(defaults.groq),
             whisper: var("WHISPER_MODEL").unwrap_or(defaults.whisper),
         };
+        let ai_account_daily_limit = match var("AI_ACCOUNT_DAILY_LIMIT") {
+            None => Some(AI_ACCOUNT_DAILY_LIMIT),
+            Some(limit) => match limit.trim().parse::<u32>() {
+                Ok(0) => None,
+                Ok(n) => Some(n),
+                Err(_) => return Err(format!("AI_ACCOUNT_DAILY_LIMIT must be a whole number (0 for no limit), got {limit}")),
+            },
+        };
         let ai_daily_limit = var("AI_DAILY_LIMIT").map(|limit| limit.trim().parse::<u32>().map_err(|_| format!("AI_DAILY_LIMIT must be a whole number, got {limit}"))).transpose()?;
 
         Ok(Self {
@@ -129,6 +145,7 @@ impl Config {
             gemini_unpaid,
             ai_models,
             ai_daily_limit,
+            ai_account_daily_limit,
         })
     }
 }

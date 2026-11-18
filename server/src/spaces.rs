@@ -223,6 +223,7 @@ async fn upsert_record(txn: &DatabaseTransaction, space_id: &str, table: &str, i
 /// Like `sync::push`, for a shared board, within the pusher's role.
 pub async fn push(State(s): State<AppState>, auth: AuthUser, Path(id): Path<String>, Json(body): Json<PushRequest>) -> Result<Json<PushResponse>, ApiError> {
     crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
+    crate::sync::slow_down(&s, &auth.user_id)?;
     if body.changes.len() > SYNC_BATCH {
         return Err(ApiError::bad_request(format!("Send at most {SYNC_BATCH} changes at a time.")));
     }
@@ -254,9 +255,15 @@ pub async fn push(State(s): State<AppState>, auth: AuthUser, Path(id): Path<Stri
 
     let new_rows = body.changes.iter().filter(|c| !merged.contains_key(&(c.table.clone(), c.id.clone()))).count() as u64;
     if new_rows > 0 {
-        let stored = space_record::Entity::find().filter(space_record::Column::SpaceId.eq(&id)).count(&txn).await?;
+        // Every board its owner shares holds this much between them, so
+        // sharing many boards doesn't multiply anyone's storage.
+        let owned: Vec<String> = space::Entity::find().filter(space::Column::OwnerId.eq(&found.owner_id)).all(&txn).await?.into_iter().map(|b| b.id).collect();
+        let stored = space_record::Entity::find().filter(space_record::Column::SpaceId.is_in(owned)).count(&txn).await?;
         if stored + new_rows > MAX_RECORDS_PER_ACCOUNT {
-            return Err(ApiError::new(StatusCode::INSUFFICIENT_STORAGE, "This shared board has reached its storage limit."));
+            return Err(ApiError::new(
+                StatusCode::INSUFFICIENT_STORAGE,
+                "The shared boards this one's owner has are full, so new cards aren't syncing. Stop sharing an old board to make room.",
+            ));
         }
     }
 
@@ -284,6 +291,7 @@ pub async fn push(State(s): State<AppState>, auth: AuthUser, Path(id): Path<Stri
 /// Like `sync::pull`, for a shared board. Any member may pull.
 pub async fn pull(State(s): State<AppState>, auth: AuthUser, Path(id): Path<String>, Query(query): Query<PullQuery>) -> Result<Json<PullResponse>, ApiError> {
     crate::admin::require(&s, &auth.user_id, axiom_protocol::permissions::SYNC).await?;
+    crate::sync::slow_down(&s, &auth.user_id)?;
     // On the board, and nothing new on it since this device last pulled:
     // answered from what's remembered, without reading the database.
     let member = s.cache.spaces(&auth.user_id).is_some_and(|boards| boards.iter().any(|b| b.id == id));

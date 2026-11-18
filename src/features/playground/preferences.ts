@@ -67,7 +67,7 @@ export function openLeaderboards(next: BoardFilters) {
   if (openListeners.size) openListeners.forEach(l => l());
   else requestedOpen = true;
 }
-/** The Playground opens on the leaderboards; Nexus is a hidden door (`nexus` = it's been found). */
+/** Which view the Playground shows: it opens on the leaderboards, with Nexus one click away. */
 export function usePlaygroundMode() {
   const { options } = usePlaygroundOptions();
   const opening = useRef({ filters: requestedOpen ? filters : options.defaultBoard });

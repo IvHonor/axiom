@@ -85,6 +85,10 @@ pub struct Shared {
     /// An emergency brake on model calls per day across every account
     /// (`AI_DAILY_LIMIT`). None: no limit.
     pub ai_daily_limit: Option<u32>,
+    /// Model calls (and recordings) one account may use a day
+    /// (`AI_ACCOUNT_DAILY_LIMIT`), so one person can't use up everyone's
+    /// `ai_daily_limit`. Admins have none. None: no limit.
+    pub ai_account_daily_limit: Option<u32>,
     /// The admin panel's settings, read from the database at startup.
     pub settings: RwLock<admin::Settings>,
     /// Sessions, accounts and shared boards remembered between requests, so
@@ -117,6 +121,7 @@ impl Shared {
             ai: axiom_ai::Ai::default(),
             ai_keys: axiom_ai::Keys::default(),
             ai_daily_limit: None,
+            ai_account_daily_limit: Some(config::AI_ACCOUNT_DAILY_LIMIT),
             settings: RwLock::new(admin::Settings::default()),
             cache: cache::Cache::default(),
             email_wake: tokio::sync::Notify::new(),
@@ -246,6 +251,7 @@ pub fn app(state: AppState) -> Router {
         .route(routes::PLAYGROUND_FRIEND, delete(playground::remove))
         .route(routes::PLAYGROUND_FRIEND_ACCEPT, post(playground::accept))
         .route(routes::PLAYGROUND_FRIEND_CHEER, post(playground::cheer))
+        .route(routes::PLAYGROUND_BLOCK, put(playground::block).delete(playground::unblock))
         .route(routes::PLAYGROUND_AVATAR, get(playground::avatar))
         .route(routes::HUB_ENTER, post(hub::enter))
         .route(routes::HUB_SYNC, post(hub::sync))

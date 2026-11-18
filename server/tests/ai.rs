@@ -127,20 +127,30 @@ async fn the_brake_is_counted_in_the_database_so_a_restart_keeps_it() {
     assert_eq!(call(&app, Method::POST, routes::AI_CHAT, Some(&token), Some(chat())).await.0, StatusCode::OK);
 }
 
+/// Each account has a daily allowance (see tests/limits.rs), unless it's
+/// switched off (`AI_ACCOUNT_DAILY_LIMIT=0`) or the account is an admin's.
 #[tokio::test]
-async fn there_is_no_allowance_per_account() {
+async fn the_allowance_per_account_can_be_off_and_admins_have_none() {
     use sea_orm::ConnectionTrait;
 
-    let url = gemini().await;
-    let db = axiom_server::db::connect("sqlite::memory:").await.unwrap();
-    let mut s = axiom_server::Shared::new(db.clone(), SECRET);
-    s.ai = axiom_ai::Ai::default().with_urls(&url, "http://127.0.0.1:9");
-    s.ai_keys = axiom_ai::Keys { gemini: Some("key".into()), groq: None };
-    let app = axiom_server::app(axiom_server::AppState::from(s));
-    let token = token(&app).await;
-    assert_eq!(call(&app, Method::POST, routes::AI_CHAT, Some(&token), Some(chat())).await.0, StatusCode::OK);
-    db.execute_unprepared("UPDATE ai_usage SET count = 100000, prompts = 100000").await.unwrap();
-    assert_eq!(call(&app, Method::POST, routes::AI_CHAT_STREAM, Some(&token), Some(chat())).await.0, StatusCode::OK);
+    for (off, admin) in [(true, false), (false, true)] {
+        let url = gemini().await;
+        let db = axiom_server::db::connect("sqlite::memory:").await.unwrap();
+        let mut s = axiom_server::Shared::new(db.clone(), SECRET);
+        s.ai = axiom_ai::Ai::default().with_urls(&url, "http://127.0.0.1:9");
+        s.ai_keys = axiom_ai::Keys { gemini: Some("key".into()), groq: None };
+        if off {
+            s.ai_account_daily_limit = None;
+        }
+        if admin {
+            s.admins.insert("ada@example.com".into());
+        }
+        let app = axiom_server::app(axiom_server::AppState::from(s));
+        let token = token(&app).await;
+        assert_eq!(call(&app, Method::POST, routes::AI_CHAT, Some(&token), Some(chat())).await.0, StatusCode::OK);
+        db.execute_unprepared("UPDATE ai_usage SET count = 100000, prompts = 100000").await.unwrap();
+        assert_eq!(call(&app, Method::POST, routes::AI_CHAT_STREAM, Some(&token), Some(chat())).await.0, StatusCode::OK, "off: {off}, admin: {admin}");
+    }
 }
 
 #[tokio::test]

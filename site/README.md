@@ -29,6 +29,9 @@ motion and very short screens get the plain window with working tabs.
 It uses the desktop sync protocol through an account-bound same-origin proxy,
 with a per-account IndexedDB cache and durable outbox. Custom AI names, looks,
 held items and saved outfits use the same synced profile settings as the desktop.
+The tie (Showing Up) and fedora (Regular) use the same models and wardrobe on
+both platforms. Earned achievement cosmetics sync to the web through the profile;
+admins can equip all achievement cosmetics without earning them.
 First Light eligibility uses the account server's original creation date. See
 [`docs/WEB_TERMINAL.md`](../docs/WEB_TERMINAL.md) for the parity checklist,
 architecture and local browser test. This is separate from the public `/web`
@@ -59,8 +62,9 @@ when needed; `SITE_TEST_URL` changes the address. Screenshots go to
 `.qa.local/site`.
 
 After a website production build, `node tests/lemma-web-sync.mjs` checks the
-customisation UI, First Light cutoff, animations, and two-way sync of the name,
-selected holdable and saved outfits across isolated devices. It starts its own
+customisation UI, tie/fedora rewards, admin access, First Light cutoff, animations,
+and two-way sync of the name, selected items and saved outfits across isolated
+devices, including regular accounts with synced rewards. It starts its own
 local website and fictional account server; it never uses a live account.
 
 ## Deploy (Vercel)

@@ -4,6 +4,8 @@
 .hub-profile-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 4px; }
 .pg-enter.is-soft { color: var(--text); background: var(--panel); border-color: var(--line-strong); box-shadow: none; }
 .hub-profile-phrases { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin-top: 6px; }
+.hub-profile-block { display: inline-flex; align-items: center; gap: 4px; align-self: center; margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+.hub-profile-block.is-armed { color: var(--danger, #c2410c); }
 .hub-profile-phrases button { padding: 4px 10px; font: 12px var(--font-ui); color: var(--text-dim); background: none; border: 1px dashed var(--line-strong); border-radius: 999px; cursor: pointer; }
 .hub-profile-phrases button:hover { color: var(--text); border-color: var(--accent); }
 

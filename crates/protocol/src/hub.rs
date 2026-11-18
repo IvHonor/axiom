@@ -44,6 +44,14 @@ pub const MAX_SEEN: usize = 40;
 /// Most people in Nexus at once.
 pub const CAPACITY: usize = 400;
 
+/// Most people inside one building at once.
+pub const ROOM_CAPACITY: usize = 60;
+
+/// Fastest anyone moves between check-ins, in metres a second: well above
+/// walking (`WALK` in src/features/playground/nexus/world.ts, 9 m/s), so only
+/// a jump is slowed down. Going through a door is a jump, and allowed.
+pub const MAX_SPEED: f32 = 30.0;
+
 /// What an AI can do.
 pub const EMOTES: &[&str] = &["wave", "dance", "highfive", "heart", "laugh", "clap", "sparkle", "think"];
 

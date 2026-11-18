@@ -38,6 +38,7 @@ export function DeviceList() {
           ))}
         </ul>
       )}
+      {devices && <p className="field-hint">Up to 20 devices stay signed in. Signing in somewhere new signs out the one used least recently.</p>}
       {!devices && !error && <p className="field-hint">Loading devices…</p>}
       <ErrorNote error={error} />
       {error && (

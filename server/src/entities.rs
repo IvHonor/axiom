@@ -517,3 +517,23 @@ pub mod playground_cheer {
 
     impl ActiveModelBehavior for ActiveModel {}
 }
+
+pub mod playground_block {
+    use sea_orm::entity::prelude::*;
+
+    /// Someone who's blocked someone else in the Playground.
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "playground_blocks")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub blocker_id: String,
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub blocked_id: String,
+        pub created_at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}

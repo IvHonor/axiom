@@ -12,6 +12,7 @@
     "core:window:allow-show",
     "opener:default",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "notification:allow-is-permission-granted"
   ]
 }

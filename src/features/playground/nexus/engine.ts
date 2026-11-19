@@ -140,6 +140,7 @@ function companion(who: NexusLook, host: HTMLElement, own: boolean) {
   const height = Math.max(0.5, box.max.y - box.min.y);
   model.root.scale.setScalar(TALL / height);
   model.root.position.y = -box.min.y * (TALL / height) + 0.4;
+  model.glowEffect.update(0);
   return { model, glow };
 }
 

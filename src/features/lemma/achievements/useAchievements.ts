@@ -10,9 +10,10 @@ import { getDays } from "../../playground/api";
 import { RULES } from "../../playground/rules";
 import { usePlayground } from "../../playground/store";
 import { STANDARD, useLook, type Look } from "../look";
-import { ACHIEVEMENTS, AREAS, type Achievement, type Known } from "./catalog";
+import { ACHIEVEMENT_METRICS, ACHIEVEMENTS, AREAS, type Achievement, type Known, type SharedCounts } from "./catalog";
 import { progressOf, type Progress } from "./progress";
 import { useSecrets } from "./secrets";
+import { useSharedCounts } from "./useAchievementRewards";
 
 export type State =
   | { kind: "soon" }
@@ -23,12 +24,14 @@ export interface Standing { achievement: Achievement; state: State }
 export interface AreaStanding { area: string; standings: Standing[] }
 
 /** The web can't read encrypted areas, so these aren't counted there (see src/web/commands/playground.ts). */
-const NOT_ON_WEB = ["active", "journal.days", "goals.checkins"];
-const LOOKS: (keyof Look)[] = ["glow", "shell", "shape", "accessory", "facewear", "neckwear", "finish", "holding"];
+const NOT_ON_WEB = ["active", "journal.days", "goals.checkins", ...ACHIEVEMENT_METRICS.filter((metric) => metric.startsWith("journal."))];
+const LOOKS: (keyof Look)[] = ["glow", "shell", "shape", "accessory", "facewear", "neckwear", "finish", "holding", "glowEffect"];
 
-export function stateOf(a: Achievement, known: Known | null): State {
+export function stateOf(a: Achievement, known: Known | null, shared: SharedCounts = {}): State {
   if (!a.count) return { kind: "soon" };
-  const count = known ? a.count(known) : undefined;
+  const here = known ? a.count(known) : undefined;
+  // Another device may have counted further, or be the only one able to.
+  const count = shared[a.id] === undefined ? here : Math.max(here ?? 0, shared[a.id]);
   if (count === undefined) return known ? { kind: "unknown", why: a.unknown ?? "Not counted here yet." } : { kind: "unknown", why: "Counting…" };
   return { kind: "counted", count, ...progressOf(count, a.levels) };
 }
@@ -40,6 +43,7 @@ export function useAchievements() {
   const secrets = useSecrets();
   const { me, friends } = usePlayground();
   const { isOn } = useInstalled();
+  const shared = useSharedCounts();
 
   useEffect(() => {
     let live = true;
@@ -48,7 +52,7 @@ export function useAchievements() {
         if (!live) return;
         // A metric with no days yet still counts, as 0.
         const known: Known["days"] = { ...all };
-        for (const rule of RULES) known[rule.id] ??= {};
+        for (const id of [...RULES.map((rule) => rule.id), ...ACHIEVEMENT_METRICS]) known[id] ??= {};
         if (isWeb) for (const metric of NOT_ON_WEB) delete known[metric];
         setDays(known);
       },
@@ -68,9 +72,10 @@ export function useAchievements() {
     const on = (area: string) => area === "axiom" || EXTENSIONS.some((e) => e.id === area && isOn(e));
     return AREAS.filter(on).map((area) => ({
       area,
-      standings: ACHIEVEMENTS.filter((a) => a.area === area).map((achievement) => ({ achievement, state: stateOf(achievement, known) })),
+      standings: ACHIEVEMENTS.filter((a) => a.area === area).map((achievement) => ({ achievement, state: stateOf(achievement, known, shared) })),
     }));
-  }, [known, isOn]);
+  }, [known, isOn, shared]);
 
-  return { areas, loading: !days && !error, error };
+  const bookFinished = !!days?.["reading.quiet_finished"] && Object.values(days["reading.quiet_finished"]).some((n) => n > 0);
+  return { areas, loading: !days && !error, error, bookFinished, secrets };
 }

@@ -15,6 +15,8 @@ use crate::playground::DayCounts;
 
 /// How many tags the period lists.
 const TOP_TAGS: usize = 8;
+/// What counts as a long entry, for the Long Form achievement.
+const LONG_ENTRY_WORDS: i32 = 1000;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,4 +101,34 @@ pub async fn report(db: &DatabaseConnection, period: Period) -> Result<JournalAn
 pub async fn playground_days(db: &DatabaseConnection) -> Result<Vec<(&'static str, DayCounts)>> {
     let days: DayCounts = entries().all(db).await?.into_iter().filter(|e| e.words > 0 || e.mood.is_some()).map(|e| (e.day, 1)).collect();
     Ok(vec![("journal.days", days)])
+}
+
+/// Days counted for achievements alone: only how much, never what was written.
+/// Unlike `journal.days`, a mood tapped with no words isn't a day of writing.
+pub async fn achievement_days(db: &DatabaseConnection) -> Result<Vec<(&'static str, DayCounts)>> {
+    let (mut written, mut words, mut long, mut prompted, mut moods) = (DayCounts::new(), DayCounts::new(), DayCounts::new(), DayCounts::new(), DayCounts::new());
+    // Per day: words, a mood, an energy and a tag, from any of its entries.
+    let mut parts: HashMap<Date, [bool; 4]> = HashMap::new();
+    for e in entries().all(db).await? {
+        let wrote = e.words > 0;
+        if wrote {
+            written.insert(e.day, 1);
+            *words.entry(e.day).or_default() += i64::from(e.words);
+        }
+        if e.words >= LONG_ENTRY_WORDS {
+            *long.entry(e.day).or_default() += 1;
+        }
+        if wrote && !e.prompt.trim().is_empty() {
+            *prompted.entry(e.day).or_default() += 1;
+        }
+        if e.mood.is_some() {
+            moods.insert(e.day, 1);
+        }
+        let day = parts.entry(e.day).or_default();
+        for (part, has) in day.iter_mut().zip([wrote, e.mood.is_some(), e.energy.is_some(), !split_tags(&e.tags).is_empty()]) {
+            *part |= has;
+        }
+    }
+    let full: DayCounts = parts.into_iter().filter(|(_, day)| day.iter().all(|has| *has)).map(|(day, _)| (day, 1)).collect();
+    Ok(vec![("journal.written", written), ("journal.words", words), ("journal.long_entries", long), ("journal.prompted", prompted), ("journal.moods", moods), ("journal.full_pages", full)])
 }

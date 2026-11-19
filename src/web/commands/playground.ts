@@ -6,6 +6,7 @@
 import { dayKey } from "../../features/playground/stats";
 import { DEMO, rowsOf, snapshot } from "../runtime";
 import { account } from "./account";
+import { readingDays } from "./readingDays";
 import type { Handlers } from "./types";
 
 type Days = Record<string, number>;
@@ -21,8 +22,7 @@ async function days(): Promise<Record<string, Days>> {
   const out: Record<string, Days> = {};
   const metric = (id: string) => (out[id] ??= {});
 
-  for (const s of rowsOf(records, "reading_sessions")) add(metric("reading.pages"), s.data.day, num(s.data.pages));
-  for (const r of rowsOf(records, "reading_reads")) if (r.data.outcome === "finished") add(metric("reading.books"), r.data.finished_on, 1);
+  Object.assign(out, readingDays({ books: rowsOf(records, "reading_books"), sessions: rowsOf(records, "reading_sessions"), notes: rowsOf(records, "reading_notes"), reads: rowsOf(records, "reading_reads") }));
   for (const s of rowsOf(records, "learning_sessions")) add(metric("learning.minutes"), s.data.day, num(s.data.minutes));
   for (const u of rowsOf(records, "learning_units")) add(metric("learning.units"), u.data.done_on, 1);
   for (const l of rowsOf(records, "uni_lectures")) add(metric("uni.caught_up"), l.data.caught_up_on, 1);
@@ -40,10 +40,15 @@ async function days(): Promise<Record<string, Days>> {
       slot[1] += t.data.done_at ? 1 : 0;
     }
   }
+  // For achievements alone, as on the desktop; an empty one still counts, as 0.
+  const planned = metric("daily_plan.planned"), shutdown = metric("daily_plan.shutdown"), routines = metric("daily_plan.routines");
   for (const d of rowsOf(records, "daily_plan_days")) {
     const [count, done] = top[d.id] ?? [0, 0];
     if (d.data.planned_at && d.data.shutdown_at && count > 0 && count === done) add(metric("daily_plan.perfect"), d.id, 1);
+    if (d.data.planned_at) add(planned, d.id, 1);
+    if (d.data.shutdown_at) add(shutdown, d.id, 1);
   }
+  for (const r of rowsOf(records, "daily_plan_routines")) add(routines, localDay(r.data.created_at), 1);
   return out;
 }
 

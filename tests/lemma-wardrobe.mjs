@@ -145,22 +145,22 @@ try {
     const { speak } = await import("/src/lib/voice.ts"); speak("Fallback");
   });
   assert.equal(await page.evaluate(() => window.testSpeech.voice), "test-voice", "Missing device voice falls back");
-  await tab("Presence"); await slider("Companion size", 220); await slider("Glow brightness", 0.65); await slider("Idle movement", 0);
+  await tab("Presence"); assert.equal(await page.getByRole("slider", { name: "Companion size" }).count(), 0, "The size setting is gone"); await slider("Hologram brightness", 0.65); await slider("Idle movement", 0);
   await page.getByRole("combobox", { name: "Companion position" }).selectOption("top-left");
   await page.screenshot({ path: ".qa.local/lemma-wardrobe/presence.png" });
   await choose("Close");
   const dock = page.locator(".lemma-companion-dock");
-  assert.equal(await dock.locator(".lemma-face").evaluate(node => node.getBoundingClientRect().width), 220);
+  assert.equal(await dock.locator(".lemma-face").evaluate(node => node.getBoundingClientRect().width), 160);
   assert.equal(await dock.evaluate(node => getComputedStyle(node).left), "18px");
   assert.equal(await dock.evaluate(node => getComputedStyle(node).top), "54px");
   await dock.getByRole("button", { name: "Customise Lemma", exact: true }).click(); await tab("Presence");
-  await page.getByRole("switch", { name: "Follow me between areas" }).click();
+  await page.getByRole("switch", { name: "Show in other areas" }).click();
   assert.equal(await dialog().count(), 1, "Turning follow off keeps the settings open");
   assert.equal(await dock.count(), 0);
-  await page.getByRole("switch", { name: "Follow me between areas" }).click();
+  await page.getByRole("switch", { name: "Show in other areas" }).click();
   assert.equal(await dock.count(), 1);
   await page.reload({ waitUntil: "domcontentloaded" }); await tab("Presence");
-  assert.equal(await page.getByRole("slider", { name: "Companion size" }).inputValue(), "220");
+  assert.equal(await page.getByRole("slider", { name: "Hologram brightness" }).inputValue(), "0.65");
   await page.setViewportSize({ width: 390, height: 740 });
   for (const section of ["Appearance", "Personality", "Presence", "Outfits"]) {
     await tab(section);
@@ -173,7 +173,7 @@ try {
     const { normaliseLook } = await import("/src/features/lemma/look.ts");
     return { prefs: normalisePrefs({ size: 1e9, brightness: "bad", movement: -10, rate: 1e9, outfits: [null, { id: "a", name: "Test", look: {} }, { id: "a", name: "Duplicate" }] }), look: normaliseLook({ accessory: "bow", shape: "pyramid", facewear: "bogus", finish: "bogus", headwearColor: "url(bad)" }) };
   });
-  assert.equal(validated.prefs.size, 240); assert.equal(validated.prefs.brightness, 1); assert.equal(validated.prefs.movement, 0); assert.equal(validated.prefs.rate, 1.4); assert.equal(validated.prefs.outfits.length, 1);
+  assert.equal("size" in validated.prefs, false); assert.equal(validated.prefs.brightness, 1); assert.equal(validated.prefs.movement, 0); assert.equal(validated.prefs.rate, 1.4); assert.equal(validated.prefs.outfits.length, 1);
   assert.equal(validated.look.accessory, "none"); assert.equal(validated.look.neckwear, "bow"); assert.equal(validated.look.facewear, "none"); assert.equal(validated.look.finish, "hologram"); assert.equal(validated.look.headwearColor, "auto");
   assert.deepEqual(errors, []);
   console.log("PASS: independent slots, wearable colours, identical Prism body with all headwear, headphone clearance, all body/finish previews, outfits, persistence, presence, voice, personality, validation and narrow layouts");

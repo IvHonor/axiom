@@ -34,6 +34,7 @@ export const SYNCED: Record<string, string> = {
   "axiom.lemma.look": "lemma.look",
   "axiom.achievements.secrets": "achievements.secrets",
   "axiom.achievements.rewards": "achievements.rewards",
+  "axiom.achievements.counts": "achievements.counts",
   "axiom.lemma.preferences": "lemma.preferences",
   "axiom.lemma.persona": "lemma.persona",
   "axiom.lemma.compact": "lemma.compact",

@@ -55,6 +55,74 @@ fn fields_of(card: &super::types::BookCard) -> BookFields {
 }
 
 #[tokio::test]
+async fn finished_books_count_without_being_read_again() {
+    let db = setup().await;
+    let book = add_book(&db, new_book("Hail Mary", Some(496), "reading"), day(1)).await.unwrap();
+    set_status(&db, &book.book.id, "finished", day(5)).await.unwrap();
+    let got: std::collections::HashMap<_, _> = super::analytics::playground_days(&db).await.unwrap().into_iter().collect();
+    assert_eq!(got["reading.books"].get(&day(5)), Some(&1), "a first finish counts straight away");
+
+    // Reading it again keeps the first finish, and finishing again adds a second.
+    read_again(&db, &book.book.id, day(8)).await.unwrap();
+    let got: std::collections::HashMap<_, _> = super::analytics::playground_days(&db).await.unwrap().into_iter().collect();
+    assert_eq!(got["reading.books"].values().sum::<i64>(), 1, "starting again doesn't count twice");
+    set_status(&db, &book.book.id, "finished", day(12)).await.unwrap();
+    let got: std::collections::HashMap<_, _> = super::analytics::playground_days(&db).await.unwrap().into_iter().collect();
+    assert_eq!((got["reading.books"][&day(5)], got["reading.books"][&day(12)]), (1, 1));
+}
+
+#[tokio::test]
+async fn achievements_count_reading_and_listening() {
+    let db = setup().await;
+    let print = add_book(&db, new_book("Long One", Some(520), "reading"), day(1)).await.unwrap();
+    log_progress(&db, &print.book.id, 40, None, day(2)).await.unwrap();
+    set_status(&db, &print.book.id, "finished", day(3)).await.unwrap();
+    let mut reviewed = fields_of(&print);
+    reviewed.rating = Some(8);
+    reviewed.review = "Loved it.".into();
+    reviewed.started_on = Some(day(1));
+    reviewed.finished_on = Some(day(3));
+    update_book(&db, &print.book.id, reviewed, day(3)).await.unwrap();
+    add_note(&db, &print.book.id, NoteFields { kind: "quote".into(), page: Some(3), text: "A line".into() }).await.unwrap();
+    add_note(&db, &print.book.id, NoteFields { kind: "bookmark".into(), page: Some(4), text: String::new() }).await.unwrap();
+    read_again(&db, &print.book.id, day(4)).await.unwrap();
+    set_status(&db, &print.book.id, "finished", day(6)).await.unwrap();
+
+    let audio = NewBook { format: "audio".into(), audio_minutes: Some(600), ..new_book("Heard", None, "reading") };
+    let audio = add_book(&db, audio, day(7)).await.unwrap();
+    log_progress(&db, &audio.book.id, 90, None, day(8)).await.unwrap();
+    set_status(&db, &audio.book.id, "finished", day(9)).await.unwrap();
+
+    let got: std::collections::HashMap<_, _> = super::analytics::achievement_days(&db).await.unwrap().into_iter().collect();
+    assert_eq!(got["reading.read_pages"].get(&day(2)), Some(&40));
+    assert_eq!(got["reading.read_pages"].get(&day(8)), Some(&60), "90 minutes of listening is about 60 pages");
+    assert!(got["reading.active_days"].contains_key(&day(2)) && got["reading.active_days"].contains_key(&day(8)), "listening is a reading day");
+    assert_eq!(got["reading.finished_print"].values().sum::<i64>(), 2);
+    assert_eq!(got["reading.finished_audio"].values().sum::<i64>(), 1);
+    assert!(got["reading.finished_ebook"].is_empty());
+    assert_eq!(got["reading.longest"].values().max(), Some(&520));
+    assert_eq!(got["reading.rereads"].get(&day(6)), Some(&1), "only the second finish is a re-read");
+    assert_eq!(got["reading.reviews"].values().sum::<i64>(), 1);
+    assert_eq!(got["reading.notes"].values().sum::<i64>(), 1, "bookmarks aren't notes");
+}
+
+#[tokio::test]
+async fn one_book_is_quietly_recognised_however_it_is_written() {
+    // Backwards, so searching the code doesn't give the secret away.
+    let quiet: String = "liveD ehT gnittiwtuO".chars().rev().collect();
+    for (title, recognised) in [(format!("{quiet}: A Subtitle"), true), (quiet.to_uppercase(), true), ("Some Other Book".to_string(), false)] {
+        let db = setup().await;
+        let book = add_book(&db, new_book(&title, Some(100), "reading"), day(1)).await.unwrap();
+        let days: std::collections::HashMap<_, _> = super::analytics::achievement_days(&db).await.unwrap().into_iter().collect();
+        assert_eq!(!days["reading.quiet_started"].is_empty(), recognised, "started: {title}");
+        assert!(days["reading.quiet_finished"].is_empty(), "not finished yet: {title}");
+        set_status(&db, &book.book.id, "finished", day(2)).await.unwrap();
+        let days: std::collections::HashMap<_, _> = super::analytics::achievement_days(&db).await.unwrap().into_iter().collect();
+        assert_eq!(days["reading.quiet_finished"].contains_key(&day(2)), recognised, "finished: {title}");
+    }
+}
+
+#[tokio::test]
 async fn adding_a_book_twice_is_refused() {
     let db = setup().await;
     let added = add_book(&db, new_book("Hail Mary", Some(496), "want"), day(TODAY)).await.unwrap();

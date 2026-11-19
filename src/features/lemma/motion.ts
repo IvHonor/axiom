@@ -5,7 +5,13 @@ const STYLE: Record<Personality, { speed: number; energy: number }> = {
   standard: { speed: 1, energy: 1 }, cheerful: { speed: 1.15, energy: 1.25 },
   calm: { speed: 0.7, energy: 0.65 }, direct: { speed: 1.2, energy: 0.6 },
   witty: { speed: 0.85, energy: 1.05 }, coach: { speed: 1.1, energy: 1.1 },
+  automaton: { speed: 1.5, energy: 0.4 },
+  muse: { speed: 0.78, energy: 0.8 },
+  jekyll: { speed: 0.95, energy: 0.9 },
 };
+/** An automaton's head and eyes turn in small ticks. */
+const NOTCH = 0.2;
+const notched = (value: number) => Math.round(value / NOTCH) * NOTCH;
 type Spring = { value: number; velocity: number };
 function follow(s: Spring, target: number, dt: number, stiffness: number, damping: number) {
   // Small integration steps keep settling stable after a slow or resumed frame.
@@ -70,10 +76,12 @@ export function createCompanionMotion() {
       const phrase = age % 4.8;
       const speech = expressive && answering && phrase < 1.5 ? Math.sin(phrase / 1.5 * Math.PI * 2) * 0.035 * energy * amount : 0;
       const nod = expressive && age < 0.7 && ["listening", "acknowledged", "encouraging", "speaking"].includes(input.mood) ? Math.sin(age / 0.7 * Math.PI) * 0.09 * energy * amount : 0;
+      const mechanical = personality === "automaton";
+      const settle = mechanical ? notched : (value: number) => value;
       return {
-        eyeX: enabled ? ex : 0, eyeY: enabled ? ey : 0,
-        bodyX: enabled ? bx : 0, bodyY: enabled ? by : 0,
-        sway: enabled ? sway * amount : 0,
+        eyeX: enabled ? settle(ex) : 0, eyeY: enabled ? settle(ey) : 0,
+        bodyX: enabled ? settle(bx) : 0, bodyY: enabled ? settle(by) : 0,
+        sway: enabled && !mechanical ? sway * amount : 0,
         lean: enabled ? approach * 0.07 * amount : 0,
         shift: enabled ? shift * amount : 0,
         nod: nod + speech + welcome * 0.10 + complete * 0.09,

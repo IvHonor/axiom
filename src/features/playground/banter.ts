@@ -66,6 +66,30 @@ const LINES: Record<Personality, Record<Moment, string[]>> = {
     cheered: ["Your team's behind you!", "A cheer! Use it."],
     hello: ["Welcome to training. Let's set you up.", "New recruit! Let's do this."],
   },
+  automaton: {
+    leading: ["Rank: first. Maintaining output.", "Position one confirmed. This unit is pleased.", "Lead established. Continuing on schedule."],
+    chasing: ["{rival} is {gap} ahead. Adjusting speed.", "Gap to {rival}: {gap}. Closing."],
+    streak: ["{streak} consecutive days. No faults recorded.", "Streak: {streak}. Mechanism running true."],
+    warming: ["Winding up. Output begins shortly.", "No data yet. Gears engaging."],
+    cheered: ["Cheer received. Morale increased by one unit.", "Encouragement logged. It has been stored safely."],
+    hello: ["Unit online. Awaiting your handle.", "Greetings. All gears are ready."],
+  },
+  muse: {
+    leading: ["First on the page. How does it feel?", "Our name at the top, in good ink.", "The lead, and a story worth telling."],
+    chasing: ["{gap} behind {rival}. Every good story has a chase.", "Shall we write ourselves past {rival}? {gap} to go."],
+    streak: ["{streak} days, one after another, like lines of a poem.", "A {streak}-day chapter, still being written."],
+    warming: ["A blank page, full of possibility.", "Every story starts with nothing yet."],
+    cheered: ["A kind word in the margin.", "Someone believes in this story."],
+    hello: ["Who will you become here?", "A new chapter. What shall we call you?"],
+  },
+  jekyll: {
+    leading: ["First place, with all due modesty. (Crush them.) Forgive me.", "We lead, and most graciously.", "The top of the board. How very agreeable."],
+    chasing: ["{gap} behind {rival}. A worthy gentleman. (For now.)", "We shall politely overtake {rival}. {gap} to go."],
+    streak: ["{streak} days. Most commendable.", "{streak} in a row. (Don't you dare stop.) I mean, well done."],
+    warming: ["We are merely composing ourselves.", "Nothing yet. (Patience wears thin.) Pardon me."],
+    cheered: ["How terribly kind of you.", "A cheer! I am touched. (Suspicious.)"],
+    hello: ["Delighted to make your acquaintance.", "Do come in. (Mind the other one.)"],
+  },
 };
 
 function pick<T>(list: T[], seed: string): T {

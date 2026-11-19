@@ -55,6 +55,33 @@ async fn an_entry_keeps_its_edits_and_a_searchable_copy() {
 }
 
 #[tokio::test]
+async fn achievements_count_writing_moods_and_complete_days() {
+    let db = setup().await;
+    let (yesterday, earlier) = (day(2026, 10, 23), day(2026, 10, 22));
+    // Today: a long answer to a prompt, with a mood, energy and a tag.
+    let full = create(&db, today(), "What went well?").await.unwrap();
+    save(&db, &full.id, None, "Words.".into(), 1200).await.unwrap();
+    let mut changed = fields(today(), Some(4), &["uni"]);
+    changed.prompt = "What went well?".into();
+    update(&db, &full.id, changed).await.unwrap();
+    // Yesterday: only a mood. Earlier: a few words and nothing else.
+    let mood = create(&db, yesterday, "").await.unwrap();
+    update(&db, &mood.id, fields(yesterday, Some(2), &[])).await.unwrap();
+    let short = create(&db, earlier, "An unanswered prompt").await.unwrap();
+    update(&db, &short.id, EntryFields { energy: None, prompt: String::new(), ..fields(earlier, None, &[]) }).await.unwrap();
+    save(&db, &short.id, None, "Short.".into(), 50).await.unwrap();
+
+    let got: std::collections::HashMap<_, _> = super::analytics::achievement_days(&db).await.unwrap().into_iter().collect();
+    let days = |metric: &str| got[metric].keys().copied().collect::<Vec<_>>();
+    assert_eq!(days("journal.written"), [earlier, today()], "a mood alone isn't writing");
+    assert_eq!((got["journal.words"][&today()], got["journal.words"][&earlier]), (1200, 50));
+    assert_eq!(days("journal.long_entries"), [today()]);
+    assert_eq!(days("journal.prompted"), [today()]);
+    assert_eq!(days("journal.moods"), [yesterday, today()]);
+    assert_eq!(days("journal.full_pages"), [today()]);
+}
+
+#[tokio::test]
 async fn big_updates_are_split_and_put_back_together() {
     let db = setup().await;
     let e = create(&db, today(), "").await.unwrap();

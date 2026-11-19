@@ -1,6 +1,12 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { lookForRole, type Look, type Holding } from "./look";
+import { cogBolo, gearwrightHat, longHourWatch, skeletonWorks, watchmakersLoupe, type Spinner } from "./clockwork";
+import { buildGlowEffect } from "./glowEffects";
+import { inkGlobe, lastWord, ribbonBookmark, scribesCap } from "./inkwell";
+import { EVERYDAY_FACEWEAR, EVERYDAY_HEADWEAR, EVERYDAY_NECKWEAR, type EverydayFacewear, type EverydayHeadwear, type EverydayNeckwear } from "./look";
+import { everydayFacewear, everydayHat, everydayNeckwear, FACEWEAR_COLOURS, HEADWEAR_COLOURS, NECKWEAR_COLOURS } from "./everydayWear";
+import { countsCollar, deerstalker, dragonHelm, griffinGoggles, gygesRing, odysseyVoyage, threeRealmsMask, trueCompass, tweedMaterial, type Ticker } from "./greatLibrary";
 
 /** All of Lemma's shapes and accessories are local geometry: no remote models. */
 export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Color, admin = false, firstLight = false) {
@@ -12,12 +18,19 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
   root.add(idleBody);
   idleBody.add(body);
   const finish = look.finish;
+  // Living Ink and the Voyage are both clear glass with a world inside.
+  const skeleton = finish === "skeleton", inked = finish === "living-ink" || finish === "voyage";
+  /** Clockwork parts the scene keeps turning. */
+  const spinners: Spinner[] = [];
+  /** Everything else that keeps moving by itself. */
+  const tickers: Ticker[] = [];
   const casing = new THREE.MeshPhysicalMaterial({
-    color: shell.clone().lerp(glow, finish === "hologram" ? 0.22 : 0.06),
-    metalness: finish === "metal" ? 0.92 : finish === "glass" || finish === "matte" ? 0 : 0.48,
-    roughness: finish === "matte" ? 0.96 : finish === "glass" ? 0.5 : finish === "metal" ? 0.16 : 0.3,
-    transparent: finish === "glass", opacity: finish === "glass" ? 0.67 : 1,
-    clearcoat: finish === "glass" ? 0.7 : 0, side: THREE.FrontSide,
+    color: inked ? new THREE.Color("#dcecff") : shell.clone().lerp(glow, finish === "hologram" ? 0.22 : skeleton ? 0.14 : 0.06),
+    metalness: finish === "metal" ? 0.92 : finish === "glass" || finish === "matte" || skeleton || inked ? 0 : 0.48,
+    roughness: finish === "matte" ? 0.96 : finish === "glass" ? 0.5 : finish === "metal" ? 0.16 : skeleton ? 0.08 : inked ? 0.05 : 0.3,
+    // The Long Hour fades the shell away, so it has to be able to.
+    transparent: finish === "glass" || skeleton || inked || look.holding === "long-hour" || look.holding === "gyges-ring", opacity: finish === "glass" ? 0.67 : skeleton ? 0.16 : inked ? 0.14 : 1,
+    clearcoat: finish === "glass" ? 0.7 : skeleton || inked ? 1 : 0, side: THREE.FrontSide, depthWrite: !skeleton && !inked,
   });
   const dark = new THREE.MeshStandardMaterial({ color: "#071b26", metalness: 0.35, roughness: 0.24 });
   const trim = new THREE.MeshStandardMaterial({ color: glow, emissive: glow, emissiveIntensity: 0.4, metalness: 0.45, roughness: 0.25 });
@@ -73,7 +86,20 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
     default:
       geometry = new THREE.SphereGeometry(0.88, 48, 32);
   }
-  mesh(body, geometry, casing);
+  const shellMesh = mesh(body, geometry, casing);
+  // Everything that makes up the body's shell, for The Last Word to sink and raise.
+  const shellObjects: THREE.Object3D[] = [shellMesh];
+  if (skeleton) {
+    const works = skeletonWorks(body, look.shape);
+    spinners.push(...works.spinners);
+    shellObjects.push(works.group);
+  }
+  const globe = finish === "living-ink" ? inkGlobe(body, geometry, look.shape) : null;
+  const voyage = finish === "voyage" ? odysseyVoyage(body, geometry, look.shape) : null;
+  if (voyage) tickers.push(voyage.tick);
+  /** What fills a clear shell, which some animations have to clear away. */
+  const interior: THREE.Object3D | null = globe?.mesh ?? voyage?.group ?? null;
+  if (interior) shellObjects.push(interior);
 
   // A transparent skin gives each solid body a luminous rim and fine scan lines.
   const hologram = new THREE.ShaderMaterial({
@@ -89,11 +115,15 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
         gl_FragColor = vec4(tint, (rim * (0.12 + scan * 0.53) + lines * 0.075 * scan) * dissolve); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
-  mesh(body, geometry, hologram).scale.setScalar(1.008);
+  const skin = mesh(body, geometry, hologram);
+  skin.scale.setScalar(1.008);
+  shellObjects.push(skin);
   // A pyramid's true edges glow. (A prism's corners are rounded: outlining
   // them traced every facet of the curve, and made it look textured.)
+  let edges: THREE.LineSegments | null = null;
   if (look.shape === "pyramid") {
-    body.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 25), new THREE.LineBasicMaterial({ color: glow, transparent: true, opacity: 0.75 })));
+    edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 25), new THREE.LineBasicMaterial({ color: glow, transparent: true, opacity: 0.75 }));
+    body.add(edges);
   }
 
   const face = new THREE.Group();
@@ -132,14 +162,35 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
   }
 
   const hat = new THREE.Group();
-  const hatTrim = look.accessory === "fedora" ? new THREE.MeshStandardMaterial({ color: "#35343a", roughness: 1, emissiveIntensity: 0 }) : trim;
+  const everydayHead = (EVERYDAY_HEADWEAR as readonly string[]).includes(look.accessory) ? look.accessory as EverydayHeadwear : null;
+  const everydayNeck = (EVERYDAY_NECKWEAR as readonly string[]).includes(look.neckwear) ? look.neckwear as EverydayNeckwear : null;
+  const everydayFace = (EVERYDAY_FACEWEAR as readonly string[]).includes(look.facewear) ? look.facewear as EverydayFacewear : null;
+  const hatTrim = everydayHead ? new THREE.MeshStandardMaterial({ color: HEADWEAR_COLOURS[everydayHead], roughness: 0.92, emissiveIntensity: 0, side: THREE.DoubleSide })
+    : look.accessory === "fedora" ? new THREE.MeshStandardMaterial({ color: "#35343a", roughness: 1, emissiveIntensity: 0 })
+    : look.accessory === "gearwright-hat" ? new THREE.MeshStandardMaterial({ color: "#26252b", roughness: 0.72, emissiveIntensity: 0 })
+    : look.accessory === "scribe-cap" ? new THREE.MeshStandardMaterial({ color: "#3b2a58", roughness: 0.92, emissiveIntensity: 0 })
+    : look.accessory === "deerstalker" ? tweedMaterial()
+    : look.accessory === "dragon-helm" ? new THREE.MeshStandardMaterial({ color: "#dfb04a", emissive: "#6e4810", emissiveIntensity: 0.3, metalness: 0.5, roughness: 0.46 }) : trim;
   hat.position.y = hatY;
-  if (look.shape === "pyramid" && ["cap", "beanie", "crown", "fedora"].includes(look.accessory)) {
+  if (look.shape === "pyramid" && (everydayHead || ["cap", "beanie", "crown", "fedora", "gearwright-hat", "scribe-cap", "deerstalker", "dragon-helm"].includes(look.accessory))) {
     hat.position.y = 0.72;
     hat.scale.setScalar(0.65);
   }
   body.add(hat);
+  if (everydayHead) everydayHat(everydayHead, hat, hatTrim, look.shape);
   switch (look.accessory) {
+    case "gearwright-hat":
+      spinners.push(...gearwrightHat(hat, hatTrim));
+      break;
+    case "scribe-cap":
+      scribesCap(hat, hatTrim);
+      break;
+    case "deerstalker":
+      deerstalker(hat, hatTrim);
+      break;
+    case "dragon-helm":
+      tickers.push(...dragonHelm(hat, hatTrim));
+      break;
     case "fedora": {
       const brim = mesh(hat, new THREE.LatheGeometry([
         new THREE.Vector2(0, 0.01), new THREE.Vector2(0.59, 0.01),
@@ -244,7 +295,7 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
   }
 
   if (look.shape === "prism") {
-    if (look.accessory === "cap" || look.accessory === "beanie" || look.accessory === "fedora") { hat.scale.x = 1.15; hat.position.y = 0.82; }
+    if (everydayHead || look.accessory === "cap" || look.accessory === "beanie" || look.accessory === "fedora" || look.accessory === "gearwright-hat" || look.accessory === "scribe-cap" || look.accessory === "deerstalker" || look.accessory === "dragon-helm") { hat.scale.x = 1.15; hat.position.y = 0.82; }
   }
 
   const neckwear = new THREE.Group();
@@ -260,19 +311,35 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
     }
     mesh(neckwear, box(0.1, 0.13, 0.11, 0.035), trim, 0, 0, 0.04);
   }
-  const neckTrim = look.neckwear === "tie" ? new THREE.MeshStandardMaterial({ color: "#7a2e3a", roughness: 0.95, emissiveIntensity: 0 }) : trim;
+  const neckTrim = everydayNeck ? new THREE.MeshStandardMaterial({ color: NECKWEAR_COLOURS[everydayNeck], roughness: everydayNeck === "chain-necklace" ? 0.3 : 0.86, metalness: everydayNeck === "chain-necklace" ? 0.72 : 0, emissiveIntensity: 0, side: THREE.DoubleSide })
+    : look.neckwear === "tie" ? new THREE.MeshStandardMaterial({ color: "#7a2e3a", roughness: 0.95, emissiveIntensity: 0 })
+    : look.neckwear === "cog-bolo" ? new THREE.MeshStandardMaterial({ color: "#a67c4b", roughness: 0.8, emissiveIntensity: 0 })
+    : look.neckwear === "ribbon-bookmark" ? new THREE.MeshStandardMaterial({ color: "#a3234a", roughness: 0.45, emissiveIntensity: 0, side: THREE.DoubleSide })
+    : look.neckwear === "counts-collar" ? new THREE.MeshStandardMaterial({ color: "#121117", roughness: 0.5, emissiveIntensity: 0, side: THREE.DoubleSide }) : trim;
+  if (everydayNeck) everydayNeckwear(everydayNeck, neckwear, neckTrim, look.shape);
+  if (look.neckwear === "counts-collar") countsCollar(neckwear, neckTrim, look.shape);
+  if (look.neckwear === "cog-bolo") spinners.push(...cogBolo(neckwear, neckTrim));
+  if (look.neckwear === "ribbon-bookmark") ribbonBookmark(neckwear, neckTrim);
   if (look.neckwear === "tie") {
-    neckwear.position.y += 0.13;
+    // On the pyramid it lies along the sloping front and ends at the base, instead of hanging past it.
+    const tieMount = look.shape === "pyramid" ? new THREE.Group() : neckwear;
+    if (look.shape === "pyramid") {
+      tieMount.position.set(0, 0.08, -0.115);
+      tieMount.rotation.x = -Math.atan(0.451);
+      tieMount.scale.setScalar(0.62);
+      neckwear.add(tieMount);
+    } else neckwear.position.y += 0.13;
     const tie = new THREE.Shape();
     tie.moveTo(-0.045, 0); tie.lineTo(0.045, 0); tie.lineTo(0.12, -0.34);
     tie.lineTo(0, -0.47); tie.lineTo(-0.12, -0.34); tie.closePath();
-    mesh(neckwear, new THREE.ExtrudeGeometry(tie, { depth: 0.045, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.008, bevelSegments: 2, steps: 1 }), neckTrim);
-    const knot = mesh(neckwear, box(0.13, 0.14, 0.085, 0.025), neckTrim, 0, 0.06, 0.025);
+    mesh(tieMount, new THREE.ExtrudeGeometry(tie, { depth: 0.045, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.008, bevelSegments: 2, steps: 1 }), neckTrim);
+    const knot = mesh(tieMount, box(0.13, 0.14, 0.085, 0.025), neckTrim, 0, 0.06, 0.025);
     knot.rotation.z = Math.PI / 12;
   }
   const facewear = new THREE.Group();
   facewear.position.z = 0.17;
   face.add(facewear);
+  const tintedLens = everydayFace ? everydayFacewear(everydayFace, facewear, trim, glow) : null;
   if (look.facewear === "sunglasses") {
     const outline = (inset: number) => {
       const shape = new THREE.Shape(), a = 0.185 - inset, b = 0.14 - inset;
@@ -296,6 +363,12 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
       tube(facewear, [[side * 0.40, 0.10, 0.01], [side * 0.51, 0.10, -0.07], [side * 0.54, 0.04, -0.20]], 0.028, trim);
     }
     mesh(facewear, box(0.12, 0.045, 0.04, 0.014), trim, 0, 0.12, 0.015);
+  } else if (look.facewear === "loupe") {
+    spinners.push(...watchmakersLoupe(facewear, trim));
+  } else if (look.facewear === "griffin-goggles") {
+    tickers.push(...griffinGoggles(facewear, trim));
+  } else if (look.facewear === "three-realms") {
+    tickers.push(...threeRealmsMask(facewear));
   } else if (look.facewear === "glasses") {
     for (const side of [-1, 1]) {
       const frame = ring(facewear, 0.15, 0.022, trim);
@@ -412,6 +485,20 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
   }
   const lantern = look.holding === "first-light" ? firstLightEffect() : null;
   if (lantern) { prop.add(lantern.frame); body.add(lantern.star, lantern.sparks); }
+  const ink = look.holding === "last-word" ? lastWord(prop, body, geometry, look.shape) : null;
+  if (ink) shellObjects.push(ink.flood);
+  const gyges = look.holding === "gyges-ring" ? gygesRing(prop, body, geometry) : null;
+  const compass = look.holding === "true-compass" ? trueCompass(prop, body, geometry, face, root) : null;
+  if (compass) { tickers.push(compass.tick); shellObjects.push(compass.veil); }
+  const watch = look.holding === "long-hour" ? longHourWatch(prop, body, geometry, light, glow) : null;
+  // The gears The Hour Stops reveals; a Skeleton shell already shows its own.
+  let revealedWorks: THREE.Group | null = null;
+  if (watch && !skeleton) {
+    const works = skeletonWorks(body, look.shape);
+    works.group.visible = false;
+    revealedWorks = works.group;
+    spinners.push(...works.spinners);
+  }
   function itemTrim(group: THREE.Object3D, fallback: string, field?: "headwearColor" | "facewearColor" | "neckwearColor", sources = [trim]) {
     const replacements = new Map<THREE.Material, THREE.MeshStandardMaterial>();
     const bindings: { material: THREE.MeshStandardMaterial; base: THREE.Color; emissive: THREE.Color; intensity: number; autoIntensity: number }[] = [];
@@ -441,11 +528,12 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
     update(look, glow);
     if (field) colourUpdates.push(update);
   }
-  itemTrim(hat, look.accessory === "fedora" ? "#35343a" : "#466b85", "headwearColor", [hatTrim, ...(["crown", "halo"].includes(look.accessory) ? [gold] : []), ...(look.accessory === "headphones" ? [dark] : [])]);
-  itemTrim(neckwear, look.neckwear === "tie" ? "#7a2e3a" : "#b83f55", "neckwearColor", [neckTrim]);
+  itemTrim(hat, everydayHead ? HEADWEAR_COLOURS[everydayHead] : look.accessory === "fedora" ? "#35343a" : look.accessory === "gearwright-hat" ? "#26252b" : look.accessory === "scribe-cap" ? "#3b2a58" : look.accessory === "deerstalker" ? "#ffffff" : look.accessory === "dragon-helm" ? "#dfb04a" : "#466b85", "headwearColor", [hatTrim, ...(["crown", "halo"].includes(look.accessory) ? [gold] : []), ...(look.accessory === "headphones" ? [dark] : [])]);
+  itemTrim(neckwear, everydayNeck ? NECKWEAR_COLOURS[everydayNeck] : look.neckwear === "tie" ? "#7a2e3a" : look.neckwear === "cog-bolo" ? "#a67c4b" : look.neckwear === "ribbon-bookmark" ? "#a3234a" : look.neckwear === "counts-collar" ? "#121117" : "#b83f55", "neckwearColor", [neckTrim]);
   if (hatTrim !== trim) hatTrim.dispose();
   if (neckTrim !== trim) neckTrim.dispose();
-  itemTrim(facewear, look.facewear === "sunglasses" ? "#161b20" : "#d7e1e5", "facewearColor");
+  if (tintedLens) colourUpdates.push((_, next) => tintedLens.color.copy(next));
+  itemTrim(facewear, everydayFace ? FACEWEAR_COLOURS[everydayFace] : look.facewear === "sunglasses" ? "#161b20" : look.facewear === "loupe" || look.facewear === "griffin-goggles" ? "#c79a4f" : "#d7e1e5", "facewearColor");
   itemTrim(prop, "#3c78a6");
   const palm = mesh(held, new THREE.SphereGeometry(0.12, 16, 12), trim, -0.06, -0.23, 0.05);
   palm.scale.set(1.3, 0.6, 1);
@@ -467,12 +555,11 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
   const pulse = ring(base, 0.84, 0.022, trim, Math.PI * 1.75);
   pulse.rotation.x = Math.PI / 2;
   pulse.visible = false;
-  const motes = new THREE.Group();
-  root.add(motes);
-  for (let i = 0; i < 9; i++) {
-    const a = i * 2.4;
-    mesh(motes, new THREE.OctahedronGeometry(i % 3 === 0 ? 0.025 : 0.012), soft, Math.sin(a) * 1.2, (i % 4) * 0.48 - 0.65, Math.cos(a) * 0.8 - 0.3);
-  }
+  const glowEffect = buildGlowEffect(look.glowEffect, root, soft);
+  // While time is stopped, every colour but Lemma's eyes drains to old brass.
+  const brassTone = new THREE.Color("#c79a4f");
+  const drainable = !watch ? [] : [hologram.uniforms.tint.value as THREE.Color, soft.color, trim.color, trim.emissive, casing.color].map(color => ({ color, from: color.clone() }));
+  let drained = 0;
   const bodyMaterials = new Map<THREE.Material, number>();
   const idleLight = new THREE.Group(), idleSpark = new THREE.Group();
   idleLight.visible = false;
@@ -492,7 +579,14 @@ export function buildCompanion(chosen: Look, glow: THREE.Color, shell: THREE.Col
       object.material.transparent = true;
     }
   });
-  return { root, body, idleBody, idleLight, idleSpark, idleTrail, eyes, face, facewear, neckwear, mouth, mouths, hat, hatOrigin: hat.position.clone(), held, heldOrigin: held.position.clone(), prop, work, base, pulse, motes, hologram, sprout, bookCover, page, steam, drop, sneeze, code, lantern, bodyMaterials,
+  return { root, body, idleBody, idleLight, idleSpark, idleTrail, eyes, face, facewear, neckwear, mouth, mouths, hat, hatOrigin: hat.position.clone(), hatScale: hat.scale.clone(), held, heldOrigin: held.position.clone(), prop, palm, work, base, pulse, glowEffect, hologram, sprout, bookCover, page, steam, drop, sneeze, code, lantern, watch, spinners, bodyMaterials,
+    casing, casingOpacity: casing.opacity, lens, lensScale: lens.scale.clone(), edges, revealedWorks, ink, globe, voyage, interior, gyges, compass, tickers, faceOrigin: face.position.clone(),
+    shellParts: shellObjects.map(object => ({ object, scale: object.scale.clone(), position: object.position.clone() })),
+    drainColour(amount: number) {
+      if (amount === drained) return;
+      drained = amount;
+      for (const { color, from } of drainable) color.copy(from).lerp(brassTone, amount);
+    },
     updateColours(next: Look, glow: THREE.Color) { colourUpdates.forEach(update => update(next, glow)); },
   };
 }
@@ -587,7 +681,7 @@ export function disposeModel(root: THREE.Object3D) {
   const materials = new Set<THREE.Material>();
   const textures = new Set<THREE.Texture>();
   root.traverse((object) => {
-    if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
+    if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points) {
       geometries.add(object.geometry);
       for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material);
     }
@@ -595,7 +689,7 @@ export function disposeModel(root: THREE.Object3D) {
   geometries.forEach((geometry) => geometry.dispose());
   materials.forEach((material) => {
     if (material instanceof THREE.ShaderMaterial) for (const uniform of Object.values(material.uniforms)) if (uniform.value instanceof THREE.Texture) textures.add(uniform.value);
-    if (material instanceof THREE.MeshBasicMaterial && material.map) textures.add(material.map);
+    if ((material instanceof THREE.MeshBasicMaterial || material instanceof THREE.MeshStandardMaterial) && material.map) textures.add(material.map);
     material.dispose();
   });
   textures.forEach(texture => texture.dispose());

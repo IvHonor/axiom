@@ -9,7 +9,8 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { Compass, DoorOpen, HelpCircle, LogOut, MapPin, MessageCircle, Users, Volume2, VolumeX } from "lucide-react";
 import { useAccount } from "../../../shell/useAccount";
 import { readSetting, saveSetting } from "../../../lib/settings";
-import { hasFirstLight, normaliseLook, useLook } from "../../lemma/look";
+import { hasFirstLight, lookForRewards, normaliseLook, useLook } from "../../lemma/look";
+import { useAchievementRewards } from "../../lemma/achievements/useAchievementRewards";
 import { useAssistantName, usePersona } from "../../lemma/persona";
 import type { Player } from "../api";
 import { Duo } from "../Duo";
@@ -72,7 +73,9 @@ function bubbleOf(shown: Shown | null, since: number, me: string | undefined, no
 const random = () => Math.random();
 
 export function Nexus({ onLeave }: { onLeave: (why?: string) => void }) {
-  const look = useLook();
+  const chosenLook = useLook();
+  const rewards = useAchievementRewards(false);
+  const look = useMemo(() => lookForRewards(chosenLook, rewards), [chosenLook, rewards]);
   const lemma = useAssistantName();
   const persona = usePersona();
   const [account] = useAccount();

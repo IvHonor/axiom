@@ -58,6 +58,9 @@ const HINTS: Record<Personality, string[]> = {
   direct: ["Double-click to talk.", "Talk: double-click."],
   witty: ["Poking won't do it. Double-click and I'm all ears.", "That tickles. Double-click if you want to talk."],
   coach: ["Double-click to talk. Let's get after it!", "Want to talk? Double-click me, champ."],
+  automaton: ["Input not recognised. Double-click to begin speech.", "Single tap logged. Double-click to talk."],
+  muse: ["A tap is only a comma. Double-click, and tell me more.", "Is there something you'd like to say? Double-click me."],
+  jekyll: ["Do double-click, my friend. (Stop poking me.) Forgive me.", "A double-click, if you please. (Or else.) Pardon me."],
 };
 
 /** How to talk to him, said his way. */

@@ -1,10 +1,11 @@
 // Who Lemma is: the name it goes by and how it talks. Part of the profile
 // beside its look, and sent with each message so the AI plays the part.
 // "Lemma" with the standard personality is the default.
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { onSettingSynced, readSetting, saveSetting } from "../../lib/settings";
+import { useAchievementRewards } from "./achievements/useAchievementRewards";
 
-export type Personality = "standard" | "cheerful" | "calm" | "direct" | "witty" | "coach";
+export type Personality = "standard" | "cheerful" | "calm" | "direct" | "witty" | "coach" | "automaton" | "muse" | "jekyll";
 
 export interface Persona {
   /** What it's called; "" is Lemma. */
@@ -17,14 +18,23 @@ export const MAX_NAME = 24;
 export const STANDARD_PERSONA: Persona = { name: "", personality: "standard" };
 
 /** Mirrors the styles in `agent::style`. */
-export const PERSONALITIES: { id: Personality; name: string; description: string }[] = [
+export const PERSONALITIES: { id: Personality; name: string; description: string; reward?: string }[] = [
   { id: "standard", name: "Standard", description: "Warm, encouraging and brief." },
   { id: "cheerful", name: "Cheerful", description: "Upbeat and playful, with a bit of fun." },
   { id: "calm", name: "Calm", description: "Gentle and reassuring, never rushed." },
   { id: "direct", name: "Direct", description: "Straight to the point, no small talk." },
   { id: "witty", name: "Witty", description: "Friendly, with a dry sense of humour." },
   { id: "coach", name: "Coach", description: "Motivating, and keeps you to your goals." },
+  { id: "automaton", name: "Automaton", description: "Precise, mechanical and always on schedule.", reward: "automaton" },
+  { id: "muse", name: "The Muse", description: "Thoughtful and poetic, with a gentle question.", reward: "muse" },
+  { id: "jekyll", name: "Jekyll & Hyde", description: "Impeccably polite, apart from the occasional aside.", reward: "jekyll" },
 ];
+
+/** A saved personality is kept, but one that takes a reward needs it earned. */
+export function personaForRewards(p: Persona, rewards: readonly string[]): Persona {
+  const needs = PERSONALITIES.find((item) => item.id === p.personality)?.reward;
+  return needs && !rewards.includes(needs) ? { ...p, personality: STANDARD_PERSONA.personality } : p;
+}
 
 const KEY = "axiom.lemma.persona";
 
@@ -52,13 +62,15 @@ export function setPersona(change: Partial<Persona>) {
 }
 
 export function usePersona(): Persona {
-  return useSyncExternalStore(
+  const saved = useSyncExternalStore(
     (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
     () => persona,
   );
+  const rewards = useAchievementRewards(false);
+  return useMemo(() => personaForRewards(saved, rewards), [saved, rewards]);
 }
 
 /** The name it goes by: the chosen one, or Lemma. */

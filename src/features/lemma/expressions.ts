@@ -33,6 +33,9 @@ const RESTING: Record<Personality, Expression> = {
   direct: { ...EXPRESSIONS.idle, eyes: [0.95, 0.95], brows: [0, 0], mouth: "flat" },
   witty: { ...EXPRESSIONS.idle, eyes: [0.85, 1.05], brows: [0, 0.23], browY: [0.19, 0.25], mouth: "smile" },
   coach: { ...EXPRESSIONS.idle, eyes: [1.04, 1.04], brows: [-0.13, 0.13], browY: [0.21, 0.21] },
+  automaton: { ...EXPRESSIONS.idle, eyes: [1.14, 1.14], brows: [0, 0], browY: [0.23, 0.23], mouth: "flat" },
+  muse: { ...EXPRESSIONS.idle, eyes: [0.86, 0.86], gaze: [0.018, 0.02], brows: [0.14, -0.14], browY: [0.22, 0.22] },
+  jekyll: { ...EXPRESSIONS.idle, eyes: [1.02, 0.72], brows: [0.1, 0.32], browY: [0.22, 0.17] },
 };
 
 export function expressionOf(mood: Mood, personality: Personality, compact = false): Expression {

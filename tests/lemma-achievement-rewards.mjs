@@ -13,7 +13,7 @@ const preview = page.locator(".lemma-wardrobe-preview .lemma-face");
 const unlocked = async name => {
   await page.waitForFunction(name => {
     const button = document.querySelector(`button[aria-label="${name}"]`);
-    return button && button.getAttribute("aria-disabled") !== "true";
+    return button && button.getAttribute("data-locked") !== "true";
   }, name);
   assert.equal(await choice(name).isEnabled(), true);
 };
@@ -21,7 +21,7 @@ await mkdir(".qa.local/lemma-rewards", { recursive: true });
 try {
   await page.goto(`${base}?admin&active=0`);
   await unlocked("Tie"); await unlocked("Fedora");
-  assert.equal(await choice("Tie").getAttribute("title"), "Available to admins");
+  assert.equal(await choice("Tie").getAttribute("aria-description"), "Available to admins");
   await choice("Fedora").click(); await choice("Tie").click();
   assert.equal(await preview.getAttribute("data-headwear"), "fedora");
   assert.equal(await preview.getAttribute("data-neckwear"), "tie");
@@ -35,18 +35,18 @@ try {
   assert.equal(await preview.getAttribute("data-headwear"), "none");
   assert.equal(await preview.getAttribute("data-neckwear"), "none", "Saved admin outfits cannot bypass achievement requirements after role changes");
   await dialog.getByRole("tab", { name: "Appearance", exact: true }).click();
-  assert.equal(await choice("Fedora").getAttribute("aria-disabled"), "true");
-  assert.equal(await choice("Tie").getAttribute("aria-disabled"), "true");
+  assert.equal(await choice("Fedora").getAttribute("data-locked"), "true");
+  assert.equal(await choice("Tie").getAttribute("data-locked"), "true");
   await page.getByRole("button", { name: "Use admin account", exact: true }).evaluate(button => button.click());
   await unlocked("Tie"); await unlocked("Fedora");
   assert.equal(await preview.getAttribute("data-neckwear"), "tie", "Admin access returns immediately when the role is restored");
   await page.evaluate(() => localStorage.clear());
   await page.goto(`${base}?active=2`);
   await preview.locator('canvas').waitFor();
-  assert.equal(await choice("Tie").getAttribute("aria-disabled"), "true");
-  assert.equal(await choice("Fedora").getAttribute("aria-disabled"), "true");
-  assert.match(await choice("Tie").getAttribute("title"), /Showing Up.*3 days in a row/);
-  assert.match(await choice("Fedora").getAttribute("title"), /Regular.*10 days/);
+  assert.equal(await choice("Tie").getAttribute("data-locked"), "true");
+  assert.equal(await choice("Fedora").getAttribute("data-locked"), "true");
+  assert.match(await choice("Tie").getAttribute("aria-description"), /Showing Up.*3 days in a row/);
+  assert.match(await choice("Fedora").getAttribute("aria-description"), /Regular.*10 days/);
   const gates = await page.evaluate(async () => {
     const { STANDARD, normaliseLook, lookForRewards, setLook } = await import("/src/features/lemma/look.ts");
     const look = normaliseLook({ ...STANDARD, accessory: "fedora", neckwear: "tie" });
@@ -60,13 +60,13 @@ try {
   await page.getByRole("button", { name: "Add activity day", exact: true }).evaluate(button => button.click());
   await unlocked("Tie");
   assert.equal(await preview.getAttribute("data-neckwear"), "bow");
-  assert.equal(await choice("Fedora").getAttribute("aria-disabled"), "true");
+  assert.equal(await choice("Fedora").getAttribute("data-locked"), "true");
   await choice("Tie").click();
   assert.equal(await preview.getAttribute("data-neckwear"), "tie");
   // Nine distinct days are not enough for Regular.
   await page.goto(`${base}?active=9`);
   await unlocked("Tie");
-  assert.equal(await choice("Fedora").getAttribute("aria-disabled"), "true");
+  assert.equal(await choice("Fedora").getAttribute("data-locked"), "true");
   await page.getByRole("button", { name: "Add activity day", exact: true }).evaluate(button => button.click());
   await unlocked("Fedora");
   await choice("Fedora").click();
@@ -106,7 +106,7 @@ try {
     const { setLocalSetting } = await import("/src/lib/settings.ts");
     setLocalSetting("axiom.achievements.rewards", ["fedora"]);
   });
-  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("axiom.achievements.rewards")).sort()), ["fedora", "tie"], "An older synced profile preserves both rewards");
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("axiom.achievements.rewards")).sort()), ["bandana", "fedora", "round-glasses", "tie"], "An older synced profile preserves every reward earned here");
   // Unlocks survive removed activity, a broken streak, and a full reload.
   await page.goto(`${base}?active=0`);
   await unlocked("Tie"); await unlocked("Fedora");

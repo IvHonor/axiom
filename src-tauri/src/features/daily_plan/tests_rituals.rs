@@ -217,4 +217,10 @@ async fn the_playground_counts_focus_tasks_and_perfect_days() {
     set_done(&db, &top.id, false).await.unwrap();
     let got = counts(super::analytics::playground_days(&db).await.unwrap());
     assert!(got["daily_plan.perfect"].is_empty());
+
+    // Planning and shutting down still count for their own achievements.
+    let got = counts(super::analytics::achievement_days(&db).await.unwrap());
+    assert_eq!(got["daily_plan.planned"].get(&day(TODAY)), Some(&1));
+    assert_eq!(got["daily_plan.shutdown"].get(&day(TODAY)), Some(&1));
+    assert!(got["daily_plan.routines"].is_empty());
 }

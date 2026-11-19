@@ -12,6 +12,8 @@ import { useCompanionPrefs } from "./preferences";
 import { useCompanionPlace } from "./companionPlace";
 import { useDialogue } from "./useDialogue";
 
+const FACE_SIZE = 160;
+
 /**
  * A companion beside your other areas, with a remembered compact mode. Drag
  * it (the pill anywhere, the card by its frame) or use the arrow keys to put
@@ -59,7 +61,7 @@ export function Companion({ onOpen }: { onOpen: () => void }) {
       <aside
         ref={card.ref}
         className={`lemma-companion-dock${card.dragging ? " is-dragging" : ""}`}
-        style={{ ...card.style, width: prefs.size + 4 }}
+        style={{ ...card.style, width: FACE_SIZE + 4 }}
         aria-label={`${me} companion`}
         {...card.handle}
         onPointerDown={fromFrame}
@@ -68,7 +70,7 @@ export function Companion({ onOpen }: { onOpen: () => void }) {
           <GripHorizontal size={13} />
         </button>
         <button className="icon-btn lemma-companion-min" onClick={() => setCompact(true)} title={`Minimise ${me}`} aria-label={`Minimise ${me}`}><Minus size={13} /></button>
-        <Face mood={moodOf(state)} level={state.level} tool={toolOf(state)} size={prefs.size} interactive onTalk={() => { onOpen(); askToTalk(); }}
+        <Face mood={moodOf(state)} level={state.level} tool={toolOf(state)} size={FACE_SIZE} interactive onTalk={() => { onOpen(); askToTalk(); }}
           onIdleComplete={dialogue.completed} dialogueRef={dialogue.attach} />
         <p aria-live="polite" aria-atomic="true" data-lemma-dialogue={dialogue.message?.kind}>{doing(state) ?? dialogue.message?.text ?? "Right here with you."}</p>
         <div className="lemma-companion-actions">

@@ -4,10 +4,11 @@ import type { Look } from "./look";
 import type { Mood } from "./Face";
 import { expressionOf } from "./expressions";
 import type { Personality } from "./persona";
-import { createIdleDirector } from "./itemIdle";
+import { createIdleDirector, routineFor } from "./itemIdle";
 import { performItem } from "./itemPerformance";
 import { createCompanionMotion } from "./motion";
 import { createIdleMotion, idleMotionPose, type IdleContext } from "./idleMotion";
+import { clockTurn } from "./clockwork";
 import type { CompletedAction } from "./dialogue";
 
 /**
@@ -27,6 +28,8 @@ export interface SceneState {
   compact: boolean;
   admin: boolean;
   firstLight: boolean;
+  /** Whether the True Compass has settled: you've made progress today. */
+  compassSteady?: boolean;
   idleContext?: IdleContext;
   onIdleComplete?: (kind: CompletedAction) => void;
   facing?: { x: number; y: number };
@@ -59,7 +62,7 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
   let signature = "";
   let painted = "";
   let visible = true, lost = false, disposed = false;
-  let lastFrame = 0, time = 0, nextBlink = 2.8, blinkUntil = 0, sizeCheckedAt = 0;
+  let lastFrame = 0, time = 0, clock = 0, nextBlink = 2.8, blinkUntil = 0, sizeCheckedAt = 0;
   let pointerX = 0, pointerY = 0, yaw = 0, tilt = 0;
   let happyUntil = 0;
   let lastMood: Mood | null = null, moodStarted = 0;
@@ -113,8 +116,8 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
 
   function rebuild() {
     const glow = resolvedColor("[data-glow]").multiplyScalar(state.brightness), shell = resolvedColor("[data-shell]");
-    const { shape, accessory, facewear, neckwear, holding, finish, headwearColor, facewearColor, neckwearColor, jewelColor } = state.look;
-    const next = JSON.stringify([shape, accessory, facewear, neckwear, holding, finish, state.admin, state.firstLight, state.brightness, glow.getHexString(), shell.getHexString()]);
+    const { shape, accessory, facewear, neckwear, holding, finish, glowEffect, headwearColor, facewearColor, neckwearColor, jewelColor } = state.look;
+    const next = JSON.stringify([shape, accessory, facewear, neckwear, holding, finish, glowEffect, state.admin, state.firstLight, state.brightness, glow.getHexString(), shell.getHexString()]);
     const colours = JSON.stringify([headwearColor, facewearColor, neckwearColor, jewelColor]);
     if (signature === next) {
       if (painted !== colours) { model.updateColours(state.look, glow); painted = colours; }
@@ -128,11 +131,25 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
     scene.add(model.root);
     signature = next;
     painted = colours;
+    prepareRoutine();
   }
 
+  /** Readies the big animations' effects while nothing's happening, so they don't stall as they begin. */
+  function prepareRoutine() {
+    const kind = routineFor(state.look.holding, state.admin, state.firstLight), built = model;
+    if (kind !== "long-hour" && kind !== "last-word" && kind !== "gyges-ring" && kind !== "true-compass") return;
+    window.setTimeout(() => {
+      if (disposed || lost || built !== model || state.compact) return;
+      for (const progress of [0.3, 0.55, 0.78]) { performItem(built, { kind, progress }, time); renderer.compile(scene, camera); }
+      performItem(built, null, time);
+    }, 400);
+  }
+
+  const canPlay = () => !motion.matches && !state.focused && !state.compact && !state.working && !state.display && state.movement > 0 && !document.hidden && !lost;
   function idleInput(now: number) {
     return { now: now / 1000, holding: state.look.holding, admin: state.admin, firstLight: state.firstLight,
-      eligible: !motion.matches && !state.focused && !state.compact && !state.working && !state.display && !["thinking", "preparing", "looking", "listening", "speaking", "patient"].includes(state.mood) && state.movement > 0 && visible && !document.hidden && !lost };
+      eligible: canPlay() && !["thinking", "preparing", "looking", "listening", "speaking", "patient"].includes(state.mood) && visible,
+      allowed: canPlay() };
   }
 
   function render(now = performance.now(), force = false) {
@@ -198,7 +215,9 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
     model.body.rotation.x = THREE.MathUtils.lerp(model.body.rotation.x, tilt + nod - pose.lean + (facing ? facing.y * 0.18 : 0) + pose.bodyY * 0.12, lerp);
     const lean = mood === "concerned" ? -0.07 : mood === "puzzled" ? 0.13 : mood === "waiting" ? 0.07 : idleGlance ? idleTilt : Math.sin(t * 0.65) * 0.025 * movement;
     model.body.rotation.z = THREE.MathUtils.lerp(model.body.rotation.z, lean * (moving ? pose.energy : 0) + pose.tilt, lerp);
-    model.body.position.y = (moving ? Math.sin(t * (mood === "sleepy" ? 0.8 : 1.6) * pose.speed) * 0.04 * movement : 0) + pose.bounce + (moving && !state.focused && mood === "happy" && age < 0.9 ? Math.sin(age / 0.9 * Math.PI) * 0.07 * state.movement : 0);
+    // An automaton's idle bob moves in small notches rather than a smooth wave.
+    const bob = Math.sin(t * (mood === "sleepy" ? 0.8 : 1.6) * pose.speed);
+    model.body.position.y = (moving ? (state.personality === "automaton" ? Math.round(bob * 3) / 3 : bob) * 0.04 * movement : 0) + pose.bounce + (moving && !state.focused && mood === "happy" && age < 0.9 ? Math.sin(age / 0.9 * Math.PI) * 0.07 * state.movement : 0);
     model.body.position.z = pose.lean;
     const level = Math.min(1, Math.max(0, Number.isFinite(state.level) ? state.level : 0));
     model.body.scale.setScalar(mood === "listening" ? 1 + level * 0.035 : 1);
@@ -241,8 +260,8 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
       const eyeLerp = moving ? 1 - Math.exp(-dt * 18 * pose.speed) : 1;
       eye.group.position.x = THREE.MathUtils.lerp(eye.group.position.x, (i === 0 ? -0.22 : 0.22) + expression.gaze[0] + (facing ? facing.x * 0.03 : 0) + pose.eyeX * 0.055, eyeLerp);
       eye.group.position.y = THREE.MathUtils.lerp(eye.group.position.y, 0.04 + expression.gaze[1] - pose.eyeY * 0.055, eyeLerp);
-      eye.group.visible = !display;
-      eye.brow.visible = !display;
+      eye.group.visible = !display && !action?.hidden;
+      eye.brow.visible = !display && !action?.hidden;
       eye.brow.rotation.z = THREE.MathUtils.lerp(eye.brow.rotation.z, expression.brows[i], lerp);
       eye.brow.position.y = THREE.MathUtils.lerp(eye.brow.position.y, expression.browY[i], lerp);
     }
@@ -271,16 +290,28 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
       if (state.look.holding === "book") model.held.rotation.z += pose.sway;
       if (state.look.holding === "plant") model.sprout.rotation.z += pose.sway * 2 + pose.accessoryLift;
     }
-    model.motes.rotation.y = t * 0.08 * movement;
-    model.hologram.uniforms.time.value = t;
+    // This clock is the world's: The Long Hour can bring it to a stop.
+    if (moving) clock += dt * Math.min(1, movement) * (1 - (model.watch?.stillness ?? 0));
+    const turn = clockTurn(clock) + (model.watch?.drive ?? 0);
+    for (const spinner of model.spinners) spinner.object.rotation.z = spinner.phase + spinner.rate * turn;
+    model.glowEffect.update(clock);
+    model.globe?.tick(moving ? dt : 0, clock, model.body.rotation.y, model.body.rotation.x);
+    if (model.compass) model.compass.part.steady = state.compassSteady ?? true;
+    for (const tick of model.tickers) tick(clock, moving ? dt : 1);
+    if (model.gyges) model.gyges.ring.visible = !state.working;
+    if (model.ink) model.ink.quill.visible = !state.working;
+    model.hologram.uniforms.time.value = clock;
     model.pulse.visible = mood === "listening" || busy || mood === "waiting";
     model.pulse.scale.setScalar(mood === "listening" ? 1 + level * 0.28 : 1 + Math.sin(t * 2) * 0.035);
-    model.base.rotation.y = (busy ? -t * 1.5 : t * 0.12) * (state.focused ? 0.12 : 1);
+    model.base.rotation.y = busy ? -clock * 1.5 : clock * 0.12;
     renderer.render(scene, camera);
   }
   function schedule() {
-    if (document.hidden || !visible || motion.matches || lost) {
+    if (document.hidden || motion.matches || lost) {
       itemIdle.reset(); idleMotion.reset(); host.dataset.idleMotion = "";
+    } else if (!visible) {
+      // Briefly out of view isn't a reason to lose an animation someone asked for.
+      itemIdle.interrupt(); idleMotion.reset(); host.dataset.idleMotion = "";
     }
     renderer.setAnimationLoop(!disposed && !lost && visible && !document.hidden && !motion.matches ? (now) => render(now) : null);
     render(performance.now(), true);
@@ -315,7 +346,7 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
     if (event instanceof KeyboardEvent && ["Enter", " "].includes(event.key) && event.target instanceof Node && host.contains(event.target)) return;
     itemIdle.interrupt(); render(performance.now(), true);
   }
-  function away() { if (awayAt === null) awayAt = performance.now(); itemIdle.reset(); idleMotion.reset(); host.dataset.idleMotion = ""; leave(); }
+  function away() { if (awayAt === null) awayAt = performance.now(); itemIdle.interrupt(); idleMotion.reset(); host.dataset.idleMotion = ""; leave(); }
   function returned() {
     const now = performance.now();
     if (awayAt !== null && now - awayAt >= 30_000) presence.greet(now / 1000);
@@ -369,16 +400,16 @@ export function createCompanionScene(host: HTMLElement, initial: SceneState, ava
 
   return {
     update(next: SceneState) {
-      if (next.look !== state.look || next.admin !== state.admin || next.firstLight !== state.firstLight) {
-        itemIdle.reset(); idleMotion.reset();
-      }
+      // Only a change to what's held ends its animation: outfits and synced copies of the same look don't.
+      if (routineFor(next.look.holding, next.admin, next.firstLight) !== routineFor(state.look.holding, state.admin, state.firstLight)) itemIdle.reset();
+      if (next.look !== state.look) idleMotion.reset();
       state = next; rebuild(); schedule();
     },
     previewIdle() { idleMotion.reset(); const started = itemIdle.preview(idleInput(performance.now())); schedule(); return started; },
     greet() {
       const now = performance.now();
       idleMotion.reset();
-      const started = itemIdle.preview(idleInput(now));
+      const started = itemIdle.preview(idleInput(now), false);
       happyUntil = started ? 0 : now + 1600;
       presence.tap(now / 1000); schedule();
     },

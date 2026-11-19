@@ -16,6 +16,9 @@ const SOLO: Record<string, Record<Moment, string[]>> = {
   direct: { arrive: ["Here.", "Arrived."], gate: ["Open up.", "Accept?"], dizzy: ["Stop.", "Enough."], cheered: ["Noted.", "Thanks."], yum: ["Got it.", "Mine."] },
   witty: { arrive: ["Did someone order a Lemma?", "Fashionably on time."], gate: ["I promise I'm house-trained.", "Knock knock."], dizzy: ["I've seen the code of the universe.", "Is this a test?"], cheered: ["Finally, recognition.", "My fans!"], yum: ["Five stars.", "Compliments to the gardener."] },
   coach: { arrive: ["Let's get to work!", "Reporting for training!"], gate: ["Ready when you are, coach!", "Let me on the team!"], dizzy: ["Hydrate! Recover!", "Walk it off…"], cheered: ["That's the spirit!", "Team energy!"], yum: ["Fuel up!", "Protein!"] },
+  automaton: { arrive: ["Unit arrived. On time.", "Tick. Tock. Hello."], gate: ["Requesting entry.", "Awaiting gate signal."], dizzy: ["Gyroscope fault.", "Recalibrating…"], cheered: ["Cheer logged.", "Morale: increased."], yum: ["Fuel accepted.", "Oil levels nominal."] },
+  muse: { arrive: ["What a lovely opening scene.", "And so we enter…"], gate: ["May I join this chapter?", "Is there room in your story?"], dizzy: ["The words are swimming…", "What a plot twist."], cheered: ["A kind line.", "I'll keep that one."], yum: ["Food for thought.", "Delicious, like a good sentence."] },
+  jekyll: { arrive: ["Good day, all.", "Charmed, I'm sure."], gate: ["May I trouble you?", "Do let me in. (Now.)"], dizzy: ["I'm not myself…", "Which one am I?"], cheered: ["Most kind.", "(Finally.) Thank you."], yum: ["Quite delicious.", "(More.) Pardon me."] },
 };
 
 /** Two Lemmas talking: an opener and a reply. */
@@ -36,6 +39,7 @@ const FLAVOUR: Record<string, (s: string) => string> = {
   cheerful: (s) => s.replace(/[.?]$/, "!"),
   direct: (s) => s.split(/[,.!?]/)[0] + ".",
   coach: (s) => s.replace(/\?$/, "? Let's go!"),
+  automaton: (s) => s.replace(/!/g, "."),
 };
 
 const pick = <T,>(list: T[], rand: () => number) => list[Math.floor(rand() * list.length) % list.length];
@@ -60,6 +64,9 @@ const HELLO: Record<string, string[]> = {
   direct: ["Yes?", "Hi.", "What's up."],
   witty: ["Autographs later.", "You rang?", "Careful, I'm delicate."],
   coach: ["Hey champ!", "Let's go, {you}!", "High five!"],
+  automaton: ["Contact detected.", "Greetings, {you}.", "Tick."],
+  muse: ["Hello, {you}. What's your story?", "Oh, a visitor.", "Tell me something true."],
+  jekyll: ["Good day, {you}.", "(Hands off.) Forgive me.", "At your service."],
 };
 const EMOJI = ["💖", "✨", "👋", "😊", "🌟"];
 

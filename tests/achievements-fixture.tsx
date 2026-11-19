@@ -10,6 +10,8 @@ import "../src/styles/shell.css";
 // Lemma's page with a few weeks of made-up activity, for the Achievements
 // view. `?empty` starts from nothing. Nothing leaves the page.
 const empty = new URLSearchParams(location.search).has("empty");
+// `?interview`: a certain book has been finished.
+const interview = new URLSearchParams(location.search).has("interview");
 const key = (d: Date) => d.toISOString().slice(0, 10);
 /** `n` days ending today, each worth `each`. */
 const run = (n: number, each: number, gap = 0) => Object.fromEntries(Array.from({ length: n }, (_, i) => [key(new Date(Date.now() - (i + gap) * 864e5)), each]));
@@ -23,6 +25,7 @@ const days = empty ? {} : {
   "daily_plan.perfect": run(4, 1),
   "daily_plan.focus": run(25, 90),
   "project_board.done": run(5, 2),
+  ...(interview ? { "reading.quiet_started": run(1, 1, 9), "reading.quiet_finished": run(1, 1) } : {}),
 };
 
 mockWindows("main");

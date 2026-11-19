@@ -32,7 +32,7 @@ pub(super) fn sessions() -> Select<session::Entity> {
     session::Entity::find().filter(session::Column::DeletedAt.is_null())
 }
 
-fn notes() -> Select<note::Entity> {
+pub(super) fn notes() -> Select<note::Entity> {
     note::Entity::find().filter(note::Column::DeletedAt.is_null())
 }
 

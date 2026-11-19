@@ -106,7 +106,7 @@ export const PLANT_KINDS = 3;
 const clamp = (v: number, [lo, hi]: readonly [number, number]) => Math.min(hi, Math.max(lo, v));
 
 /** Walking speed (lawn widths a second) by personality. */
-const SPEED: Record<string, number> = { standard: 0.11, cheerful: 0.14, calm: 0.07, direct: 0.15, witty: 0.11, coach: 0.16 };
+const SPEED: Record<string, number> = { standard: 0.11, cheerful: 0.14, calm: 0.07, direct: 0.15, witty: 0.11, coach: 0.16, automaton: 0.1, muse: 0.08, jekyll: 0.1 };
 
 /** How likely each thing is next, by personality. */
 const LIKES: Record<string, Partial<Record<Activity, number>>> = {
@@ -116,6 +116,9 @@ const LIKES: Record<string, Partial<Record<Activity, number>>> = {
   direct: { idle: 2, walk: 6, visit: 2, sit: 1 },
   witty: { idle: 3, walk: 3, visit: 5, sit: 1, dance: 1 },
   coach: { idle: 1, walk: 5, visit: 3, play: 3, dance: 1 },
+  automaton: { idle: 4, walk: 5, visit: 1 },
+  muse: { idle: 4, walk: 2, visit: 3, sit: 4 },
+  jekyll: { idle: 3, walk: 3, visit: 4, sit: 2 },
 };
 
 export class Garden {

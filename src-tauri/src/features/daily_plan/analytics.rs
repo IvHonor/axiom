@@ -6,7 +6,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, QueryFilter};
 use serde::Serialize;
 
 use super::entities::{day, task};
-use super::service::{days, tasks};
+use super::service::{days, routines, tasks};
 use crate::error::Result;
 use crate::features::period::{percent, Compare, Headline, Period};
 use crate::playground::DayCounts;
@@ -121,4 +121,23 @@ pub async fn playground_days(db: &DatabaseConnection) -> Result<Vec<(&'static st
         }
     }
     Ok(vec![("daily_plan.focus", focus), ("daily_plan.done", done), ("daily_plan.perfect", perfect)])
+}
+
+/// Days counted for achievements alone: they aren't Playground metrics, and
+/// don't make a day "active". Routines count on the day they were made.
+pub async fn achievement_days(db: &DatabaseConnection) -> Result<Vec<(&'static str, DayCounts)>> {
+    let (mut planned, mut shutdown, mut made) = (DayCounts::new(), DayCounts::new(), DayCounts::new());
+    for r in days().all(db).await? {
+        let Ok(d) = r.id.parse::<Date>() else { continue };
+        if r.planned_at.is_some() {
+            planned.insert(d, 1);
+        }
+        if r.shutdown_at.is_some() {
+            shutdown.insert(d, 1);
+        }
+    }
+    for r in routines().all(db).await? {
+        *made.entry(r.created_at.date_naive()).or_default() += 1;
+    }
+    Ok(vec![("daily_plan.planned", planned), ("daily_plan.shutdown", shutdown), ("daily_plan.routines", made)])
 }

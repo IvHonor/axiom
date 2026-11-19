@@ -33,6 +33,40 @@ export function bestStreak(days: Days): number {
   return best;
 }
 
+const activeDays = (days: Days) => Object.keys(days).filter((d) => days[d] > 0);
+const dayNumber = (day: string) => {
+  const [y, m, d] = day.split("-").map(Number);
+  return Date.UTC(y, m - 1, d) / 864e5;
+};
+
+/** How many weeks (Monday to Sunday) had at least `atLeast` days with something on them. */
+export function weeksWith(days: Days, atLeast: number): number {
+  const perWeek = new Map<number, number>();
+  // Day 0 was a Thursday, so adding 3 makes each block of seven start on a Monday.
+  for (const day of activeDays(days)) { const week = Math.floor((dayNumber(day) + 3) / 7); perWeek.set(week, (perWeek.get(week) ?? 0) + 1); }
+  return [...perWeek.values()].filter((n) => n >= atLeast).length;
+}
+
+/** How many different calendar months have something in them. */
+export const monthsWith = (days: Days) => new Set(activeDays(days).map((day) => day.slice(0, 7))).size;
+
+/** The largest single value. */
+export const largest = (days: Days) => Math.max(0, ...Object.values(days).filter(Number.isFinite));
+
+/** The most days with something on them inside any stretch of `span` days. */
+export function bestWithin(days: Days, span: number): number {
+  const on = Object.keys(days).filter((d) => days[d] > 0).map((day) => {
+    const [y, m, d] = day.split("-").map(Number);
+    return Date.UTC(y, m - 1, d) / 864e5;
+  }).sort((a, b) => a - b);
+  let best = 0, start = 0;
+  on.forEach((day, i) => {
+    while (day - on[start] >= span) start++;
+    best = Math.max(best, i - start + 1);
+  });
+  return best;
+}
+
 export interface Progress {
   /** Levels reached: 0 is none yet, `levels.length` is every one. */
   reached: number;

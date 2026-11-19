@@ -40,7 +40,7 @@ fn blocks() -> Select<block::Entity> {
     block::Entity::find().filter(block::Column::DeletedAt.is_null())
 }
 
-fn routines() -> Select<routine::Entity> {
+pub(super) fn routines() -> Select<routine::Entity> {
     routine::Entity::find().filter(routine::Column::DeletedAt.is_null())
 }
 

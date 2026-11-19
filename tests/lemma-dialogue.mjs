@@ -4,11 +4,11 @@ import { createDialogueDirector, DIALOGUE_LINES, dialogueStatus, dialogueVariant
 import { createIdleMotion } from "../src/features/lemma/idleMotion.ts";
 import { createIdleDirector } from "../src/features/lemma/itemIdle.ts";
 
-const people = ["standard", "cheerful", "calm", "direct", "witty", "coach"];
+const people = ["standard", "cheerful", "calm", "direct", "witty", "coach", "automaton", "muse", "jekyll"];
 const facts = { theme: "Crimson", name: "Nova", task: "Finish the report", enabled: "Daily Plan", disabled: "Journal", area: "Reading", changes: "1 change" };
 
-test("all 25 situations have two distinct lines for all six personalities", () => {
-  assert.equal(Object.keys(DIALOGUE_LINES).length, 25);
+test("all 30 situations have two distinct lines for all nine personalities", () => {
+  assert.equal(Object.keys(DIALOGUE_LINES).length, 30);
   for (const kind of Object.keys(DIALOGUE_LINES)) for (const personality of people) {
     const variants = dialogueVariants({ kind, values: facts }, personality);
     assert.equal(variants.length, 2, kind + "/" + personality);

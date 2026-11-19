@@ -17,12 +17,18 @@ import "../src/styles/shell.css";
 const failing = new URLSearchParams(location.search).has("fail");
 const createdAt = new URLSearchParams(location.search).get("joined") ?? "2026-11-08T12:00:00Z";
 let activeDays = Number(new URLSearchParams(location.search).get("active") ?? 0);
+// ?clockwork: enough Daily Plan activity to have earned the whole clockwork set.
+let clockwork = new URLSearchParams(location.search).has("clockwork");
+const planRun = (length: number, each = 1) => Object.fromEntries(Array.from({ length }, (_, i) => [new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10), each]));
+const clockworkDays = () => clockwork ? { "daily_plan.done": planRun(100), "daily_plan.perfect": planRun(7), "daily_plan.focus": planRun(1, 1200), "daily_plan.planned": planRun(21), "daily_plan.shutdown": planRun(20), "daily_plan.routines": planRun(3) } : {};
+let progressToday = false;
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 let fixtureAccount = new URLSearchParams(location.search).has("admin") ? { state: "signed_in", email: "admin@example.test", admin: true, createdAt } : { state: "signed_in", email: "member@example.test", admin: false, createdAt };
 let asked = false;
 
 mockWindows("main");
 mockIPC((command) => {
-  if (command === "playground_days") return { active: Object.fromEntries(Array.from({ length: activeDays }, (_, i) => [new Date(Date.UTC(2026, 10, i + 1)).toISOString().slice(0, 10), 1])) };
+  if (command === "playground_days") return { active: Object.fromEntries(Array.from({ length: activeDays }, (_, i) => [new Date(Date.UTC(2026, 10, i + 1)).toISOString().slice(0, 10), 1])), ...clockworkDays(), ...(progressToday ? { "reading.pages": { [localToday()]: 12 } } : {}) };
   if (command === "account_status") return fixtureAccount;
   if (command === "ai_transcribe") return { text: "A captured sentence", provider: "fixture" };
   if (command === "assistant_chats") return failing && asked ? [{ id: "fixture-chat", title: "Hello", updatedAt: new Date().toISOString() }] : [];
@@ -46,6 +52,8 @@ function Fixture() {
         <output data-testid="behaviour-state" hidden>{JSON.stringify(state)}</output>
         <button className="btn" onClick={() => setWardrobe(true)}>Wardrobe</button>
         <button className="btn" onClick={() => { activeDays++; void emit("data-changed"); }}>Add activity day</button>
+        <button className="btn" onClick={() => { clockwork = true; void emit("data-changed"); }}>Earn clockwork</button>
+        <button className="btn" onClick={() => { progressToday = true; void emit("data-changed"); }}>Make progress today</button>
         <button className="btn" onClick={() => setChat(!chat)}>Toggle chat</button>
         <button className="btn" onClick={() => setMounted(!mounted)}>Toggle companion</button>
         <button className="btn" onClick={() => { fixtureAccount = { state: "signed_in", email: "member@example.test", admin: false, createdAt }; void emit("account-changed", fixtureAccount); }}>Use member account</button>

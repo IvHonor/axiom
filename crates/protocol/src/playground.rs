@@ -116,10 +116,10 @@ pub struct LemmaCard {
 }
 
 pub const MAX_LEMMA_NAME: usize = 24;
-pub const PERSONALITIES: &[&str] = &["standard", "cheerful", "calm", "direct", "witty", "coach"];
+pub const PERSONALITIES: &[&str] = &["standard", "cheerful", "calm", "direct", "witty", "coach", "automaton", "muse", "jekyll"];
 /// The `Look` fields, so nothing else rides along to other people's screens.
 const LOOK_FIELDS: &[&str] = &[
-    "glow", "shell", "shape", "accessory", "facewear", "neckwear", "finish", "headwearColor", "facewearColor", "neckwearColor", "holdingColor", "jewelColor", "holding",
+    "glow", "shell", "shape", "accessory", "facewear", "neckwear", "finish", "headwearColor", "facewearColor", "neckwearColor", "holdingColor", "jewelColor", "holding", "glowEffect",
 ];
 
 /// Returns the message to show if the Lemma can't be shown to others.
@@ -481,6 +481,7 @@ mod tests {
     fn lemma_looks_carry_only_look_fields() {
         let mut lemma = LemmaCard { personality: "witty".into(), name: "Pixel".into(), ..Default::default() };
         lemma.look.insert("glow".into(), "#2ec4ff".into());
+        lemma.look.insert("glowEffect".into(), "verdigris".into());
         assert!(check_lemma(&lemma).is_ok());
         lemma.look.insert("onclick".into(), "x".into());
         assert!(check_lemma(&lemma).is_err());

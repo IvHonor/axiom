@@ -6,6 +6,7 @@ import { DEFAULT_THEMES } from "../../themes/modern_themes";
 import { usePersistentState } from "../usePersistentState";
 import { applyTheme } from "./applyTheme";
 import { isMacDesktop } from "../../lib/platform";
+import { noteThemeTried } from "../../features/lemma/achievements/secrets";
 
 export interface ThemeOption {
   theme: Theme;
@@ -103,6 +104,13 @@ export function ThemeProvider({ installed, children, transparent = false }: Them
 
   const setFollowSystem = (followSystem: boolean) =>
     setPrefs((p) => ({ ...p, followSystem, fixed: theme.id }));
+
+  // Every theme picked (other than the two defaults) counts towards Change of Scene.
+  useEffect(() => {
+    for (const id of new Set([prefs.dark, prefs.light, prefs.fixed])) {
+      if (id !== DEFAULT_THEMES.dark && id !== DEFAULT_THEMES.light && options.some((o) => o.theme.id === id)) noteThemeTried(id);
+    }
+  }, [prefs.dark, prefs.light, prefs.fixed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Layout effect so the theme is in place before the first paint (no flash).
   useLayoutEffect(() => {

@@ -52,6 +52,9 @@ const INTROS: Record<Personality, string> = {
   direct: "Today, in short.",
   witty: "Here's the day, minus the small print.",
   coach: "Here's the game plan.",
+  automaton: "Daily schedule loaded. Reporting.",
+  muse: "Here is today's blank page, and what might fill it.",
+  jekyll: "Good day to you. Allow me to present the day's affairs.",
 };
 
 const SIGNOFFS: Record<Personality, [morning: string, day: string, evening: string]> = {
@@ -61,6 +64,9 @@ const SIGNOFFS: Record<Personality, [morning: string, day: string, evening: stri
   direct: ["That's it.", "That's all.", "Done for now."],
   witty: ["Go on, impress yourself.", "Halfway there. Probably.", "Tomorrow-you will be grateful."],
   coach: ["Let's get after it.", "Keep pushing. You've got this.", "Finish strong, then rest."],
+  automaton: ["All systems wound. Proceed.", "Midday check complete. You remain on schedule.", "Evening cycle begun. Rest is scheduled."],
+  muse: ["What will you make of this morning?", "The middle of a story is where it gets good.", "What would you like to remember about today?"],
+  jekyll: ["A fine morning for it. (Do hurry.) Forgive me.", "You are doing splendidly. (So far.) I do apologise.", "Rest well tonight. (I shan't.) Pay that no mind."],
 };
 
 const QUIET: Record<Personality, string> = {
@@ -70,6 +76,9 @@ const QUIET: Record<Personality, string> = {
   direct: "Nothing urgent today.",
   witty: "Nothing on fire today. Suspicious, but let's enjoy it.",
   coach: "Nothing urgent, so pick one goal and move it forward.",
+  automaton: "No urgent items detected. Spare capacity available.",
+  muse: "Nothing presses on the page today. What would you write there, if you could write anything?",
+  jekyll: "Nothing urgent today, I am pleased to report. (How dull.) Do enjoy the calm.",
 };
 
 const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;

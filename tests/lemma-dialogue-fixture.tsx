@@ -20,10 +20,12 @@ let slow = false;
 const releases: (() => void)[] = [];
 const commands: string[] = [];
 let account: object = { state: "signed_out" };
+let days: object = {};
 mockWindows("main");
 mockIPC(async command => {
   commands.push(command);
   if (command === "account_status") return account;
+  if (command === "playground_days") return days;
   if (command === "plan_summary") {
     const result = structuredClone(summary);
     if (slow) await new Promise<void>(resolve => { releases.push(resolve); });
@@ -36,6 +38,7 @@ Object.assign(window, { dialogueFixture: {
   release: () => { slow = false; releases.splice(0).forEach(resolve => resolve()); },
   complete: () => { summary = { ...summary, done: 2, focus: [] }; },
   refresh: () => emit("data-changed"),
+  startQuietBook: () => { days = { "reading.quiet_started": { "2026-11-15": 1 } }; return emit("data-changed"); },
   switchAccount: () => {
     account = { state: "signed_in", email: "other@example.test", admin: false, createdAt: "2026-01-01T00:00:00Z" };
     summary = { ...summary, total: 0, done: 0, focus: [] };

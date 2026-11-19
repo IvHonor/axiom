@@ -38,6 +38,9 @@ pub async fn playground_days(db: State<'_, Db>) -> Result<HashMap<&'static str, 
     let active: DayCounts = all.iter().flat_map(|(_, days)| days.iter().filter(|(_, n)| **n > 0).map(|(d, _)| (*d, 1))).collect();
     let mut out: HashMap<&'static str, DayCounts> = all.into_iter().collect();
     out.insert("active", active);
+    out.extend(features::daily_plan::analytics::achievement_days(&db).await?);
+    out.extend(features::journal::analytics::achievement_days(&db).await?);
+    out.extend(features::reading::analytics::achievement_days(&db).await?);
     Ok(out)
 }
 

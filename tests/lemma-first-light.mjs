@@ -69,7 +69,9 @@ try {
     assert.ok(model.flare > 2 && model.restored, `${model.shape}: catch glows, and interruption restores the resting pose`);
   }
   await choose("First Light");
-  assert.equal(await dialog().getByRole("status").innerText(), "First Light: Given to users who created an account before 21 March 2027.");
+  await page.mouse.move(0, 0);
+  await dialog().getByRole("button", { name: "First Light", exact: true }).hover();
+  assert.match(await page.getByRole("tooltip").innerText(), /First Light[\s\S]*Given to users who created an account before 21 March 2027\./);
   await choose("Preview item animation"); await advance(3500);
   assert.equal(await preview().getAttribute("data-idle-routine"), "first-light");
   await preview().screenshot({ path: ".qa.local/lemma-first-light/orbit.png" });

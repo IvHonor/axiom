@@ -207,6 +207,21 @@ try {
     console.log("PASS: the real wardrobe acknowledges a finished name edit and remembers the comments switch");
   }
   {
+    const { context, page } = await fresh();
+    assert.equal(await kind(page), null, "nothing to say about a book nobody has opened");
+    await page.evaluate(() => window.dialogueFixture.startQuietBook());
+    await page.clock.runFor(300);
+    await page.locator('[data-testid=remark][data-lemma-dialogue=whisper]').waitFor();
+    assert.match(await page.getByTestId("remark").textContent(), /asks questions back/);
+    assert.match(await page.evaluate(() => localStorage.getItem("axiom.achievements.secrets")), /quiet-word/);
+    await advance(page, 320000);
+    await page.evaluate(() => window.dialogueFixture.refresh());
+    await page.clock.runFor(300);
+    assert.notEqual(await kind(page), "whisper", "it is only ever said once");
+    await context.close();
+    console.log("PASS: Lemma's quiet word about a certain book is said once");
+  }
+  {
     const { context, page } = await fresh("lemma-cards-preview.html");
     const caption = page.locator(".lemma-chat-companion > p");
     assert.match(await caption.textContent(), /ready|decision|final say|review/i, "real pending cards explain who makes the decision");

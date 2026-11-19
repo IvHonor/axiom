@@ -27,7 +27,8 @@ import { api, trackedMinutes, type PlanTask } from "../../features/daily_plan/ap
 import { addDays, clock, mondayOf, nowMinute, today } from "../../features/daily_plan/time";
 import { api as learning } from "../../features/learning/api";
 import { Face, type Mood } from "../../features/lemma/Face";
-import { useLook } from "../../features/lemma/look";
+import { lookForRewards, useLook } from "../../features/lemma/look";
+import { useAchievementRewards } from "../../features/lemma/achievements/useAchievementRewards";
 import { useName } from "../../features/lemma/parts";
 import { nameOf, usePersona } from "../../features/lemma/persona";
 import { feel, setLemma, useLemma } from "../../features/lemma/state";
@@ -428,7 +429,7 @@ interface MenuEntry {
 
 export function Desk() {
   const prefs = useDeskPrefs();
-  const look = useLook();
+  const look = lookForRewards(useLook(), useAchievementRewards(false));
   const timers = useTimers();
   const persona = usePersona();
   const lemma = useLemma();

@@ -39,6 +39,28 @@ try {
   await preview().press(" "); await advance(120);
   assert.equal(await preview().getAttribute("data-idle-routine"), "glitch", "Space activation also plays the routine");
   await advance(9000);
+  // Once asked for, it plays to the end, whatever else happens meanwhile.
+  await choose("Preview item animation"); await advance(1000);
+  await page.evaluate(async () => {
+    const { setLocalSetting, readSetting } = await import("/src/lib/settings.ts");
+    setLocalSetting("axiom.lemma.look", { ...readSetting("axiom.lemma.look") });
+    window.dispatchEvent(new Event("blur")); window.dispatchEvent(new Event("focus"));
+  });
+  await advance(300);
+  assert.equal(await preview().getAttribute("data-idle-routine"), "glitch", "Its own look syncing back, or the window losing focus, doesn't stop it");
+  await page.getByRole("dialog").getByRole("heading", { name: /Customise/ }).click(); await page.keyboard.press("Shift"); await advance(300);
+  assert.equal(await preview().getAttribute("data-idle-routine"), "glitch", "Clicks and keys elsewhere don't stop it");
+  await preview().click(); await advance(300);
+  assert.equal(await preview().getAttribute("data-idle-routine"), "glitch", "Clicking Lemma carries on");
+  await choose("Fedora"); await advance(300);
+  assert.equal(await preview().getAttribute("data-idle-routine"), "glitch", "Changing an outfit piece doesn't stop it");
+  await choose("None"); await advance(5900);
+  assert.equal(await preview().getAttribute("data-idle-routine"), "", "Clicking didn't start it over: it ended on time");
+  // A hand that moves a little while clicking still counts as a click.
+  const box = await preview().boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.mouse.move(box.x + box.width / 2 + 5, box.y + box.height / 2 + 2, { steps: 3 }); await page.mouse.up(); await advance(150);
+  assert.equal(await preview().getAttribute("data-idle-routine"), "glitch", "A slightly shaky click still plays it");
+  await advance(9000);
   const bounds = await preview().boundingBox();
   await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
   await page.mouse.down(); await page.mouse.move(bounds.x + bounds.width / 2 + 45, bounds.y + bounds.height / 2, { steps: 5 }); await page.mouse.up(); await advance(120);
@@ -85,6 +107,11 @@ try {
     const initial = director.tick(input), early = director.tick({ ...input, now: 119 }), start = director.tick({ ...input, now: 120 });
     const finished = director.tick({ ...input, now: 128 }), cooldown = director.tick({ ...input, now: 200 });
     director.interrupt(); const interrupted = director.tick({ ...input, now: 201 });
+    const asked = createIdleDirector(() => 0.5); asked.tick(input);
+    asked.preview({ ...input, now: 10 }); asked.interrupt();
+    const keptAfterInterrupt = asked.tick({ ...input, now: 11 }), keptWhileBusy = asked.tick({ ...input, now: 12, eligible: false, allowed: true });
+    const continued = asked.preview({ ...input, now: 13 }, false) && asked.tick({ ...input, now: 13 });
+    const stoppedWhenBarred = asked.tick({ ...input, now: 14, eligible: false, allowed: false });
     const pending = createIdleDirector(() => 0);
     pending.tick({ ...input, eligible: false });
     const busyDue = pending.tick({ ...input, now: 70, eligible: false });
@@ -94,11 +121,15 @@ try {
     const latestStart = latest.tick({ ...input, now: 180 });
     pending.reset(); const resumed = pending.tick({ ...input, now: 2000 });
     const restricted = routineFor("glitch", false), allowed = routineFor("glitch", true), future = routineFor("rocket", true);
-    return { initial, early, start, finished, cooldown, interrupted, restricted, allowed, future, busyDue, deferred, beforeLatest, latestStart, resumed };
+    return { keptAfterInterrupt, keptWhileBusy, continued, stoppedWhenBarred, initial, early, start, finished, cooldown, interrupted, restricted, allowed, future, busyDue, deferred, beforeLatest, latestStart, resumed };
   });
   assert.equal(pure.initial, null); assert.equal(pure.early, null); assert.equal(pure.start.kind, "coffee");
   for (const key of ["finished", "cooldown", "interrupted", "restricted", "future"]) assert.equal(pure[key], null);
   assert.equal(pure.allowed, "glitch");
+  assert.equal(pure.keptAfterInterrupt.kind, "coffee", "A requested routine survives interruptions");
+  assert.equal(pure.keptWhileBusy.kind, "coffee");
+  assert.ok(Math.abs(pure.continued.progress - 3 / 7) < 1e-9, "Asking again without restarting carries on from where it was");
+  assert.equal(pure.stoppedWhenBarred, null, "It still stops when it truly can't play");
   assert.equal(pure.busyDue, null); assert.equal(pure.deferred.kind, "coffee", "Busy activity defers rather than restarts the countdown");
   assert.equal(pure.beforeLatest, null); assert.equal(pure.latestStart.kind, "coffee"); assert.equal(pure.resumed, null, "Returning after suspension cannot replay a queued routine");
   const desktop = await browser.newPage({ viewport: { width: 500, height: 600 } });

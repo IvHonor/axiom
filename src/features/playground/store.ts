@@ -3,8 +3,9 @@
 // tile and the friends button in the top bar agree. Also keeps what others see up to date: your numbers, and your Lemma
 // whenever you change how it looks.
 import { useCallback, useEffect, useSyncExternalStore } from "react";
-import { normaliseLook, type Look } from "../lemma/look";
-import { normalisePersona } from "../lemma/persona";
+import { STANDARD, lookForRewards, normaliseLook, type Look } from "../lemma/look";
+import { normalisePersona, personaForRewards } from "../lemma/persona";
+import { currentRewards } from "../lemma/achievements/useAchievementRewards";
 import { readSetting } from "../../lib/settings";
 import { useAccount } from "../../shell/useAccount";
 import { useDataChanged } from "../../lib/sync";
@@ -54,9 +55,13 @@ export const today = () => dayKey(new Date());
 
 /** Your Lemma as everyone will see it: how it looks and who it is right now. */
 export function myLemma(): api.LemmaCard {
-  const look: Look = normaliseLook(readSetting("axiom.lemma.look"));
-  const persona = normalisePersona(readSetting("axiom.lemma.persona"));
-  return { look: { ...look } as unknown as Record<string, string>, name: persona.name.trim(), personality: persona.personality };
+  const rewards = currentRewards(!!state.me?.player.perks.admin);
+  const look: Look = lookForRewards(normaliseLook(readSetting("axiom.lemma.look")), rewards);
+  const persona = personaForRewards(normalisePersona(readSetting("axiom.lemma.persona")), rewards);
+  // The standard glow isn't sent, so an older server still accepts everyone who hasn't changed it.
+  const { glowEffect, ...rest } = look;
+  const shared = glowEffect === STANDARD.glowEffect ? rest : look;
+  return { look: { ...shared } as unknown as Record<string, string>, name: persona.name.trim(), personality: persona.personality };
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);

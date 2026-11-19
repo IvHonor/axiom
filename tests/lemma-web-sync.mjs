@@ -7,7 +7,7 @@ import { mkdir } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || "playwright");
-const accounts = new Map(["early", "late", "member", "new-member"].map(id => [id, { seq: 0, rows: new Map(), times: new Map() }]));
+const accounts = new Map(["early", "late", "member", "new-member", "planner"].map(id => [id, { seq: 0, rows: new Map(), times: new Map() }]));
 function apply(account, change) {
   const key = `${change.table}/${change.id}`;
   const row = account.rows.get(key) ?? { table: change.table, id: change.id, data: { id: change.id }, seq: 0 };
@@ -21,6 +21,10 @@ for (const [accountId, account] of accounts) for (const [id, value] of Object.en
   "lemma.preferences": { follow: true, outfits: [] },
   "achievements.rewards": accountId === "member" ? ["tie", "fedora"] : [],
 })) apply(account, { table: "profile_settings", id, fields: { value: JSON.stringify(value) }, changed_at: 1 });
+// Counts the desktop worked out, which the website can't make for itself.
+apply(accounts.get("planner"), { table: "profile_settings", id: "achievements.counts", fields: { value: JSON.stringify({ "axiom.showing_up": 12 }) }, changed_at: 1 });
+// Someone who only uses the website, with three routines made there.
+for (const n of [1, 2, 3]) apply(accounts.get("planner"), { table: "daily_plan_routines", id: `routine-${n}`, fields: { title: `Routine ${n}`, start_minute: 480 + n * 60, duration_minutes: 30, color: "blue", weekdays: 31, created_at: "2026-11-01T09:00:00.000Z", deleted_at: null }, changed_at: 1 });
 const backend = createServer(async (request, response) => {
   const send = (status, body) => { response.writeHead(status, { "content-type": "application/json" }); response.end(JSON.stringify(body)); };
   const id = request.headers.authorization?.replace("Bearer fixture-access-", "");
@@ -54,6 +58,7 @@ const errors = [];
 const profile = (key, id = "early") => JSON.parse(accounts.get(id).rows.get(`profile_settings/${key}`).data.value);
 const dialog = page => page.getByRole("dialog", { name: /^Customise / });
 const choose = (page, name) => dialog(page).getByRole("button", { name, exact: true }).click();
+const tip = async (page, name) => { await page.mouse.move(0, 0); await dialog(page).getByRole("button", { name, exact: true }).hover(); return page.getByRole("tooltip").innerText(); };
 const tab = (page, name) => dialog(page).getByRole("tab", { name, exact: true }).click();
 const preview = page => dialog(page).locator(".lemma-wardrobe-preview .lemma-face");
 async function until(check, message) { for (let i = 0; i < 100; i++) { if (await check()) return; await delay(100); } throw new Error(`${message}\n${logs.slice(-1500)}`); }
@@ -93,9 +98,9 @@ try {
   const first = await device("early");
   assert.equal(await preview(first).getAttribute("data-holding"), "first-light");
   await choose(first, "Glitch core");
-  assert.equal(await dialog(first).getByRole("status").innerText(), "Glitch core: Given to admins.");
+  assert.match(await tip(first, "Glitch core"), /Glitch core[\s\S]*Given to admins\./);
   await choose(first, "First Light");
-  assert.equal(await dialog(first).getByRole("status").innerText(), "First Light: Given to users who created an account before 21 March 2027.");
+  assert.match(await tip(first, "First Light"), /First Light[\s\S]*Given to users who created an account before 21 March 2027\./);
   await choose(first, "Tie"); await choose(first, "Fedora");
   assert.equal(await preview(first).getAttribute("data-neckwear"), "tie");
   assert.equal(await preview(first).getAttribute("data-headwear"), "fedora");
@@ -117,7 +122,7 @@ try {
   await tab(first, "Appearance"); await pull(first);
   await first.getByRole("dialog", { name: "Customise Orbit", exact: true }).waitFor();
   await until(async () => (await preview(first).getAttribute("data-holding")) === "book", "The first device did not receive the selected book");
-  assert.equal(await dialog(first).getByRole("status").innerText(), "Book: Available to everyone.");
+  assert.match(await tip(first, "Book"), /Book[\s\S]*Available to everyone\./);
   assert.equal((await dialog(first).innerText()).includes("Leave the name empty for Lemma"), false);
   await first.clock.install({ time: new Date("2030-04-01T12:00:00Z") });
   for (const [name, kind, milliseconds] of [["Book", "book", 4000], ["Plant", "plant", 5500], ["First Light", "first-light", 3500]]) {
@@ -144,11 +149,24 @@ try {
   assert.equal(await preview(otherMember).getAttribute("data-headwear"), "fedora", "A second browser restores the earned outfit");
   await member.context().close(); await otherMember.context().close();
   const fresh = await device("new-member");
-  assert.equal(await dialog(fresh).getByRole("button", { name: "Tie", exact: true }).getAttribute("aria-disabled"), "true");
-  assert.equal(await dialog(fresh).getByRole("button", { name: "Fedora", exact: true }).getAttribute("aria-disabled"), "true", "New regular accounts still need to earn the cosmetics");
+  assert.equal(await dialog(fresh).getByRole("button", { name: "Tie", exact: true }).getAttribute("data-locked"), "true");
+  assert.equal(await dialog(fresh).getByRole("button", { name: "Fedora", exact: true }).getAttribute("data-locked"), "true", "New regular accounts still need to earn the cosmetics");
   await preview(fresh).screenshot({ path: ".qa.local/lemma-web-sync/locked-rewards.png" });
+  assert.equal(await dialog(fresh).getByRole("button", { name: "Verdigris", exact: true }).getAttribute("data-locked"), "true");
+  await fresh.context().close();
+  const planner = await device("planner");
+  const verdigris = dialog(planner).getByRole("button", { name: "Verdigris", exact: true });
+  await until(async () => (await verdigris.getAttribute("data-locked")) === null, "Routines made on the website did not earn their reward there");
+  await until(() => profile("achievements.rewards", "planner").includes("verdigris"), "The reward earned on the website did not reach the account");
+  await until(() => ["tie", "round-glasses"].every(id => profile("achievements.rewards", "planner").includes(id)), "Steps counted on the desktop did not earn their items on the website");
+  assert.equal(await dialog(planner).getByRole("button", { name: "Loupe", exact: true }).getAttribute("data-locked"), "true", "Only what was earned unlocks");
+  await planner.keyboard.press("Escape");
+  await dialog(planner).waitFor({ state: "detached" });
+  await planner.getByRole("button", { name: "Achievements", exact: true }).first().click();
+  await planner.getByRole("region", { name: "Areas", exact: true }).getByRole("button", { name: /^Axiom/ }).click();
+  await planner.getByRole("dialog", { name: "Axiom", exact: true }).locator(".ach-card", { hasText: "Showing Up" }).getByText("Step 3 of 5 · 12 / 14").waitFor();
   assert.deepEqual(errors, []);
-  console.log("PASS: production website includes tie/fedora cosmetics, admin access without achievements, synced member rewards and outfits, locked rewards for new accounts, holdable descriptions, custom names, First Light entitlement/animation, book/plant animations and bidirectional account sync across isolated devices");
+  console.log("PASS: rewards earned on the website itself, production website includes tie/fedora cosmetics, admin access without achievements, synced member rewards and outfits, locked rewards for new accounts, holdable descriptions, custom names, First Light entitlement/animation, book/plant animations and bidirectional account sync across isolated devices");
 } finally {
   await browser?.close(); server.kill(); await new Promise(resolve => backend.close(resolve));
 }

@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
+import { noteAreaOpened } from "../features/lemma/achievements/secrets";
 import { arrayMove } from "@dnd-kit/sortable";
 import { OVERVIEW, parseView, sameView, viewKey, type View } from "./view";
 import { usePersistentState } from "./usePersistentState";
@@ -26,6 +27,9 @@ export function useTabs() {
   // A saved active tab that's no longer open falls back to the overview.
   const current = active.kind === "overview" || tabs.some((t) => sameView(t, active)) ? active : OVERVIEW;
   const preview = tabs.find((t) => viewKey(t) === previewKey) ?? null;
+  // Opening an area counts towards the Explorer achievement.
+  const openedArea = current.kind === "extension" ? current.id : null;
+  useEffect(() => { if (openedArea) noteAreaOpened(openedArea); }, [openedArea]);
 
   /**
    * Focuses a view, opening a tab for it if needed. With `preview`, the view

@@ -10,6 +10,9 @@ import { useLemmaAreas } from "./parts";
 import { nameOf, usePersona } from "./persona";
 import { useCompanionPrefs } from "./preferences";
 import { useLemma } from "./state";
+import { getDays } from "../playground/api";
+import { WHISPER_SECRET } from "./achievements/catalog";
+import { currentSecrets, markFound } from "./achievements/secrets";
 
 type Surface = "desktop" | "overview" | "chat" | "preview" | "companion";
 const director = createDialogueDirector();
@@ -96,6 +99,26 @@ export function useDialogue(surface: Surface, enabled = true) {
     if (surface === "preview") return;
     offer({ kind });
   }, [surface, offer]);
+
+  // One quiet remark, once ever, when a certain book is opened.
+  const whisper = useCallback(async () => {
+    if (surface === "preview" || currentSecrets().includes(WHISPER_SECRET)) return false;
+    const started = (await getDays().catch(() => null))?.["reading.quiet_started"];
+    // Another Lemma on screen may have said it while this one was checking.
+    if (currentSecrets().includes(WHISPER_SECRET) || !started || !Object.values(started).some(n => n > 0)) return false;
+    if (!offer({ kind: "whisper", key: "whisper" })) return true;
+    markFound(WHISPER_SECRET);
+    return false;
+  }, [surface, offer]);
+  const [whisperCheck, setWhisperCheck] = useState(0);
+  useEffect(() => {
+    // If Lemma couldn't speak just then, it tries again shortly.
+    let live = true, timer: ReturnType<typeof setTimeout> | undefined;
+    const attempt = () => { void whisper().then(waiting => { if (live && waiting) timer = setTimeout(attempt, 20_000); }); };
+    attempt();
+    return () => { live = false; clearTimeout(timer); };
+  }, [whisper, whisperCheck]);
+  useDataChanged(() => setWhisperCheck(n => n + 1));
 
   // Coalesce a burst of wardrobe edits into a reaction to the final look or name.
   const previousAppearance = useRef({ name: nameOf(persona), look: lookKey });
